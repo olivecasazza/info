@@ -1,0 +1,2 @@
+cargo:rustc-env=TYPENUM_BUILD_CONSTS=/home/ccasazza/code/colincasazza.info.next/target/wasm32-unknown-unknown/release/build/typenum-adb3bcbbcc511626/out/consts.rs
+cargo:rustc-env=TYPENUM_BUILD_OP=/home/ccasazza/code/colincasazza.info.next/target/wasm32-unknown-unknown/release/build/typenum-adb3bcbbcc511626/out/op.rs
