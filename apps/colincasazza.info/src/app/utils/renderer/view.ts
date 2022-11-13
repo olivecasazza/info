@@ -1,29 +1,51 @@
-import { Color, Object3D, PerspectiveCamera, Scene, Vector3 } from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { generateUUID } from 'three/src/math/MathUtils';
-import { IViewData, IViewOptions } from './viewOptions';
-import { ViewPort } from './viewPort';
+import { Color, Object3D, PerspectiveCamera, Scene, Vector3 } from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { generateUUID } from "three/src/math/MathUtils";
+import { ViewPort } from "./viewPort";
+
+export interface IControlsOptions {
+  enabled?: boolean;
+  minAzimuthAngle?: number;
+  minPolarAngle?: number;
+  enableRotate?: boolean;
+  startDirection?: Vector3;
+}
+
+export interface ICameraOptions {
+  fov?: number;
+  aspect?: number;
+  near?: number;
+  far?: number;
+  startingPosition?: Vector3;
+}
+
+export type IViewData = Object
+
+export interface IViewOptions {
+  id: string;
+  renderTickCallback: (view: View, timeStepMS: number) => void;
+  background?: Color;
+  scene?: Scene;
+  cameraOptions?: ICameraOptions;
+  controlsOptions?: IControlsOptions;
+}
 
 export class View {
   options: IViewOptions;
   id: string = generateUUID();
-  background: Color = new Color('black');
+  background: Color = new Color("black");
   scene: Scene = new Scene();
   viewPort: ViewPort = new ViewPort();
   camera!: PerspectiveCamera;
   controls!: OrbitControls;
-  objects: Record<string, Object3D> =  {};
 
-  renderTickCallback(_view: View, _timeStepMS: number): void {
-    throw new Error('not implemented.');
+  renderTickCallback(view: View, timeStepMS: number): void {
+    throw new Error('not implemented.')
   }
 
   constructor(options: IViewOptions) {
     this.options = options;
-    Object.assign(this, options);
-    for (const k in this.objects) {
-      this.scene.add(this.objects[k])
-    }
+    Object.assign(this, options)
   }
 
   get isMounted() {
@@ -106,8 +128,6 @@ export class View {
   }
 
   removeEntities(...entities: Object3D[]) {
-    this.scene.children = this.scene.children.filter(
-      (e) => !entities.includes(e)
-    );
+    this.scene.children = this.scene.children.filter(e => !entities.includes(e))
   }
 }

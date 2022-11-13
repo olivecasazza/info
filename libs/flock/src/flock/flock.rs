@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::utils::log;
 
-use super::{bird::Bird, bird_config::{BirdConfig, self}};
+use super::{bird::Bird, bird_config::BirdConfig};
 
 #[wasm_bindgen]
 pub struct Flock {
@@ -61,6 +61,7 @@ impl Flock {
                 "cannot add bird to flock. config with id {} was not found in bird config hashmap",
                 config_id
             );
+            log(&err);
             throw_str(&err);
         }
         let position = Vector2::new(pos_x, pos_y);
@@ -81,7 +82,6 @@ impl Flock {
             new_birds.remove(idx as usize);
         }
         // rebuild tree
-        // self.birds,
         self.birds = kd_tree::KdTree2::build_by_key(new_birds, |bird, k| {
             ordered_float::OrderedFloat(bird.position[k])
         });
@@ -126,56 +126,33 @@ impl Flock {
             .clone()
             .to_vec()
             .iter_mut()
-            .filter_map(|bird| {
-                let bird_config = self.configs.get(&bird.config_id);
-                match bird_config {
-                    Some(bird_config) => {
-                        bird.update_bird(
-                            &self.birds,
-                            bird_config.clone(),
-                            &width,
-                            &height,
-                            &time_step,
-                        );
-                        for vertex in bird.get_vertices(bird_config) {
-                            vertices.push(vertex.x);
-                            vertices.push(vertex.y);
-                            vertices.push(0.);
-                            colors.push(bird_config.color_r);
-                            colors.push(bird_config.color_g);
-                            colors.push(bird_config.color_b);
-                        }
-                        Some(bird.to_owned())
-                    },
-                    _ => None
+            .map(|bird| {
+                let bird_config = self.configs.get(&bird.config_id).unwrap();
+                bird.update_bird(
+                    &self.birds,
+                    bird_config.clone(),
+                    &width,
+                    &height,
+                    &time_step,
+                );
+                for vertex in bird.get_vertices(bird_config) {
+                    vertices.push(vertex.x);
+                    vertices.push(vertex.y);
+                    vertices.push(0.);
+                    colors.push(bird_config.color_r);
+                    colors.push(bird_config.color_g);
+                    colors.push(bird_config.color_b);
                 }
+                bird.to_owned()
             })
             .collect();
 
-            // .map(|bird| {
-                // let bird_config = self.configs.get(&bird.config_id).unwrap();
-                // bird.update_bird(
-                //     &self.birds,
-                //     bird_config.clone(),
-                //     &width,
-                //     &height,
-                //     &time_step,
-                // );
-                // for vertex in bird.get_vertices(bird_config) {
-                //     vertices.push(vertex.x);
-                //     vertices.push(vertex.y);
-                //     vertices.push(0.);
-                //     colors.push(bird_config.color_r);
-                //     colors.push(bird_config.color_g);
-                //     colors.push(bird_config.color_b);
-                // }
-                // bird.to_owned()
-            // })
-            // .collect();
-        // up vertex buffer
         let js_vertices = js_sys::Float32Array::from(vertices.as_slice());
         let js_colors = js_sys::Float32Array::from(colors.as_slice());
-        update_flock_geometry.call2(&JsValue::null(), &js_vertices, &js_colors).unwrap();
+        let e = update_flock_geometry.call2(&JsValue::null(), &js_vertices, &js_colors);
+        if e.is_err() {
+            log("could not call js update vertex buffer function from rust");
+        }
         // rebuild tree
         self.birds =
             kd_tree::KdTree2::build_by_key(new_flock, |bird, k| OrderedFloat(bird.position[k]));

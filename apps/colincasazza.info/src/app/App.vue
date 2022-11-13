@@ -4,11 +4,11 @@ import NavBar from '@app/views/NavBar.vue';
 import Footer from '@app/views/Footer.vue';
 import { Options, Vue } from 'vue-class-component';
 import { vxm } from '@app/store';
-import FlockView from '@app/views/flock/FlockView.vue';
+import BackgroundWrapper from '@app/views/background/BackgroundWrapper.vue';
 
 @Options({
   components: {
-    FlockView,
+    BackgroundWrapper,
     RendererRootViewPortComponent,
     NavBar,
     Footer,
@@ -20,7 +20,7 @@ export default class App extends Vue {
   }
   mounted() {
     vxm.renderer.start();
-    vxm.flock.constructFlock();
+    vxm.background.constructFlock();
   }
 }
 </script>
@@ -30,9 +30,9 @@ export default class App extends Vue {
     <div class="w-full h-full relative">
       <RendererRootViewPortComponent class="z-10" />
       <div v-if="vxm.renderer.rendererRootViewPort.isMounted">
-        <FlockView v-if="vxm.flock.isMounted" class="absolute w-full h-full" />
+        <BackgroundWrapper v-if="vxm.background.isMounted" class="absolute w-full h-full" />
         <div
-          v-if="vxm.flock.isMounted"
+          v-if="vxm.background.isMounted"
           class="absolute w-full h-full flex flex-col z-30 p-4"
         >
           <NavBar />

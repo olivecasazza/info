@@ -5,7 +5,7 @@ import {
   createSubModule,
   extractVuexModule,
 } from "vuex-class-component";
-import { FlockStore } from "./flock.vuex";
+import { BackgroundStore } from "./background.vuex";
 import { RendererStore } from "./renderer.vuex";
 
 const VuexModule = createModule({
@@ -15,7 +15,7 @@ const VuexModule = createModule({
 
 export default class MainStore extends VuexModule {
   renderer = createSubModule(RendererStore);
-  flock = createSubModule(FlockStore);
+  background = createSubModule(BackgroundStore);
 }
 
 export const store = new Vuex.Store({

@@ -5,9 +5,9 @@
 /tmp
 /out-tsc
 apps/colincasazza.info/dist/**
+libs/renderer/target/*
 libs/flock/target/*
 **/dist/*
-target/
 
 # dependencies
 node_modules
@@ -42,4 +42,3 @@ testem.log
 .DS_Store
 Thumbs.db
 .runtimeconfig.json
-

@@ -3,26 +3,24 @@ import {
   generateBirdId,
   MAX_FLOCK_SIZE,
   type IBirdConfig
-} from '@app/views/flock/flock';
+} from '@app/views/background/background';
 import { BirdConfig, Flock } from '@libs/flock';
 import themeColors from '@libs/theme/src/lib/colors.cjs';
 import { Color } from 'three';
 import { action, createModule } from 'vuex-class-component';
 import * as WeightedArray from 'weighted-array';
 import { vxm } from '.';
-import initFlock from '@libs/flock';
 
 const { select } = WeightedArray;
 
 const VuexModule = createModule({
-  namespaced: 'flock',
+  namespaced: 'background',
   strict: false,
 });
 
-export class FlockStore extends VuexModule {
+export class BackgroundStore extends VuexModule {
   birdConfigs: Map<string, IBirdConfig> = new Map<string, IBirdConfig>();
   isDragging = false;
-  isCreating = false;
   isMounted = false;
   updating = false;
   timeStep = 1.0;
@@ -38,13 +36,7 @@ export class FlockStore extends VuexModule {
   }
 
   get maxFlockSize() {
-    return vxm.flock._maxFlockSize;
-  }
-
-  @action async created() {
-    this.isCreating = true;
-    await initFlock();
-    this.isCreating = false;
+    return vxm.background._maxFlockSize;
   }
 
   @action async updateMaxFlockSize(newMaxFlockSize: number) {
@@ -59,7 +51,7 @@ export class FlockStore extends VuexModule {
       this._maxFlockSize,
       BigInt(new Date().getUTCMilliseconds())
     );
-    await vxm.flock.addOrUpdateBirdConfig({
+    await vxm.background.addOrUpdateBirdConfig({
       id: generateBirdId(),
       weight: 1,
       neighborDistance: 20,
@@ -72,7 +64,7 @@ export class FlockStore extends VuexModule {
       birdSize: 12,
       birdColor: themeColors.highlight[200],
     } as IBirdConfig);
-    await vxm.flock.addOrUpdateBirdConfig({
+    await vxm.background.addOrUpdateBirdConfig({
       id: DEFAULT_BIRD_ID,
       weight: 80,
       neighborDistance: 80,
@@ -100,7 +92,7 @@ export class FlockStore extends VuexModule {
   ): Promise<IBirdConfig> {
     if (!this._flock)
       throw new Error(
-        "[flock.vuex] cannot add config, flock doesn't exist."
+        "[background.vuex] cannot add config, flock doesn't exist."
       );
     const birdConfig = await this.generateBirdConfig(configParams);
     this.birdConfigs.set(birdConfig.id, birdConfig);
@@ -111,12 +103,12 @@ export class FlockStore extends VuexModule {
   @action async removeBirdConfig(configIdToRemove: string) {
     if (!this._flock)
       throw new Error(
-        "[flock.vuex] cannot remove config, flock doesn't exist."
+        "[background.vuex] cannot remove config, flock doesn't exist."
       );
     const config = this.birdConfigs.get(configIdToRemove);
     if (!config)
       throw new Error(
-        '[flock.vuex] cannot remove config, cannot find matching config.'
+        '[background.vuex] cannot remove config, cannot find matching config.'
       );
     this._flock.remove_bird_config(configIdToRemove);
     this.birdConfigs.delete(configIdToRemove);
@@ -134,7 +126,7 @@ export class FlockStore extends VuexModule {
     this._flock.update(
       props.sceneWidth,
       props.sceneHeight,
-      props.timeStep ? props.timeStep : vxm.flock.timeStep,
+      props.timeStep ? props.timeStep : vxm.background.timeStep,
       props.updateFlockGeometryCallback
     );
   }

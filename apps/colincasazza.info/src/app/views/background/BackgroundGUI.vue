@@ -1,5 +1,5 @@
 <template>
-  <div v-if="vxm.flock.isMounted" class="app-view-port h-full w-full">
+  <div v-if="vxm.background.isMounted" class="app-view-port h-full w-full">
     <div ref="gui-container" class="noselect"></div>
   </div>
 </template>
@@ -13,10 +13,10 @@ import {
 } from '@app/utils/random';
 import { GUI } from 'dat.gui';
 import { Vue } from 'vue-class-component';
-import type { IBirdConfig } from './flock';
-import { DEFAULT_BIRD_ID, generateBirdId } from './flock';
+import type { IBirdConfig } from './background';
+import { DEFAULT_BIRD_ID, generateBirdId } from './background';
 
-export default class FlockGUI extends Vue {
+export default class BackgroundGUI extends Vue {
   gui: GUI = new GUI({ autoPlace: false, closeOnTop: true });
 
   get vxm() {
@@ -53,22 +53,22 @@ export default class FlockGUI extends Vue {
 
     this.gui.add({ export: () => this.exportBirdsConfigAsJSON() }, 'export');
     this.globalsFloder
-      .add({ max_flock_size: vxm.flock.maxFlockSize }, 'max_flock_size')
+      .add({ max_flock_size: vxm.background.maxFlockSize }, 'max_flock_size')
       .min(1)
       .max(2000)
       .name('max flock size')
       .onChange(
-        async (newMax) => await vxm.flock.updateMaxFlockSize(newMax)
+        async (newMax) => await vxm.background.updateMaxFlockSize(newMax)
       );
 
     this.globalsFloder
-      .add(vxm.flock, 'timeStep')
+      .add(vxm.background, 'timeStep')
       .min(0.0)
       .max(3.0)
       .name('time step');
 
     this.globalsFloder.open();
-    await vxm.flock.birdConfigs.forEach(this.addBirdConfigToGui);
+    await vxm.background.birdConfigs.forEach(this.addBirdConfigToGui);
   }
 
   unmounted() {
@@ -78,7 +78,7 @@ export default class FlockGUI extends Vue {
   }
 
   async generateRandomBirdConfig() {
-    const newBirdConfig = await vxm.flock.addOrUpdateBirdConfig({
+    const newBirdConfig = await vxm.background.addOrUpdateBirdConfig({
       id: generateBirdId(),
       weight: randomIntFromRange(25, 75),
       neighborDistance: randomIntFromRange(0, 50),
@@ -95,7 +95,7 @@ export default class FlockGUI extends Vue {
   }
 
   async removeBirdConfigFromGui(birdConfigIdToRemove: string) {
-    await vxm.flock.removeBirdConfig(birdConfigIdToRemove);
+    await vxm.background.removeBirdConfig(birdConfigIdToRemove);
     this.birdsFolder.removeFolder(
       this.birdsFolder.__folders[birdConfigIdToRemove]
     );
@@ -107,7 +107,7 @@ export default class FlockGUI extends Vue {
       .addColor(configToAdd, 'birdColor')
       .setValue(configToAdd.birdColor)
       .onFinishChange(async (updatedColor: any) => {
-        await vxm.flock.addOrUpdateBirdConfig({
+        await vxm.background.addOrUpdateBirdConfig({
           ...configToAdd,
           birdColor: updatedColor,
         });
@@ -127,7 +127,7 @@ export default class FlockGUI extends Vue {
       birdFolder
         .add(configToAdd, attr)
         .onFinishChange(async (updatedValue: any) => {
-          await vxm.flock.addOrUpdateBirdConfig({
+          await vxm.background.addOrUpdateBirdConfig({
             ...configToAdd,
             [attr]: updatedValue,
           });
@@ -148,7 +148,7 @@ export default class FlockGUI extends Vue {
   }
 
   exportBirdsConfigAsJSON(): void {
-    const data = [...vxm.flock.birdConfigs].map((c) => {
+    const data = [...vxm.background.birdConfigs].map((c) => {
       return Object.fromEntries(Object.entries(c));
     });
     console.log(JSON.stringify(data));
