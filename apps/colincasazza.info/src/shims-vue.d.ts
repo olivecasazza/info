@@ -10,3 +10,4 @@ interface ImportMeta {
 }
 
 declare module "weighted-array";
+declare module 'vue-mobile-detection';

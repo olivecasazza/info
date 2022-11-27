@@ -10,6 +10,7 @@ import { Color } from 'three';
 import { action, createModule } from 'vuex-class-component';
 import * as WeightedArray from 'weighted-array';
 import { vxm } from '.';
+import init from '../../../../../libs/flock/pkg/flock';
 
 const { select } = WeightedArray;
 
@@ -27,16 +28,18 @@ export class BackgroundStore extends VuexModule {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   $subscribeAction: any;
-  private _flock?: Flock;
+  _flock?: Flock;
   private _maxFlockSize = MAX_FLOCK_SIZE;
 
   get currentFlockSize() {
     if (!this._flock) return 1;
     return this._flock.current_flock_size;
   }
-
   get maxFlockSize() {
     return vxm.background._maxFlockSize;
+  }
+  set maxFlockSize(newMaxFlockSize: number) {
+    vxm.background.updateMaxFlockSize(newMaxFlockSize);
   }
 
   @action async updateMaxFlockSize(newMaxFlockSize: number) {
@@ -45,6 +48,7 @@ export class BackgroundStore extends VuexModule {
   }
 
   @action async constructFlock(): Promise<void> {
+    await init();
     this._flock = new Flock(
       // todo: determine number birds to add based on screen size and performance
       // const n = (this.view.viewPort.width * this.view.viewPort.height) / 500;

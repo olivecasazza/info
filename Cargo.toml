@@ -1,6 +1,5 @@
 [workspace]
 resolver = "2"
 members = [
-    "libs/flock",
-    "libs/renderer"
+    "libs/flock"
 ]

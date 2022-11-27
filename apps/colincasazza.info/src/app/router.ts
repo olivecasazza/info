@@ -50,12 +50,6 @@ const router = createRouter({
       meta: { title: 'colincasazza.info.flock' },
     },
     {
-      path: "/projects/bevy/flock",
-      name: "Flock",
-      component: BevyFlock,
-      meta: { title: 'colincasazza.info.flock' },
-    },
-    {
       path: "/projects/notebooks/2d-inverse-kinematics",
       component: NotebookWrapper,
       name: "IKNotebook",

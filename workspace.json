@@ -5,7 +5,6 @@
     "xwords": "apps/xwords",
     "colincasazza.info": "apps/colincasazza.info",
     "flock": "libs/flock",
-    "renderer": "libs/renderer",
     "theme": "libs/theme"
   }
 }

@@ -48,7 +48,7 @@
   /* remember htmlcss controls the layout&appearance */
   /* works even if you dont need to render w/ three.js or something :3 */
   .app-view-port {
-    @apply border-white border-opacity-10 border border-collapse p-1 m-1 overflow-scroll;
+    @apply p-1 m-1 overflow-scroll;
   }
 }
 

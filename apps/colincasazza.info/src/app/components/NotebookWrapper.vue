@@ -4,10 +4,6 @@ import { Prop } from "vue-property-decorator";
 
 export default class NotebookWrapper extends Vue {
   @Prop() notebookPath!: string;
-
-  get iFrame(): HTMLIFrameElement {
-    return this.$refs[this.notebookPath] as HTMLIFrameElement;
-  }
 }
 </script>
 

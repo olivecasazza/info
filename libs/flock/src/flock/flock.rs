@@ -1,12 +1,16 @@
 use nalgebra::Vector2;
 use ordered_float::OrderedFloat;
+// use nalgebra::Vector2;
+// use ordered_float::OrderedFloat;
 use wasm_bindgen::{prelude::*, throw_str};
 
 use std::collections::HashMap;
 
+// use crate::utils::log;
+
 use crate::utils::log;
 
-use super::{bird::Bird, bird_config::BirdConfig};
+use super::{bird::Bird, bird_config::{BirdConfig}};
 
 #[wasm_bindgen]
 pub struct Flock {
@@ -121,29 +125,34 @@ impl Flock {
         let mut colors: Vec<f32> = Vec::new();
         // we need to store the current state of the flock
         // (just position for each bird)
-        let new_flock: Vec<Bird> = self
+        let new_flock = self
             .birds
             .clone()
             .to_vec()
             .iter_mut()
-            .map(|bird| {
-                let bird_config = self.configs.get(&bird.config_id).unwrap();
-                bird.update_bird(
-                    &self.birds,
-                    bird_config.clone(),
-                    &width,
-                    &height,
-                    &time_step,
-                );
-                for vertex in bird.get_vertices(bird_config) {
-                    vertices.push(vertex.x);
-                    vertices.push(vertex.y);
-                    vertices.push(0.);
-                    colors.push(bird_config.color_r);
-                    colors.push(bird_config.color_g);
-                    colors.push(bird_config.color_b);
+            .filter_map(|bird| {
+                let bird_config: Option<&BirdConfig> = self.configs.get(&bird.config_id);
+                match bird_config {
+                    Some(bird_config) => {
+                        bird.update_bird(
+                            &self.birds,
+                            bird_config.clone(),
+                            &width,
+                            &height,
+                            &time_step,
+                        );
+                        for vertex in bird.get_vertices(bird_config) {
+                            vertices.push(vertex.x);
+                            vertices.push(vertex.y);
+                            vertices.push(0.);
+                            colors.push(bird_config.color_r);
+                            colors.push(bird_config.color_g);
+                            colors.push(bird_config.color_b);
+                        }
+                        Some(bird.to_owned())
+                    },
+                    _ => None                  
                 }
-                bird.to_owned()
             })
             .collect();
 
