@@ -1,49 +1,89 @@
 <!-- eslint-disable @intlify/vue-i18n/no-raw-text -->
 <template>
-  <div class="app-view-port home-wrapper">
-    <div class="app-title">colin casazza</div>
-    <div class="text-lx mb-4 select-text">
-      <div>colanzio5@gmail.com</div>
-      <div>san diego, ca</div>
-      <div>(603) 714-2047</div>
-      <a class="w-min link" href="https://github.com/colanzio5">
-        github.com/colanzio5
-      </a>
-    </div>
-    <div class="app-title">about me</div>
-    <div class="mb-4">
-      computer scientist with an interest in empowering robotics, aerospace, and
-      other stem industries with software tools.
-    </div>
-    <div class="app-title">experience</div>
-    <div class="mb-4">
-      <div class="app-heading">qualcomm</div>
-      <div class="pb-1">
-        october 2021 - current - cloud tools software engineer
-      </div>
-      <div class="pb-1">
-        march 2020 - october 2021 - it engineer, programmer analyst, site
-        reliability engineer
-      </div>
-      <div class="pb-1">may 2018 - sep 2018 - it engineering intern</div>
-      <div class="app-heading">voyager space technologies</div>
-      <div class="pb-1">jul 2018 - aug 2019 - full stack software engineer</div>
-      <div class="app-heading">sdsu rocket project</div>
-      <div class="pb-1">sep 2015 - jan 2018 - avionics systems engineer</div>
-      <div class="app-heading">freelance developer</div>
-      <div class="pb-1">jun 2017 - jan 2018 - full stack web developer</div>
-      <div class="app-heading">san diego state university</div>
-      <div class="pb-1">
-        sep 2015 - dec 2019 - bachelor’s degree in computer science
-      </div>
-    </div>
+  <div class="app-view-port home-wrapper overflow-hidden">
+    <ul class="ascii-tree text-sm">
+      <li>
+        <div class="inline app-heading text-xl">contact/</div>
+        <ul>
+          <li>
+            <inline class="text-secondary-400">email: </inline
+            >colanzio5@gmail.com
+          </li>
+          <li>
+            <inline class="text-secondary-400">git: </inline
+            >github.com/colanzio5
+          </li>
+        </ul>
+      </li>
+    </ul>
+    <ul class="ascii-tree text-xs overflow-hidden">
+      <li>
+        <div class="inline app-heading">experience/</div>
+        <ul>
+          <li v-for="item of experiences" key="item" class="">
+            <div class="inline text-highlight-300">{{ item.company }}/</div>
+            <ul>
+              <li v-for="subItem of item.subItems" :key="subItem.company" class="overflow-x-scroll" >
+                <inline class="text-secondary-400 text-xs">{{ subItem.date }}</inline>
+                <div class="inline text-xs overflow-x-scroll"> | {{ subItem.description }}</div>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
   </div>
 </template>
 
 <script lang="ts">
 import { Vue } from 'vue-class-component';
 
-export default class HomeView extends Vue {}
+interface IExperienceItem {
+  company: string;
+  subItems: {
+    date?: string;
+    description?: string;
+  }[];
+}
+
+export default class HomeView extends Vue {
+  experiences: IExperienceItem[] = [
+    {
+      company: 'qualcomm',
+      subItems: [
+        { description: 'programmer analyst', date: '2021 - current' },
+        { description: 'cloud tools software engineer', date: '2020 - 2021' },
+      ],
+    },
+    {
+      company: 'voyager space technologies',
+      subItems: [
+        {
+          date: 'jul 2018 - aug 2019',
+          description: 'full stack software engineer',
+        },
+      ],
+    },
+    {
+      company: 'sdsu rocket project',
+      subItems: [
+        {
+          date: 'sep 2015 - jan 2018',
+          description: 'full stack software engineer',
+        },
+      ],
+    },
+    {
+      company: 'san diego state university',
+      subItems: [
+        {
+          date: 'sep 2015 - dec 2019',
+          description: 'bachelor’s degree in computer science',
+        },
+      ],
+    },
+  ];
+}
 </script>
 
 <style lang="postcss">

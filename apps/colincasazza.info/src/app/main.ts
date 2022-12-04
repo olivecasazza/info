@@ -8,5 +8,6 @@ import router from './router';
 
 import '../../../../libs/theme/src/css/tailwind.scss';
 import '../../../../libs/theme/src/css/globals.scss';
+import '../../../../libs/theme/src/css/ascii-tree.scss';
 
 createApp(App).use(router).use(i18n).use(VueMobileDetection).mount('#app');

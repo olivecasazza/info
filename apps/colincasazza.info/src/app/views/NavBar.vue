@@ -8,10 +8,10 @@ export default class NavBar extends Vue {}
 <template>
   <div class="app-view-port w-full h-max flex">
     <div
-      class="justify-start space-x-4 text-4xl select-none text-center underline overflow-hidden pb-1"
+      class="justify-start space-x-4 text-2xl select-none text-center underline overflow-hidden pb-1"
     >
       <router-link class="link navbar-link underline-offset-2" to="/"
-        >home</router-link
+        >info</router-link
       >
       <router-link class="link navbar-link" to="/projects"
         >projects</router-link

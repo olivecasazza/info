@@ -16,7 +16,7 @@ const VuexModule = createModule({
 export class RendererStore extends VuexModule {
   views: View[] = [];
   stats: Stats = Stats();
-  renderer: WebGLRenderer = new WebGLRenderer({ antialias: true });
+  renderer: WebGLRenderer = new WebGLRenderer();
   renderLoop: RenderLoop = new RenderLoop();
   rendererRootViewPort: RendererRootViewPort = new RendererRootViewPort();
 
@@ -30,7 +30,6 @@ export class RendererStore extends VuexModule {
     const element = props.container.appendChild(vxm.renderer.stats.dom);
     element.style.position = 'relative';
     element.style.overflow = 'hidden';
-    // element.style.height = "10vh";
   }
 
   @mutation resize(): void {

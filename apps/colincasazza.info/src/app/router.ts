@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '@app/views/HomeView.vue';
 import Projects from '@app/views/ProjectsWrapper.vue';
-import BevyFlock from '@app/views/BevyFlock.vue';
+import AsciiRenderer from '@app/views/ascii-renderer/AsciiRenderer.vue';
 import BackgroundGUI from '@app/views/background/BackgroundGUI.vue';
 import NotebookWrapper from '@app/components/NotebookWrapper.vue';
 
@@ -49,6 +49,12 @@ const router = createRouter({
       component: BackgroundGUI,
       meta: { title: 'colincasazza.info.flock' },
     },
+    // {
+    //   path: "/projects/three/ascii-renderer",
+    //   name: "AsciiRenderer",
+    //   component: AsciiRenderer,
+    //   meta: { title: 'colincasazza.info.ascii-renderer' },
+    // },
     {
       path: "/projects/notebooks/2d-inverse-kinematics",
       component: NotebookWrapper,

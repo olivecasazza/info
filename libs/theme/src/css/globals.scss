@@ -48,7 +48,7 @@
   /* remember htmlcss controls the layout&appearance */
   /* works even if you dont need to render w/ three.js or something :3 */
   .app-view-port {
-    @apply p-1 m-1 overflow-scroll;
+    @apply p-1 m-1 overflow-scroll border border-white border-opacity-25;
   }
 }
 
@@ -61,7 +61,7 @@
   }
 
   .link {
-    @apply text-highlight-200 underline underline-offset-1;
+    @apply text-highlight-300 underline underline-offset-1;
   }
   .link:hover {
     @apply cursor-pointer rainbow-text-animated underline underline-offset-1;

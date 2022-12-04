@@ -19,8 +19,6 @@ export interface ICameraOptions {
   startingPosition?: Vector3;
 }
 
-export type IViewData = Object
-
 export interface IViewOptions {
   id: string;
   renderTickCallback: (view: View, timeStepMS: number) => void;

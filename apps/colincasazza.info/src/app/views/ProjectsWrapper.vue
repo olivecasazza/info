@@ -35,7 +35,15 @@ export default class ProjectsWrapper extends Vue {
           link: '/projects/three/flock',
           sourceCodeLink:
             'https://github.com/colanzio5/colincasazza.info/tree/wasm-flock/wasm/src/flock',
-        }
+        },
+        // {
+        //   heading: 'ascii-renderer',
+        //   // eslint-disable-next-line max-len
+        //   // text: `simulated flocking behavior based on separation, alignment, and cohesion. implemented w/ rust/wasm, inspired by <a class='link' href='https://thecodingtrain.com/CodingChallenges/124-flocking-boids.html'>thecodingtrain.com<a/>.`,
+        //   link: '/projects/three/ascii-renderer',
+        //   // sourceCodeLink:
+        //   //   'https://github.com/colanzio5/colincasazza.info/tree/wasm-flock/wasm/src/flock',
+        // }
       ],
     },
     {

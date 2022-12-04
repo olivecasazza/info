@@ -83,7 +83,7 @@ export default class BackgroundGUI extends Vue {
       title: birdConfig.id,
     });
     speciesFolder.addInput(birdConfig, 'weight', {
-      label: 'weight',
+      label: 'spawn probability multiplier',
       min: 0,
       max: 100,
       step: 1,
