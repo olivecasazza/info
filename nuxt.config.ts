@@ -1,4 +1,3 @@
-import path from 'path'
 import wasmPack from 'vite-plugin-wasm-pack'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
@@ -13,7 +12,7 @@ export default defineNuxtConfig({
   },
   vite: {
     plugins: [
-      wasmPack([`${path.resolve(__dirname, 'wasm/flock')}/`])
+      wasmPack(['./wasm/flock'])
     ]
   },
   app: {
