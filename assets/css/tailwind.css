@@ -1,0 +1,154 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+.rainbow-text-animated {
+  background: linear-gradient(to right,
+      #6666ff,
+      #0099ff,
+      #00ff00,
+      #ff3399,
+      #6666ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rainbow_animation 6s ease-in-out infinite;
+  background-size: 400% 100%;
+}
+
+@keyframes rainbow_animation {
+
+  0%,
+  100% {
+    background-position: 0 0;
+  }
+
+  50% {
+    background-position: 100% 0;
+  }
+}
+
+
+::-webkit-scrollbar {
+  width: 1px;
+  height: 1px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-primary-200;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-secondary-200;
+}
+
+
+.link {
+  @apply text-highlight-300 underline underline-offset-1;
+}
+
+.link:hover {
+  @apply cursor-pointer rainbow-text-animated underline underline-offset-1;
+}
+
+.link:selection {
+  @apply rainbow-text-animated;
+}
+
+.noselect {
+  -webkit-touch-callout: none;
+  /* iOS Safari */
+  -webkit-user-select: none;
+  /* Safari */
+  -khtml-user-select: none;
+  /* Konqueror HTML */
+  -moz-user-select: none;
+  /* Old versions of Firefox */
+  -ms-user-select: none;
+  /* Internet Explorer/Edge */
+  user-select: none;
+  /* Non-prefixed version, currently supported by Chrome, Edge, Opera and Firefox */
+}
+
+.loading-bar {
+  @apply h-0.5 min-w-max;
+  background: linear-gradient(to right,
+      #6666ff,
+      #0099ff,
+      #00ff00,
+      #ff3399,
+      #6666ff);
+  -webkit-background-clip: padding-box;
+  background-clip: padding-box;
+  color: transparent;
+  animation: rainbow_animation 1s ease-in-out infinite;
+  background-size: 600% 100%;
+}
+
+@keyframes rainbow_animation {
+
+  0%,
+  100% {
+    background-position: 0 0;
+  }
+
+  50% {
+    background-position: 100% 0;
+  }
+}
+
+
+.scroll-text {
+  text-align: left;
+
+  /* animation properties */
+  -moz-transform: translateX(100%);
+  -webkit-transform: translateX(100%);
+  transform: translateX(100%);
+
+  -moz-animation: text-scroll-animation 12s linear infinite;
+  -webkit-animation: text-scroll-animation 12s linear infinite;
+  animation: text-scroll-animation 12s linear infinite;
+}
+
+/* for Firefox */
+@-moz-keyframes text-scroll-animation {
+  from {
+    -moz-transform: translateX(100%);
+  }
+
+  to {
+    -moz-transform: translateX(-100%);
+  }
+}
+
+/* for Chrome */
+@-webkit-keyframes text-scroll-animation {
+  from {
+    -webkit-transform: translateX(100%);
+  }
+
+  to {
+    -webkit-transform: translateX(-100%);
+  }
+}
+
+@keyframes text-scroll-animation {
+  from {
+    -moz-transform: translateX(100%);
+    -webkit-transform: translateX(100%);
+    transform: translateX(100%);
+  }
+
+  to {
+    -moz-transform: translateX(-100%);
+    -webkit-transform: translateX(-100%);
+    transform: translateX(-100%);
+  }
+}

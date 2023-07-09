@@ -1,2 +1,34 @@
 {
+  // Use `eslint` for vue, ts and js
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "[vue]": {
+    "editor.defaultFormatter": "Vue.volar"
+  },
+  "[js]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "[ts]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "eslint.validate": [
+    "javascript",
+    "typescript",
+    "vue"
+  ],
+  // Tailwind Support, see https://tailwindcss.nuxt.dev/tailwind/editor-support
+  "tailwindCSS.experimental.configFile": "tailwind.config.ts",
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  // Auto-complete `.value` attribute when volar is installed
+  "volar.autoCompleteRefs": true,
+  "rust-analyzer.linkedProjects": [
+    "./wasm/flock/Cargo.toml"
+  ],
+  "typescript.tsdk": "node_modules/typescript/lib"
 }
