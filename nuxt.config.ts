@@ -14,8 +14,8 @@ export default defineNuxtConfig({
     plugins: [
       wasmPack(['./wasm/flock'])
     ]
+  },
+  app: {
+    baseURL: '/info/'
   }
-  // app: {
-  //   baseURL: '/nullspace/'
-  // }
 })
