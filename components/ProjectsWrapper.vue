@@ -16,10 +16,6 @@
 
 <script setup lang="ts">
 
-const isMounted = ref(false)
-
-onMounted(() => { isMounted.value = true })
-
 const host = computed(() => window.location.host)
 function getFullLink (item: { link: string }): string {
   return (host.value ?? 'colincasazza.info') + item.link
