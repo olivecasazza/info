@@ -10,8 +10,8 @@ const fullPath = computed(() => `https://olivecasazza.github.io/info/${props.not
 
 <template>
   <iframe
-    :ref="props.notebookPath"
-    :src="props.notebookPath"
+    :ref="fullPath"
+    :src="fullPath"
     sandbox="allow-same-origin allow-scripts"
     class="w-full h-full app-view-port"
   />
