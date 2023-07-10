@@ -18,7 +18,7 @@
 
 const host = computed(() => window.location.host)
 function getFullLink (item: { link: string }): string {
-  return (host.value ?? 'colincasazza.info') + item.link
+  return (host.value ?? 'info') + item.link
 }
 
 // ! this (and router objects) should both be coming
