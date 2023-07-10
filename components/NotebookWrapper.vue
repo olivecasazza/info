@@ -4,24 +4,17 @@ const props = defineProps < {
   notebookPath: string
 }>()
 
-const fullPath = computed(() => {
-  return `${props.notebookPath}`
-  // if (window.location.host.includes('github')) {
-  // }
-  // return props.notebookPath
-})
+const fullPath = computed(() => `https://olivecasazza.github.io/info/${props.notebookPath}`)
 
 </script>
 
 <template>
-  <ClientOnly>
-    <iframe
-      :ref="fullPath"
-      :src="fullPath"
-      sandbox="allow-same-origin allow-scripts"
-      class="w-full h-full app-view-port"
-    />
-  </ClientOnly>
+  <iframe
+    :ref="props.notebookPath"
+    :src="props.notebookPath"
+    sandbox="allow-same-origin allow-scripts"
+    class="w-full h-full app-view-port"
+  />
 </template>
 
 <style scoped>
