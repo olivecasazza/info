@@ -5,7 +5,7 @@ const props = defineProps < {
 }>()
 
 const fullPath = computed(() => {
-  if (window.location.origin.includes('github.io')) {
+  if (window.location.host.includes('github')) {
     return `https://olivecasazza.github.io/info/${props.notebookPath}`
   }
   return props.notebookPath
