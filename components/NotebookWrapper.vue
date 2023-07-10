@@ -4,15 +4,21 @@ const props = defineProps < {
   notebookPath: string
 }>()
 
+const fullPath = computed(() => {
+  return `${window.location.origin}${props.notebookPath}`
+})
+
 </script>
 
 <template>
-  <iframe
-    :ref="props.notebookPath"
-    :src="props.notebookPath"
-    sandbox="allow-same-origin allow-scripts"
-    class="w-full h-full app-view-port"
-  />
+  <ClientOnly>
+    <iframe
+      :ref="fullPath"
+      :src="fullPath"
+      sandbox="allow-same-origin allow-scripts"
+      class="w-full h-full app-view-port"
+    />
+  </ClientOnly>
 </template>
 
 <style scoped>
