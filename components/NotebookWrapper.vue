@@ -7,7 +7,9 @@ const props = defineProps < {
 const fullPath = computed(() => {
   let base = ''
   if (window.location.origin.includes('localhost')) { base += 'info/' }
-  return `${window.location.origin}${base}${props.notebookPath}`
+  const path = `${window.location.origin}${base}${props.notebookPath}`
+  console.log(path)
+  return path
 })
 
 </script>
