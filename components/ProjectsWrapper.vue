@@ -1,7 +1,7 @@
 <template>
-  <ClientOnly class="text-left break-words max-w-full">
-    <div v-for="category in categories" :key="category?.subject">
-      <li v-for="item in category?.items" :key="item.heading" class="mb-1 text-sm">
+  <ClientOnly>
+    <div v-for="category in categories" :key="category?.subject" class="flex flex-col text-sm mb-2">
+      <div v-for="item in category?.items" :key="item.heading">
         <NuxtLink class="link" :to="item.link">
           {{
             getFullLink(item)
@@ -9,7 +9,7 @@
         </NuxtLink>
         <br>
         <span class="text" v-html="item.text" />
-      </li>
+      </div>
     </div>
   </ClientOnly>
 </template>

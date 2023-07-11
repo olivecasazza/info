@@ -3,18 +3,21 @@
 const props = defineProps < {
   notebookPath: string
 }>()
-
-const fullPath = computed(() => `https://olivecasazza.github.io/info/${props.notebookPath}`)
+const fullPath = computed(() => {
+  return `${window.location.origin}/info/${props.notebookPath}`
+})
 
 </script>
 
 <template>
-  <iframe
-    :ref="fullPath"
-    :src="fullPath"
-    sandbox="allow-same-origin allow-scripts"
-    class="w-full h-full app-view-port"
-  />
+  <ClientOnly>
+    <iframe
+      :ref="fullPath"
+      :src="fullPath"
+      sandbox="allow-same-origin allow-scripts"
+      class="w-full h-full app-view-port"
+    />
+  </ClientOnly>
 </template>
 
 <style scoped>

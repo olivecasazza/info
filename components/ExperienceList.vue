@@ -1,7 +1,7 @@
 <template>
   <div>
     <span>
-      <li v-for="item of experiences" :key="item.company">
+      <li v-for="item of experiences" :key="item.company" class="flex flex-col mb-1">
         <span class="text-highlight-300">
           {{ item.company }}
         </span>
