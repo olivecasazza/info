@@ -2,10 +2,10 @@
   "private": true,
   "scripts": {
     "build": "nuxt build",
-    "build:wasm": "wasm-pack build /home/ccasazza/Code/colincasazza.info/wasm/flock/ --target web",
+    "build:wasm": "wasm-pack build ./wasm/flock/ --target web",
     "dev": "nuxt dev",
     "deploy": "gh-pages --dotfiles -d .output/public",
-    "deploy-pages": "push-dir --dir=dist --branch=gh-pages --cleanup",
+    "deploy:pages": "push-dir --dir=dist --branch=gh-pages --cleanup",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
