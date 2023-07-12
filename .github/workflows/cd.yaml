@@ -28,6 +28,8 @@ jobs:
       - name: Build WASM dependencies
         run: npm run build:wasm
 
+      - uses: Swatinem/rust-cache@v2
+
       - name: Install node dependencies
         run: npm install
 
