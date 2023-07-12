@@ -1,7 +1,7 @@
 import { Color, Object3D, PerspectiveCamera, Scene, Vector3 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { generateUUID } from 'three/src/math/MathUtils'
-import { ViewPort } from './viewPort'
+import { ViewPort } from '~/utils/renderer/viewPort'
 
 export interface IControlsOptions {
   enabled?: boolean;
