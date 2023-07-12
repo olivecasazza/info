@@ -20,15 +20,12 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - uses: Swatinem/rust-cache@v2
+
       - uses: jetli/wasm-pack-action@v0.4.0
         with:
           version: v0.9.1
       - run: npm run build:wasm
-
-      - name: Build WASM dependencies
-        run: npm run build:wasm
-
-      - uses: Swatinem/rust-cache@v2
 
       - name: Install node dependencies
         run: npm install
