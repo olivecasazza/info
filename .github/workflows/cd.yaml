@@ -25,11 +25,11 @@ jobs:
           version: v0.9.1
       - run: npm run build:wasm
 
-      - name: Install node dependencies
-        run: npm install
-
       - name: Build WASM dependencies
         run: npm run build:wasm
+
+      - name: Install node dependencies
+        run: npm install
 
       - name: Generate
         run: npm run generate
