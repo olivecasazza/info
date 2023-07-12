@@ -4,7 +4,7 @@ const props = defineProps < {
   notebookPath: string
 }>()
 const fullPath = computed(() => {
-  return `${window.location.origin}/info/${props.notebookPath}`
+  return `${window.location.origin}/${props.notebookPath}`
 })
 
 </script>
