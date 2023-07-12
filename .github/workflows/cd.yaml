@@ -20,8 +20,23 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      - name: Install dependencies
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        # Use workspace target directory for cargo install's build,
+        # so that the build of wasm-pack will be cached by rust-cache action.
+        run: CARGO_TARGET_DIR=`pwd`/target cargo install wasm-pack
+
+      - name: Install node dependencies
         run: npm install
+
+      - name: Build WASM dependencies
+        run: npm run build:wasm
 
       - name: Generate
         run: npm run generate
