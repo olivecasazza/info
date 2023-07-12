@@ -1,6 +1,6 @@
 name: cd
 
-on: [pull_request]
+on: [push, pull_request]
 
 jobs:
   cd:
@@ -38,4 +38,4 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+          publish_dir: ./.output/public
