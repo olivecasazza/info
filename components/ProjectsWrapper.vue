@@ -30,9 +30,7 @@ const categories = [
       {
         heading: 'Flocking',
         text: 'Simulated flocking behavior based on separation, alignment, and cohesion. Implemented w/ rust/wasm, inspired by <a class=\'link\' href=\'https://thecodingtrain.com/CodingChallenges/124-flocking-boids.html\'>thecodingtrain.com<a/>.',
-        link: '/projects/flock',
-        sourceCodeLink:
-          'https://github.com/olivecasazza/nullspace/tree/wasm-flock/wasm/src/flock'
+        link: '/projects/flock'
       }
     ]
   },
@@ -40,10 +38,14 @@ const categories = [
     subject: 'notebooks',
     items: [
       {
+        heading: 'Kinematics',
+        text: 'Relatively in depth analysis of the kinematics of robotic manipulator.',
+        link: '/projects/notebooks/kinematics'
+      },
+      {
         heading: 'Inverse Kinematics Approximation',
-        text: 'Apromixation of a 2d inverse kinematic function.',
-        link: '/projects/notebooks/2d-inverse-kinematics',
-        sourceCodeLink: ''
+        text: 'Approximation of a 2d inverse kinematic function.',
+        link: '/projects/notebooks/inverse-kinematic-approximations'
       }
     ]
   }

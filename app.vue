@@ -1,15 +1,19 @@
 <template>
-  <div class="min-h-screen flex flex-col h-screen">
-    <RendererRootViewPortComponent class="z-1 absolute h-full w-full" />
-    <BackgroundWrapper class="z-2 absolute h-full w-full" />
-    <div class="z-10 flex-grow flex flex-col overflow-scroll">
+  <div class="w-full h-full">
+    <RendererRootViewPortComponent class="z-1 fullscreen" />
+    <BackgroundWrapper class="z-2 fullscreen" />
+    <div class="z-10 fullscreen flex flex-col overflow-scroll">
       <NuxtPage class="flex-grow overflow-y-scroll" />
-      <NavBar />
+      <NavBar class="h-fit" />
     </div>
   </div>
 </template>
 
 <style>
+.fullscreen {
+  @apply absolute h-full w-full;
+}
+
 .html, body {
   font-family: 'Courier New', Courier, monospace;
   @apply bg-black text-sm text-gray-300 w-screen h-screen overflow-hidden;

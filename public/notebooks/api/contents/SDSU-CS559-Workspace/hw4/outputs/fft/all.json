@@ -1,0 +1,61 @@
+{
+  "content": [
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.642589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.072051Z",
+      "mimetype": "image/png",
+      "name": "Blonde1.png",
+      "path": "SDSU-CS559-Workspace/hw4/outputs/fft/Blonde1.png",
+      "size": 115071,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.642589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.076051Z",
+      "mimetype": "image/png",
+      "name": "Flowers.png",
+      "path": "SDSU-CS559-Workspace/hw4/outputs/fft/Flowers.png",
+      "size": 73426,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.642589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.076051Z",
+      "mimetype": "image/png",
+      "name": "Zebra.png",
+      "path": "SDSU-CS559-Workspace/hw4/outputs/fft/Zebra.png",
+      "size": 69616,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.642589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.076051Z",
+      "mimetype": "image/png",
+      "name": "Blonde2.png",
+      "path": "SDSU-CS559-Workspace/hw4/outputs/fft/Blonde2.png",
+      "size": 132869,
+      "type": "file",
+      "writable": true
+    }
+  ],
+  "created": "2023-07-13T02:14:09.642589Z",
+  "format": "json",
+  "last_modified": "2023-07-13T02:14:09.642589Z",
+  "mimetype": null,
+  "name": "fft",
+  "path": "SDSU-CS559-Workspace/hw4/outputs/fft",
+  "size": null,
+  "type": "directory",
+  "writable": true
+}

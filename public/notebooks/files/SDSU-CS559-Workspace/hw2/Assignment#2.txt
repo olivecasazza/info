@@ -1,0 +1,34 @@
+﻿CS559 – Computer Vision
+Assignment  No. 2 
+Due October 3, 2018*
+
+    1. (a) What is an interchange format?  (b) Give three examples of interchange formats.
+(c) What is the signature of a PGM format. Give two examples of the signature.
+
+    2. (a) What is patterning in printing? (b) What is a dither matrix and how is it used?
+(c) Explain the principle and operation of error diffusion for printing.
+ 
+    3. Explain conditions under which the use of a lookup table (LUT), instead of calculating the mapping pixel by pixel, reduces the computation.  Express the conditions in terms of number of graylevels (L) and resolution n. 
+
+    4. Many (infinite number) of passes of contrast stretching with the mapping    is applied to a perfectly equalized 8-bit input image.  Draw and carefully label the normalized histogram of the output image. 
+			
+    5.  An 8-bit image has a normalized histogram defined by and .
+Suppose that each pixel is ANDed with 0100 0000, and is set to white if the result of ANDing is non-zero, otherwise is set to black if the result is zero (this operation is called bit-plane slicing). Draw and carefully label the normalized histogram of the resulting output image.
+
+Programs: 
+
+    A.  The purpose of this assignment is to detect the motion and speed of a moving car. Stay still and take two (or move) pictures of a moving car in your neighborhood (better put camera on a stand so it remains still). Either measure or assume you know the time between the two frames (pictures) you took. Your task is to write a program with the two images as input and to find the speed of the moving car from the changes in the two consecutive frames.  This assignment leaves a lot of details for you to work out, for example finding object to image size ratio, etc. I am not expecting from you for a sophisticated method, rather the main point is to explore and appreciate challenges to such a problem.  
+
+    B. The purpose of this program is to understand the representation and manipulation of colors in an image. Consider a color image and suppose we want to keep a particular object in the image in its original color and turn other parts of the image into greyscale. As an example is the RedRose.jpg that should turn into RedRoseGray.jpg. Write a program to achieve this, and apply your program to two images of your choice to demonstrate the effectiveness of your program.  
+
+
+
+                                                         RedRose.jpg
+
+
+
+
+
+
+
+RedRoseGray.jpg

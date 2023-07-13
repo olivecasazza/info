@@ -1,0 +1,85 @@
+{
+  "content": [
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.060050Z",
+      "mimetype": "image/jpeg",
+      "name": "image_scalled_by_3.jpeg",
+      "path": "SDSU-CS559-Workspace/hw1/images/image_scalled_by_3.jpeg",
+      "size": 29512,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.060050Z",
+      "mimetype": "image/jpeg",
+      "name": "image_scalled_by_2.jpeg",
+      "path": "SDSU-CS559-Workspace/hw1/images/image_scalled_by_2.jpeg",
+      "size": 14563,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.060050Z",
+      "mimetype": "image/jpeg",
+      "name": "image.jpeg",
+      "path": "SDSU-CS559-Workspace/hw1/images/image.jpeg",
+      "size": 5342,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.060050Z",
+      "mimetype": "image/jpeg",
+      "name": "image_scalled.jpeg",
+      "path": "SDSU-CS559-Workspace/hw1/images/image_scalled.jpeg",
+      "size": 14563,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.060050Z",
+      "mimetype": "image/jpeg",
+      "name": "image_flipped.jpeg",
+      "path": "SDSU-CS559-Workspace/hw1/images/image_flipped.jpeg",
+      "size": 5988,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.060050Z",
+      "mimetype": "image/jpeg",
+      "name": "image_scalled_by_10.jpeg",
+      "path": "SDSU-CS559-Workspace/hw1/images/image_scalled_by_10.jpeg",
+      "size": 167517,
+      "type": "file",
+      "writable": true
+    }
+  ],
+  "created": "2023-07-13T02:14:09.630588Z",
+  "format": "json",
+  "last_modified": "2023-07-13T02:14:09.630588Z",
+  "mimetype": null,
+  "name": "images",
+  "path": "SDSU-CS559-Workspace/hw1/images",
+  "size": null,
+  "type": "directory",
+  "writable": true
+}

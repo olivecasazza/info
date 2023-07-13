@@ -1,0 +1,73 @@
+{
+  "content": [
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car1b_out.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/out/car1b_out.png",
+      "size": 17989,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car2_out.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/out/car2_out.png",
+      "size": 18004,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car1a_out.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/out/car1a_out.png",
+      "size": 18026,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car2a_out.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/out/car2a_out.png",
+      "size": 18063,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car2b_out.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/out/car2b_out.png",
+      "size": 18080,
+      "type": "file",
+      "writable": true
+    }
+  ],
+  "created": "2023-07-13T02:14:09.630588Z",
+  "format": "json",
+  "last_modified": "2023-07-13T02:14:09.630588Z",
+  "mimetype": null,
+  "name": "out",
+  "path": "SDSU-CS559-Workspace/hw2/cars/out",
+  "size": null,
+  "type": "directory",
+  "writable": true
+}

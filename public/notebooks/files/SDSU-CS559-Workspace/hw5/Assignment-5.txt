@@ -1,0 +1,65 @@
+CS559 - Computer Vision
+Assignment 5
+Due Dec10, 2018
+
+Note: Submitting solutions to this assignment is optional. If you submit the solutions, your best four scores of Assignments 1 thru 5 will be considered. However, this assignment will be included in the final exam. 
+
+1. [12%] (a) Discuss the limitations of region detection by 
+(i) Thresholding and 
+(ii) Region Growing
+(b) What is the main advantage of using the Fourier descriptor for storing the boundary of a region? Explain.
+
+2. [10%] Suppose that the boundary of a closed region is represented by a 4-directional chain code.  Write a function Area(ChainCode) in pseudo-code to compute the area of the region from its gain code representation.
+
+3.   [10%] Show that the area enclosed by the polyline   
+is given by
+
+
+4.  [10%] Write a function Area( QuadTree, Height) in pseudo-code that takes a quadtree representation of a region and returns the area of that region, where Height is the height of the quadtree.  
+
+5. [14%] In an 8 by 8 image the vertices of a triangular region are located at coordinates (2,1), (2,6) and (7,4).  The origin of the image (0,0) is the upper left corner, x is along vertical axis and y is along horizontal axis.
+
+(a) Determine the centroid of the region
+(b) Determine the circularity of the region
+(c) Determine the area of the region using
+(i) moment formula
+(ii) polyline area formula (See Problem 3 above)
+(iii) using geometry 
+           what conclusions do you draw?
+
+6.  [12%] Propose a simple and efficient algorithm to measure the minimum distance between two convex regions in a binary image. An example of such two regions and their minimum distance is shown in the figure just for illustration. However, your algorithm must work for any two distinct convex regions. Note that only the image array Image[x][y] is given, where Image[x][y] = 0, if the pixel (x, y) is on the region and Image[x][y] = 255 if pixel is the background.  You only know that there are two regions in the image, but no information about the location or shape of the regions is available expect for what is given by the image file Image[x][y].    Outline your algorithm in 4 to 8 clearly defined steps. (Please do not give either a detailed code or a vague general description).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+7. [12%] (a) Compare three losses compressions techniques in terms of their suitability for natural images.  
+(b) Explain which lossless compression technique use variable code length. Which technique results in the optimal code length?
+
+8. [20%] Consider the 8 by 8 subimage 
+
+
+Apply the JPEG compression algorithm and find the 1-D coefficient sequence.
+
+
+
+
+
+
+
+
+

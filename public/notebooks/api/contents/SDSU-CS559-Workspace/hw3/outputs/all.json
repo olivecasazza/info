@@ -1,0 +1,97 @@
+{
+  "content": [
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.638589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.068050Z",
+      "mimetype": "image/jpeg",
+      "name": "get_gx_salt_pepper_image.jpg",
+      "path": "SDSU-CS559-Workspace/hw3/outputs/get_gx_salt_pepper_image.jpg",
+      "size": 74996,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.638589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.068050Z",
+      "mimetype": "image/jpeg",
+      "name": "gy_filtered.jpg",
+      "path": "SDSU-CS559-Workspace/hw3/outputs/gy_filtered.jpg",
+      "size": 36576,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.638589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.068050Z",
+      "mimetype": "image/jpeg",
+      "name": "salt_pepper_flower.jpg",
+      "path": "SDSU-CS559-Workspace/hw3/outputs/salt_pepper_flower.jpg",
+      "size": 150025,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.638589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.068050Z",
+      "mimetype": "image/jpeg",
+      "name": "gx_filtered.jpg",
+      "path": "SDSU-CS559-Workspace/hw3/outputs/gx_filtered.jpg",
+      "size": 38343,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.638589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.068050Z",
+      "mimetype": "image/jpeg",
+      "name": "flower_salt_pepper_edges.jpg",
+      "path": "SDSU-CS559-Workspace/hw3/outputs/flower_salt_pepper_edges.jpg",
+      "size": 86718,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.638589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.068050Z",
+      "mimetype": "image/jpeg",
+      "name": "flower_edges.jpg",
+      "path": "SDSU-CS559-Workspace/hw3/outputs/flower_edges.jpg",
+      "size": 45702,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.638589Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.068050Z",
+      "mimetype": "image/jpeg",
+      "name": "get_gy_salt_pepper_image.jpg",
+      "path": "SDSU-CS559-Workspace/hw3/outputs/get_gy_salt_pepper_image.jpg",
+      "size": 74185,
+      "type": "file",
+      "writable": true
+    }
+  ],
+  "created": "2023-07-13T02:14:09.638589Z",
+  "format": "json",
+  "last_modified": "2023-07-13T02:14:09.638589Z",
+  "mimetype": null,
+  "name": "outputs",
+  "path": "SDSU-CS559-Workspace/hw3/outputs",
+  "size": null,
+  "type": "directory",
+  "writable": true
+}
