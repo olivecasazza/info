@@ -1,0 +1,26 @@
+﻿CS559 – Computer Vision
+Assignment  No. 4 
+Due Nov. 14, 2018
+
+
+
+    1. Please answer the following questions precisely. Support your answer with equations,  diagrams, etc, as appropriate.
+    (a) Why is the assumption of image size as a power of 2 needed in Fast Fourier Transform (FFT)?
+    (b) Why is bit reversal needed for (FFT)? 
+    (c) What is the ringing effect and how is it reduced? 
+    (d) What are spectrum power and its relation to information contents of the image?
+
+In the following problems you can use FFT functions in Matlab or Python but you must understand the code, as it may be asked in the exam. Please write captions for your figures to describe it.  For printing and showing the images rescale them to 0-255 range.
+
+    2. Consider the Blonde1.jpg and Blonde2.jpg, and Zebra.jpg accompanying this assignment.
+(a) Apply Butterworth low pass filter with an appropriate order and cutoff frequency (you choose) to the above three images. Present the Fourier spectrum (log magnitude) and filtered images in your report and discuss the effect of this filter on the above three images including the effect of the cutoff frequency.
+ (b) Now apply a low pass spatial domain filter (such as an averaging filter) to the above to images and compare the results with those obtained in (a). 
+
+    3. Apply Gaussian high pass filter to Flowers.jpg accompanying this assignment, and discuss your results and the effect of cutoff frequency.
+
+    4. A  Butterworth bandpass filter is described by ,  where w is the bandwidth and ro  is the cutoff frequency.
+(a) Propose the equation of a Gaussian bandpass filter with a bandwidth w and cutoff frequency ro . 
+(b) Demonstrate the usefulness of the Gaussian bandpass filter using an image of your choice. Discuss the results.
+
+------------------------------------------------------------------------
+* Please type your solutions to Problems 1  using a word processor such as Word or Latex, or write in very clear and legible hand writing. For programs,  submit a short report  in Word or Latex.  In this report briefly explain the features of your program, any findings and conclusions.  Provide outputs (images) to support your report. Each image must have a detailed caption explaining what processing has been done, etc.  Also submit a disk containing your program, and executables.  Put the solutions, the report and the CD/USB in a brown envelope and write your name on the envelope.

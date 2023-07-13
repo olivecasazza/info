@@ -1,0 +1,73 @@
+{
+  "content": [
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.630588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car_template.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/templates/car_template.png",
+      "size": 50136,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.634588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car_template_grey.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/templates/car_template_grey.png",
+      "size": 2224,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.634588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car_template_wheel.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/templates/car_template_wheel.png",
+      "size": 8679,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.634588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car_template_2.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/templates/car_template_2.png",
+      "size": 62199,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2023-07-13T02:14:09.634588Z",
+      "format": null,
+      "last_modified": "2023-07-12T08:01:11.064050Z",
+      "mimetype": "image/png",
+      "name": "car_template_wheel_grey.png",
+      "path": "SDSU-CS559-Workspace/hw2/cars/templates/car_template_wheel_grey.png",
+      "size": 402,
+      "type": "file",
+      "writable": true
+    }
+  ],
+  "created": "2023-07-13T02:14:09.634588Z",
+  "format": "json",
+  "last_modified": "2023-07-13T02:14:09.634588Z",
+  "mimetype": null,
+  "name": "templates",
+  "path": "SDSU-CS559-Workspace/hw2/cars/templates",
+  "size": null,
+  "type": "directory",
+  "writable": true
+}

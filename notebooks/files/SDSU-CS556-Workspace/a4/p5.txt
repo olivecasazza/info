@@ -1,0 +1,40 @@
+Problem 5
+Consider the genetic algorithm trajectory tracking for manipulators, and answer the following questions:
+
+Refrences: Tarokh, M. & Zhang, X. J Intell Robot Syst (2014) 74: 697. https://doi.org/10.1007/s10846-013-9860-4
+
+a. What are crossover and mutation in the context of manipulator trajectory tracking?
+
+    Given an artificial chromosome of L bits where each bit maps to a feature in the problem domain, the crossover operator exchanges parts of two randomly selected chromosomes, producing two distinct offsprings. The mutation operator changes bits in the chromosome in random locations in the chromosome.
+
+    In the context of manipulator trajectory tracking, chromosomes represent joint angle vectors and individual angles represent genes in the chromosome.
+
+b. What are the optimization and constraints, and how are they treated/taken care of?
+
+    The optimal real-time trajectory tracking problem can be stated as follows: Given the desired workspace posture trajectory u (t) and the start configuration described by the joint angle vector s, compute the next joint angle vectors ((j + 1) t) ≡ (j + 1), j = 0, 1,...,m − 1 such that:
+
+    (a) Constraint (1) is satisfied.
+
+    (b) The optimization objective (2) is achieved.
+
+    (c) The position and orientation tracking errors εp and εo are within the acceptable ranges. 
+
+    (d) The joint velocities and accelerations are within physically acceptable ranges.
+
+    (e) The time required to compute the next joint angle vector (j + 1) is no more than t = T/m to enable real time operation.
+
+c. What is the definition of fitness function in trajectory tracking? 
+
+    The definition for the fitness function in trajectory tracking is based off of the amount of error in the current generation. Specifically the fintness level is computed by compairing the end-effector's trajectory to the actual desired trajectory.
+
+d. Genetic algorithm solutions are generally time consuming. How are they used to achieve real-time in trajectory tracking?
+
+    "In order to achieve real time tracking, special provisions are made so that only an appropriate small region in the joint space is searched. The tracking problem is solved at the position level rather the then velocity level. As such the proposed method does not use the manipulator Jacobian inverse or pseudo-inverse matrix and is shown to be free from problems such as excessive joint velocities due to singularities." (Tarikh, Zang, pg. 1)	
+
+e. List three features of genetic algorithm for trajectory tracking that are not achievable using the Jacobian method?
+
+    1. Less prone to excessive joint velocities due to singularities
+
+    2. any simple or complex constraint or optimization objective can be specified in the genetic algorithm formulation
+
+    3. Real-time trajectory functions (very fast)
