@@ -18,7 +18,7 @@ export const useRendererStore = defineStore('renderer', () => {
 
   function init (props: { container: HTMLElement }): void {
     webGLRenderer.value = new WebGLRenderer({ canvas: props.container })
-    // props.container.appendChild(webGLRenderer.value.domElement)
+    initStats({ container: props.container })
     rendererRootViewPort.value.mount({ container: props.container })
     isReady.value = true
   }
