@@ -1,1 +1,0 @@
-import{_ as r}from"./JupyterLiteWrapper.vue.7aaa1683.js";import{_ as t,f as c,b as o}from"./entry.00feda82.js";import"./client-only.e36bf620.js";const s={};function _(n,a){const e=r;return o(),c(e,{class:"h-full w-full"})}const l=t(s,[["render",_]]);export{l as default};
