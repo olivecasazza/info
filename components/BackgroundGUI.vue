@@ -1,7 +1,7 @@
 <template>
-  <div class="w-full h-full flex flex-col">
+  <div class="w-full sm:max-w-sm content-center flex flex-col">
+    <div v-if="isReady" ref="guiContainer" class="noselect border border-gray-300 " />
     <div class="flex-grow" />
-    <div v-if="isReady" ref="guiContainer" class="noselect" />
   </div>
 </template>
 
