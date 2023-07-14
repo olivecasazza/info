@@ -51,7 +51,10 @@ npm run preview
 
 ### Todo(s)
 
+#### Features
+- [x] refactor notebooks to their own github.io
+
+#### Theme
 - [ ] notebook theming
-- [ ] refactor notebooks to their own github.io
 - [ ] light/dark select
 - [ ] theme select
