@@ -1,7 +1,0 @@
-matplotlib
-numpy
-sympy
-plotly
-pandas
-sklearn
-
