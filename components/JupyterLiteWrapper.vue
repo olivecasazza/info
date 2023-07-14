@@ -1,7 +1,8 @@
 <script  setup lang="ts">
 const props = defineProps<{ notebookPath: string }>()
+
 const fullPath = computed(() => {
-  return `${window.location.origin}/notebooks/lab?path=${props.notebookPath}`
+  return `https://olivecasazza.github.io/notebooks/lab?path=${props.notebookPath}`
 })
 
 </script>
