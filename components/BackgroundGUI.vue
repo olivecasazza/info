@@ -15,48 +15,71 @@ const backgroundStore = useBackgroundStore()
 const { addOrUpdateBirdConfig, removeBirdConfig, updateMaxFlockSize } = backgroundStore
 const { birdConfigs, flock, isReady } = storeToRefs(backgroundStore)
 
+let pane!: Pane
+let rootFolder!: FolderApi
+let globalsFolder!: FolderApi
+let birdSpeciesFolder!: FolderApi
+
 const guiContainer = ref(null)
-const pane = ref({} as Pane)
-const rootFolder = ref({} as FolderApi)
-const globalsFolder = ref({} as FolderApi)
-const birdSpeciesFolder = ref({} as FolderApi)
+const configs = computed(() => birdConfigs.value)
 
 onMounted(() => {
-  pane.value = new Pane({ container: guiContainer.value as unknown as HTMLElement })
-  rootFolder.value = pane.value.addFolder({ title: 'settings', expanded: false })
-  globalsFolder.value = rootFolder.value.addFolder({
+  pane = new Pane({ container: guiContainer.value as unknown as HTMLElement })
+  rootFolder = pane.addFolder({ title: 'settings', expanded: false })
+  globalsFolder = rootFolder.addFolder({
     title: 'flock settings'
   })
-  birdSpeciesFolder.value = rootFolder.value.addFolder({
+  birdSpeciesFolder = rootFolder.addFolder({
     title: 'bird settings'
   })
   loadGlobalsFolder()
   loadFlockSpeciesFolder()
 })
 
+// disgusting hack to make gui react to changes in bird configs
+watch(birdConfigs.value, () => {
+  const preset = {} as { [key: string]: any };
+  [...birdConfigs.value.values()].forEach((c) => {
+    Object.entries(c).forEach(([k, v]) => {
+      const validKeys = ['neighborDistance',
+        'desiredSeparation',
+        'separationMultiplier',
+        'alignmentMultiplier',
+        'cohesionMultiplier',
+        'maxForce',
+        'maxSpeed',
+        'birdColor']
+      const key = `${c.id}-${k}`
+      if (validKeys.includes(k)) { preset[key] = v }
+    })
+  })
+  pane.importPreset(preset)
+  pane.refresh()
+})
+
 function loadGlobalsFolder () {
-  globalsFolder.value.addInput(backgroundStore, 'timeStep', {
+  globalsFolder.addInput(backgroundStore, 'timeStep', {
     label: 'simulation timestep',
     step: 0.1,
     min: 0,
     max: 5
   })
-  globalsFolder.value.addInput(backgroundStore, 'maxFlockSize', {
+  globalsFolder.addInput(backgroundStore, 'maxFlockSize', {
     label: 'max flock size',
     step: 1,
     min: 0,
     max: 2000
   }).on('change', event => updateMaxFlockSize(event.value))
 
-  globalsFolder.value.addMonitor(flock.value, 'current_flock_size', {
+  globalsFolder.addMonitor(flock.value, 'current_flock_size', {
     multiline: false
   })
-  globalsFolder.value.addMonitor(flock.value, 'current_flock_size', {
+  globalsFolder.addMonitor(flock.value, 'current_flock_size', {
     view: 'graph',
     min: 0,
     max: 2000
   })
-  globalsFolder.value
+  globalsFolder
     .addButton({ title: 'generate random species' })
     .on('click', async () => {
       const randomConfig = generateRandomBirdConfig()
@@ -66,68 +89,78 @@ function loadGlobalsFolder () {
 }
 
 function loadFlockSpeciesFolder () {
-  birdConfigs.value.forEach(addSpeciesToSpeciesFolder)
+  configs.value.forEach(addSpeciesToSpeciesFolder)
 }
 
 function addSpeciesToSpeciesFolder (birdConfig: IBirdConfig) {
-  const speciesFolder = birdSpeciesFolder.value.addFolder({
+  const speciesFolder = birdSpeciesFolder.addFolder({
     title: birdConfig.id
   })
   speciesFolder.addInput(birdConfig, 'probability', {
+    presetKey: `${birdConfig.id}-probability`,
     label: 'spawn probability multiplier',
     min: 0,
     max: 100,
     step: 1
   })
   speciesFolder.addInput(birdConfig, 'neighborDistance', {
+    presetKey: `${birdConfig.id}-neighborDistance`,
     label: 'neighbor_distance',
     min: 0,
     max: 250,
     step: 1
   })
   speciesFolder.addInput(birdConfig, 'desiredSeparation', {
+    presetKey: `${birdConfig.id}-desiredSeparation`,
     label: 'desired_separation',
     min: 0,
     max: 250,
     step: 1
   })
   speciesFolder.addInput(birdConfig, 'separationMultiplier', {
+    presetKey: `${birdConfig.id}-separationMultiplier`,
     label: 'separation_multiplier',
     min: 0,
     max: 10,
     step: 0.01
   })
   speciesFolder.addInput(birdConfig, 'alignmentMultiplier', {
+    presetKey: `${birdConfig.id}-alignmentMultiplier`,
     label: 'alignment_multiplier',
     min: 0,
     max: 10,
     step: 0.01
   })
   speciesFolder.addInput(birdConfig, 'cohesionMultiplier', {
+    presetKey: `${birdConfig.id}-cohesionMultiplier`,
     label: 'cohesion_multiplier',
     min: 0,
     max: 10,
     step: 0.01
   })
   speciesFolder.addInput(birdConfig, 'maxSpeed', {
+    presetKey: `${birdConfig.id}-maxSpeed`,
     label: 'max_speed',
     min: 0,
     max: 10,
     step: 0.01
   })
   speciesFolder.addInput(birdConfig, 'maxForce', {
+    presetKey: `${birdConfig.id}-maxForce`,
     label: 'max_force',
     min: 0,
     max: 10,
     step: 0.01
   })
   speciesFolder.addInput(birdConfig, 'birdSize', {
+    presetKey: `${birdConfig.id}-birdSize`,
     label: 'bird_size',
     min: 0,
     max: 25,
     step: 1
   })
   speciesFolder.addInput(birdConfig, 'birdColor', {
+    presetKey: `${birdConfig.id}-birdColor`,
     label: 'bird_color'
   })
   if (birdConfig.id !== DEFAULT_BIRD_ID) {
