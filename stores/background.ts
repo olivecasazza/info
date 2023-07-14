@@ -15,6 +15,7 @@ export const useBackgroundStore = defineStore('background', () => {
   const isDragging = ref(false)
   const isReady = ref(false)
   const updating = ref(false)
+  const isRandomizeAnimationEnabled = ref(true)
   const timeStep = ref(1.0)
   const maxFlockSize = ref(MAX_FLOCK_SIZE)
   const flock: Ref<Flock> = ref({} as Flock)
@@ -153,6 +154,7 @@ export const useBackgroundStore = defineStore('background', () => {
   }
 
   function cycleAnimateBirdConfigs () {
+    if (!isRandomizeAnimationEnabled.value) { return }
     birdConfigs.value.forEach((birdConfig) => {
       const newBirdConfigTarget = {
         ...generateRandomBirdConfig(),
@@ -190,6 +192,7 @@ export const useBackgroundStore = defineStore('background', () => {
   return {
     birdConfigs,
     isDragging,
+    isRandomizeAnimationEnabled,
     isReady,
     updating,
     timeStep,

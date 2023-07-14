@@ -58,6 +58,10 @@ watch(birdConfigs.value, () => {
 })
 
 function loadGlobalsFolder () {
+  globalsFolder.addInput(backgroundStore, 'isRandomizeAnimationEnabled',
+    {
+      label: 'enable randomization animation'
+    })
   globalsFolder.addInput(backgroundStore, 'timeStep', {
     label: 'simulation timestep',
     step: 0.1,
