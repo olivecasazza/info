@@ -171,7 +171,6 @@ export const useBackgroundStore = defineStore('background', () => {
         to: 10000,
         duration: 1000 * 2,
         onUpdate: (latest) => {
-          console.log(latest)
           addOrUpdateBirdConfig({
             ...birdConfig,
             neighborDistance: mapNeighborDistance(latest),
