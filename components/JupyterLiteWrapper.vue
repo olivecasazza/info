@@ -2,7 +2,7 @@
 const props = defineProps<{ notebookPath: string }>()
 
 const fullPath = computed(() => {
-  return `https://olivecasazza.github.io/notebooks/lab?path=${props.notebookPath}`
+  return `https://olivecasazza.github.io/notebooks/retro?path=${props.notebookPath}`
 })
 
 </script>
