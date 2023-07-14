@@ -1,1 +1,0 @@
-import{_ as t}from"./JupyterLiteWrapper.vue.5d46c7df.js";import{_ as e,i as n,o as r}from"./entry.6f5e8000.js";import"./client-only.6aae1862.js";const c={};function a(p,s){const o=t;return r(),n(o,{"notebook-path":"SDSU-CS556-Workspace/a4/p4.ipynb"},null,8,["notebook-path"])}const f=e(c,[["render",a]]);export{f as default};
