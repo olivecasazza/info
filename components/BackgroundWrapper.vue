@@ -12,6 +12,7 @@
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
+import { animate } from 'popmotion'
 import {
   BufferAttribute,
   BufferGeometry,
@@ -21,12 +22,11 @@ import {
   Vector3
 } from 'three'
 import { lerp } from 'three/src/math/MathUtils'
-import { animate } from 'popmotion'
 import { useBackgroundStore } from '~/stores/background'
 import { View } from '~/utils/renderer/view'
 
 const backgroundStore = useBackgroundStore()
-const { init, dispose, addBirdAtRandomPosition, addBirdAtPosition } =
+const { init, dispose, addBirdAtRandomPosition, addBirdAtPosition, cycleAnimateBirdConfigs } =
   backgroundStore
 const { isDragging, maxFlockSize, flock } =
   storeToRefs(backgroundStore)
@@ -64,19 +64,26 @@ onMounted(async () => {
   view.value.scene.add(birdsLine.value)
 
   await init()
-  const s = animate({
+  animate({
     from: 0,
-    to: 100,
-    duration: 1000 * 10,
-    onUpdate: function () {
-      if (flock.value && flock.value.current_flock_size > maxFlockSize.value) { s.stop() }
+    to: maxFlockSize.value,
+    duration: 1000 * 2,
+    onUpdate: () => {
+      if (flock.value && flock.value.current_flock_size > maxFlockSize.value) { return }
       if (view.value) {
         addBirdAtRandomPosition({
           viewWidth: view.value.visibleWidthAtZDepth,
           viewHeight: view.value.visibleHeightAtZDepth
         })
       }
-    }
+    },
+    onComplete: () => animate({
+      from: 0,
+      to: 100,
+      duration: 1000 * 10,
+      repeat: Infinity,
+      onRepeat: cycleAnimateBirdConfigs
+    })
   })
 
   window.addEventListener('touchstart', throttle(touchMove, 40), false)

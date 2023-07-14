@@ -1,7 +1,7 @@
 <template>
   <ClientOnly>
-    <div v-for="category in categories" :key="category?.subject" class="flex flex-col text-sm mb-2">
-      <div v-for="item in category?.items" :key="item.heading">
+    <div v-for="category in categories" :key="category?.subject" class="flex flex-col text-sm">
+      <div v-for="item in category?.items" :key="item.heading" class="mb-2">
         <NuxtLink class="link" :to="item.link">
           {{
             getFullLink(item)

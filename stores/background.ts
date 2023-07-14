@@ -1,12 +1,13 @@
 import { defineStore } from 'pinia'
 import { Color } from 'three'
+import { animate, interpolate } from 'popmotion'
 import initFlock, { BirdConfig, Flock } from '~/wasm/flock/pkg/flock'
 
 import { themeColors } from '~/tailwind/colors'
 import {
   DEFAULT_BIRD_ID,
   IBirdConfig,
-  MAX_FLOCK_SIZE, generateBirdId
+  MAX_FLOCK_SIZE, generateBirdId, generateRandomBirdConfig
 } from '~/utils/background/background'
 
 export const useBackgroundStore = defineStore('background', () => {
@@ -28,7 +29,7 @@ export const useBackgroundStore = defineStore('background', () => {
     )
     addOrUpdateBirdConfig({
       id: generateBirdId(),
-      probability: 10,
+      probability: 20,
       neighborDistance: 30,
       desiredSeparation: 40,
       separationMultiplier: 0.3,
@@ -151,6 +152,42 @@ export const useBackgroundStore = defineStore('background', () => {
     flock.value.add_bird(config.id, props.x, props.y)
   }
 
+  function cycleAnimateBirdConfigs () {
+    birdConfigs.value.forEach((birdConfig) => {
+      const newBirdConfigTarget = {
+        ...generateRandomBirdConfig(),
+        id: birdConfig.id
+      }
+      const mapNeighborDistance = interpolate([0, 10000], [birdConfig.neighborDistance, newBirdConfigTarget.neighborDistance])
+      const mapDesiredSeparation = interpolate([0, 10000], [birdConfig.desiredSeparation, newBirdConfigTarget.desiredSeparation])
+      const mapSeparationMultiplier = interpolate([0, 10000], [birdConfig.separationMultiplier, newBirdConfigTarget.separationMultiplier])
+      const mapAlignmentMultiplier = interpolate([0, 10000], [birdConfig.alignmentMultiplier, newBirdConfigTarget.alignmentMultiplier])
+      const mapCohesionMultiplier = interpolate([0, 10000], [birdConfig.cohesionMultiplier, newBirdConfigTarget.cohesionMultiplier])
+      const mapMaxForce = interpolate([0, 10000], [birdConfig.maxForce, newBirdConfigTarget.maxForce])
+      const mapMaxSpeed = interpolate([0, 10000], [birdConfig.maxSpeed, newBirdConfigTarget.maxSpeed])
+      const mapBirdColor = interpolate([0, 10000], [birdConfig.birdColor, newBirdConfigTarget.birdColor])
+      animate({
+        from: 0,
+        to: 10000,
+        duration: 1000 * 2,
+        onUpdate: (latest) => {
+          console.log(latest)
+          addOrUpdateBirdConfig({
+            ...birdConfig,
+            neighborDistance: mapNeighborDistance(latest),
+            desiredSeparation: mapDesiredSeparation(latest),
+            separationMultiplier: mapSeparationMultiplier(latest),
+            alignmentMultiplier: mapAlignmentMultiplier(latest),
+            cohesionMultiplier: mapCohesionMultiplier(latest),
+            maxForce: mapMaxForce(latest),
+            maxSpeed: mapMaxSpeed(latest),
+            birdColor: mapBirdColor(latest)
+          })
+        }
+      })
+    })
+  }
+
   return {
     birdConfigs,
     isDragging,
@@ -166,6 +203,7 @@ export const useBackgroundStore = defineStore('background', () => {
     removeBirdConfig,
     updateFlock,
     addBirdAtRandomPosition,
-    addBirdAtPosition
+    addBirdAtPosition,
+    cycleAnimateBirdConfigs
   }
 })

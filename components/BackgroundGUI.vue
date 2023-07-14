@@ -15,20 +15,19 @@ const backgroundStore = useBackgroundStore()
 const { addOrUpdateBirdConfig, removeBirdConfig, updateMaxFlockSize } = backgroundStore
 const { birdConfigs, flock, isReady } = storeToRefs(backgroundStore)
 
-let pane!: Pane
-let rootFolder!: FolderApi
-let globalsFolder!: FolderApi
-let birdSpeciesFolder!: FolderApi
-
 const guiContainer = ref(null)
+const pane = ref({} as Pane)
+const rootFolder = ref({} as FolderApi)
+const globalsFolder = ref({} as FolderApi)
+const birdSpeciesFolder = ref({} as FolderApi)
 
 onMounted(() => {
-  const pane = new Pane({ container: guiContainer.value as unknown as HTMLElement })
-  rootFolder = pane.addFolder({ title: 'settings', expanded: false })
-  globalsFolder = rootFolder.addFolder({
+  pane.value = new Pane({ container: guiContainer.value as unknown as HTMLElement })
+  rootFolder.value = pane.value.addFolder({ title: 'settings', expanded: false })
+  globalsFolder.value = rootFolder.value.addFolder({
     title: 'flock settings'
   })
-  birdSpeciesFolder = rootFolder.addFolder({
+  birdSpeciesFolder.value = rootFolder.value.addFolder({
     title: 'bird settings'
   })
   loadGlobalsFolder()
@@ -36,28 +35,28 @@ onMounted(() => {
 })
 
 function loadGlobalsFolder () {
-  globalsFolder.addInput(backgroundStore, 'timeStep', {
+  globalsFolder.value.addInput(backgroundStore, 'timeStep', {
     label: 'simulation timestep',
     step: 0.1,
     min: 0,
     max: 5
   })
-  globalsFolder.addInput(backgroundStore, 'maxFlockSize', {
+  globalsFolder.value.addInput(backgroundStore, 'maxFlockSize', {
     label: 'max flock size',
     step: 1,
     min: 0,
     max: 2000
   }).on('change', event => updateMaxFlockSize(event.value))
 
-  globalsFolder.addMonitor(flock.value, 'current_flock_size', {
+  globalsFolder.value.addMonitor(flock.value, 'current_flock_size', {
     multiline: false
   })
-  globalsFolder.addMonitor(flock.value, 'current_flock_size', {
+  globalsFolder.value.addMonitor(flock.value, 'current_flock_size', {
     view: 'graph',
     min: 0,
     max: 2000
   })
-  globalsFolder
+  globalsFolder.value
     .addButton({ title: 'generate random species' })
     .on('click', async () => {
       const randomConfig = generateRandomBirdConfig()
@@ -71,7 +70,7 @@ function loadFlockSpeciesFolder () {
 }
 
 function addSpeciesToSpeciesFolder (birdConfig: IBirdConfig) {
-  const speciesFolder = birdSpeciesFolder.addFolder({
+  const speciesFolder = birdSpeciesFolder.value.addFolder({
     title: birdConfig.id
   })
   speciesFolder.addInput(birdConfig, 'probability', {

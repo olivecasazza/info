@@ -48,3 +48,10 @@ Locally preview production build:
 ```bash
 npm run preview
 ```
+
+### Todo(s)
+
+- [ ] notebook theming
+- [ ] refactor notebooks to their own github.io
+- [ ] light/dark select
+- [ ] theme select
