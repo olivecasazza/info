@@ -1,13 +1,14 @@
 <template>
   <ViewPortComponent
     v-if="view"
-    class="w-full h-full"
+    class="absolute w-full h-full"
     :view="view"
     @mousedown="isDragging = true"
     @mouseup="isDragging = false"
     @mousemove="mouseMove"
     @touchmove="touchMove"
   />
+  <div v-if="!(useRoute().path == '/projects/flock')" class="absolute left-0 top-0 w-full h-full bg-black bg-opacity-60 z-10" />
 </template>
 
 <script setup lang="ts">
