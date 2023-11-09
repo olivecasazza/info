@@ -30,7 +30,7 @@ const categories = [
     items: [
       {
         heading: 'Flocking',
-        text: 'Simulated flocking behavior based on separation, alignment, and cohesion. ',
+        text: 'Simulated flocking behavior based on separation, alignment, and cohesion. Written in Rust, compiled to WASM.',
         link: '/projects/flock',
         isLocal: true
       }
