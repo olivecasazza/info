@@ -1,14 +1,16 @@
 <template>
-  <ViewPortComponent
-    v-if="view"
+  <canvas
+    ref="canvasElement"
     class="absolute w-full h-full"
-    :view="view"
     @mousedown="isDragging = true"
     @mouseup="isDragging = false"
     @mousemove="mouseMove"
     @touchmove="touchMove"
   />
-  <div v-if="!(useRoute().path == '/projects/flock')" class="absolute left-0 top-0 w-full h-full bg-black bg-opacity-60 z-10" />
+  <div
+    v-if="!(useRoute().path == '/projects/flock')"
+    class="absolute left-0 top-0 w-full h-full bg-black bg-opacity-60 z-10"
+  />
 </template>
 
 <script setup lang="ts">
@@ -20,63 +22,82 @@ import {
   Color,
   LineBasicMaterial,
   LineSegments,
-  Vector3
+  PerspectiveCamera,
+  Scene,
+  Vector3,
+  WebGLRenderer
 } from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { lerp } from 'three/src/math/MathUtils'
-import { useBackgroundStore } from '~/stores/background'
-import { View } from '~/utils/renderer/view'
+import { useFlockStore } from '~/stores/flock'
 
-const backgroundStore = useBackgroundStore()
+const backgroundStore = useFlockStore()
 const { init, dispose, addBirdAtRandomPosition, addBirdAtPosition, cycleAnimateBirdConfigs } =
   backgroundStore
 const { isDragging, maxFlockSize, flock } =
   storeToRefs(backgroundStore)
 
-let addBirdsToFlockInterval: NodeJS.Timer
-// variables for rendering flock
-const view = ref(null as View | null)
+const stopped = ref(false)
+const renderer = ref(null as WebGLRenderer | null)
+const canvasElement: Ref<HTMLCanvasElement | undefined> = ref()
+const scene = ref(new Scene())
+const camera = ref(new PerspectiveCamera())
+const controls = ref(null as OrbitControls | null)
 const birdsGeometry = ref(null as BufferGeometry | null)
 const birdsMaterial = ref(null as LineBasicMaterial | null)
 const birdsLine = ref(null as LineSegments | null)
 
-onMounted(async () => {
-  // variables for rendering flock
-  view.value = new View({
-    cameraOptions: {
-      fov: 75,
-      near: 0.1,
-      far: 1200,
-      startingPosition: new Vector3(0, 0, 1000)
-    },
-    controlsOptions: {
-      startDirection: new Vector3(0, 0, 0),
-      enabled: false
-    },
-    id: 'BACKGROUND_VIEW',
-    background: new Color('black'),
-    renderTickCallback
-  })
+const visibleHeightAtZDepth = computed(() => {
+  // compensate for cameras not positioned at z=0
+  const depth = camera.value.position.z
+  // vertical fov in radians
+  const vFOV = (camera.value.fov * Math.PI) / 180
+  // Math.abs to ensure the result is always positive
+  return 2 * Math.tan(vFOV / 2.0) * Math.abs(depth)
+})
+const visibleWidthAtZDepth = computed(() => {
+  const visibleHeight = visibleHeightAtZDepth.value
+  return visibleHeight * (width.value / height.value)
+})
 
+const height = computed(() => {
+  return window.innerHeight ?? 0
+})
+
+const width = computed(() => {
+  return window.innerWidth ?? 0
+})
+
+onMounted(async () => {
+  renderer.value = new WebGLRenderer({ canvas: canvasElement.value })
+  camera.value = new PerspectiveCamera(75, (width.value / height.value), 0.1, 10000)
+  camera.value.position.z = 1000
+  controls.value = new OrbitControls(camera.value, canvasElement.value)
+  controls.value.target = new Vector3(0, 0, 0)
+  scene.value.background = new Color('black')
   birdsGeometry.value = new BufferGeometry()
+  // birdsGeometry.value.toNonIndexed()
+
   birdsMaterial.value = new LineBasicMaterial({
     vertexColors: true
   })
+
+  camera.value.aspect = width.value / height.value
   birdsLine.value = new LineSegments(birdsGeometry.value, birdsMaterial.value)
-  view.value.scene.add(birdsLine.value)
+  scene.value.add(birdsLine.value)
 
   await init()
+
   animate({
     from: 0,
     to: maxFlockSize.value,
     duration: 1000 * 2,
     onUpdate: () => {
       if (flock.value && flock.value.current_flock_size > maxFlockSize.value) { return }
-      if (view.value) {
-        addBirdAtRandomPosition({
-          viewWidth: view.value.visibleWidthAtZDepth,
-          viewHeight: view.value.visibleHeightAtZDepth
-        })
-      }
+      addBirdAtRandomPosition({
+        viewWidth: visibleWidthAtZDepth.value,
+        viewHeight: visibleHeightAtZDepth.value
+      })
     },
     onComplete: () => animate({
       from: 0,
@@ -87,26 +108,33 @@ onMounted(async () => {
     })
   })
 
+  window.addEventListener('resize', resize)
   window.addEventListener('touchstart', throttle(touchMove, 40), false)
   window.addEventListener('touchmove', throttle(touchMove, 40), false)
   window.addEventListener('mousedown', () => (isDragging.value = true), false)
   window.addEventListener('mousemove', throttle(mouseMove, 40), false)
   window.addEventListener('mouseup', () => (isDragging.value = false), false)
+
+  render()
 })
 
 onUnmounted(() => {
-  /** remove all the random event listeners weve added */
+  window.removeEventListener('resize', resize)
   window.removeEventListener('touchstart', throttle(touchMove, 40), false)
   window.removeEventListener('touchmove', throttle(touchMove, 40), false)
   window.removeEventListener('mousedown', () => (isDragging.value = true), false)
   window.removeEventListener('mousemove', throttle(mouseMove, 40), false)
   window.removeEventListener('mouseup', () => (isDragging.value = false), false)
-  clearInterval(addBirdsToFlockInterval as NodeJS.Timer)
-  /** make sure we clean up the wasm resources
-  can we write this into the flock free function */
   dispose()
 })
 
+function resize (): void {
+  // first resize the renderer root viewport
+  if (!renderer.value) { return }
+  const { innerWidth: width, innerHeight: height } = window
+  renderer.value.setSize(width, height, true)
+  camera.value.aspect = width / height
+}
 function updateFlockGeometry (vertices: Float32Array, colors: Float32Array) {
   if (!birdsLine.value) {
     return
@@ -121,18 +149,25 @@ function updateFlockGeometry (vertices: Float32Array, colors: Float32Array) {
   )
 }
 
-function renderTickCallback (_: View) {
-  const backgroundStore = useBackgroundStore()
-  const { isReady, updateFlock, timeStep } = backgroundStore
-  if (!isReady || !view.value) {
-    return
-  }
+function start (): void {
+  stopped.value = false
+  render()
+}
+
+function render (): void {
+  resize()
+  requestAnimationFrame(() => start())
+  const flockStore = useFlockStore()
+  const { updateFlock, timeStep } = flockStore
   updateFlock({
-    sceneWidth: view.value.visibleWidthAtZDepth,
-    sceneHeight: view.value.visibleHeightAtZDepth,
+    sceneWidth: visibleWidthAtZDepth.value,
+    sceneHeight: visibleHeightAtZDepth.value,
     timeStep,
     updateFlockGeometryCallback: updateFlockGeometry
   })
+  renderer.value?.render(toRaw(scene.value), camera.value)
+  camera.value.updateProjectionMatrix()
+  controls.value?.update()
 }
 
 function mouseMove (event: MouseEvent) {
@@ -147,11 +182,11 @@ function touchMove (event: TouchEvent) {
 }
 
 function addBirdFromEvent (eventX: number, eventY: number) {
-  if (!view.value) { return }
-  const normClickX = eventX / view.value.viewPort.width
-  const normClickY = eventY / view.value.viewPort.height
-  const halfSceneWidth = view.value.visibleWidthAtZDepth / 2
-  const halfSceneHeight = view.value.visibleHeightAtZDepth / 2
+  const { innerWidth: width, innerHeight: height } = window
+  const normClickX = eventX / width
+  const normClickY = eventY / height
+  const halfSceneWidth = visibleWidthAtZDepth.value / 2
+  const halfSceneHeight = visibleHeightAtZDepth.value / 2
   const x = lerp(-halfSceneWidth, halfSceneWidth, normClickX)
   const y = -lerp(-halfSceneHeight, halfSceneHeight, normClickY)
   addBirdAtPosition({ x, y })

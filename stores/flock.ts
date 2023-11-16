@@ -10,7 +10,7 @@ import {
   MAX_FLOCK_SIZE, generateBirdId, generateRandomBirdConfig
 } from '~/utils/background/background'
 
-export const useBackgroundStore = defineStore('background', () => {
+export const useFlockStore = defineStore('flock', () => {
   const birdConfigs = ref(new Map<string, IBirdConfig>())
   const isDragging = ref(false)
   const isReady = ref(false)

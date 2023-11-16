@@ -8,12 +8,12 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { FolderApi, Pane } from 'tweakpane'
-import { useBackgroundStore } from '~/stores/background'
+import { useFlockStore } from '~/stores/flock'
 import { DEFAULT_BIRD_ID, generateRandomBirdConfig, IBirdConfig } from '~/utils/background/background'
 
-const backgroundStore = useBackgroundStore()
-const { addOrUpdateBirdConfig, removeBirdConfig, updateMaxFlockSize } = backgroundStore
-const { birdConfigs, flock, isReady } = storeToRefs(backgroundStore)
+const flockStore = useFlockStore()
+const { addOrUpdateBirdConfig, removeBirdConfig, updateMaxFlockSize } = flockStore
+const { birdConfigs, flock, isReady } = storeToRefs(flockStore)
 
 let pane!: Pane
 let rootFolder!: FolderApi
@@ -58,17 +58,17 @@ watch(birdConfigs.value, () => {
 })
 
 function loadGlobalsFolder () {
-  globalsFolder.addInput(backgroundStore, 'isRandomizeAnimationEnabled',
+  globalsFolder.addInput(flockStore, 'isRandomizeAnimationEnabled',
     {
       label: 'enable randomization animation'
     })
-  globalsFolder.addInput(backgroundStore, 'timeStep', {
+  globalsFolder.addInput(flockStore, 'timeStep', {
     label: 'simulation timestep',
     step: 0.1,
     min: 0,
     max: 5
   })
-  globalsFolder.addInput(backgroundStore, 'maxFlockSize', {
+  globalsFolder.addInput(flockStore, 'maxFlockSize', {
     label: 'max flock size',
     step: 1,
     min: 0,

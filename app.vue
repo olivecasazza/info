@@ -1,10 +1,9 @@
 <template>
-  <div class="w-full h-full">
-    <!-- <LazyRendererRootViewPortComponent class="z-1 fullscreen" /> -->
-    <!-- <LazyBackgroundWrapper class="z-2 fullscreen" /> -->
-    <div class="z-10 fullscreen flex flex-col overflow-scroll">
-      <LazyNuxtPage class="flex-grow overflow-y-scroll" />
-      <LazyNavBar class="h-fit" />
+  <div class="w-screen h-screen">
+    <BackgroundWrapper />
+    <div class="z-20 fullscreen flex flex-col overflow-scroll">
+      <NuxtPage class="flex-grow overflow-y-scroll" />
+      <NavBar class="h-fit" />
     </div>
   </div>
 </template>
