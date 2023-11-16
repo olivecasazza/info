@@ -1,23 +1,23 @@
 <script  setup lang="ts">
 
-const props = defineProps < {
+const isMounted = ref(false)
+onMounted(() => { isMounted.value = true })
+
+const props = defineProps<{
   notebookPath: string
 }>()
-const fullPath = computed(() => {
-  return `https://olivecasazza.github.io/notebooks/retro/notebooks/?path=/${props.notebookPath}`
-})
 
 </script>
 
 <template>
-  <ClientOnly>
+  <div class="w-full h-full flex items-center justify-center ">
     <iframe
-      :ref="fullPath"
-      :src="fullPath"
+      :ref="props.notebookPath"
+      :src="props.notebookPath"
       sandbox="allow-same-origin allow-scripts"
-      class="w-full h-full app-view-port"
+      class="w-11/12 h-5/6 z-20 border border-gray-600"
     />
-  </ClientOnly>
+  </div>
 </template>
 
 <style scoped>
@@ -25,7 +25,48 @@ const fullPath = computed(() => {
   @apply w-full h-full bg-transparent text-xs;
 }
 
-.jp-Notebook > * {
+.jp-Notebook>* {
   background: transparent;
+}
+
+@keyframes ldio-yepym19m4 {
+  0% {
+    transform: rotate(0deg)
+  }
+
+  100% {
+    transform: rotate(360deg)
+  }
+}
+
+.loader {
+  width: 48px;
+  height: 48px;
+  border: 2px solid #FFF;
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+  box-sizing: border-box;
+  animation: rotation 1s linear infinite;
+}
+.loader::after {
+  content: '';
+  box-sizing: border-box;
+  position: absolute;
+  left: 50%;
+  top: 0;
+  background: #FF3D00;
+  width: 3px;
+  height: 24px;
+  transform: translateX(-50%);
+}
+
+@keyframes rotation {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 </style>
