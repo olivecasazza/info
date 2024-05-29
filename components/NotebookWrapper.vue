@@ -10,7 +10,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <div class="w-full h-full flex items-center justify-center ">
+  <div class="w-full h-full flex items-center justify-center z-20 absolute">
     <iframe
       :ref="props.notebookPath"
       :src="props.notebookPath"
@@ -18,16 +18,12 @@ const props = defineProps<{
       class="w-11/12 h-5/6 z-20 border border-gray-600"
     />
   </div>
+  <div class="w-full h-full flex items-center justify-center z-10 absolute rainbow-text-animated">
+    LOADING....
+  </div>
 </template>
 
 <style scoped>
-.jp-Notebook {
-  @apply w-full h-full bg-transparent text-xs;
-}
-
-.jp-Notebook>* {
-  background: transparent;
-}
 
 @keyframes ldio-yepym19m4 {
   0% {
