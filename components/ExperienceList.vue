@@ -1,7 +1,7 @@
 <template>
   <div>
     <span>
-      <li v-for="item of experiences" :key="item.company" class="flex flex-col mb-1">
+      <li v-for="item of experiences" :key="item.company" class="flex flex-col mt-1">
         <span class="text-highlight-300">
           {{ item.company }}
         </span>
@@ -29,9 +29,15 @@ interface IExperienceItem {
 
 const experiences: IExperienceItem[] = [
   {
+    company: 'Nvidia',
+    subItems: [
+      { description: 'Senior HPC Data Analyst', date: { start: '2024', end: 'current' } }
+    ]
+  },
+  {
     company: 'Qualcomm',
     subItems: [
-      { description: 'Cloud Tools Software Engineer', date: { start: '2021', end: 'current' } },
+      { description: 'Cloud Tools Software Engineer', date: { start: '2021', end: '2023' } },
       { description: 'Programmer Analyst', date: { start: '2020', end: '2021' } }
     ]
   },

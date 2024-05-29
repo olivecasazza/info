@@ -31,11 +31,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { lerp } from 'three/src/math/MathUtils'
 import { useFlockStore } from '~/stores/flock'
 
-const backgroundStore = useFlockStore()
-const { init, dispose, addBirdAtRandomPosition, addBirdAtPosition, cycleAnimateBirdConfigs } =
-  backgroundStore
-const { isDragging, maxFlockSize, flock } =
-  storeToRefs(backgroundStore)
+const { init, dispose, addBirdAtRandomPosition, addBirdAtPosition, cycleAnimateBirdConfigs } = useFlockStore()
+const { isDragging, maxFlockSize, flock } = storeToRefs(useFlockStore())
 
 const stopped = ref(false)
 const renderer = ref(null as WebGLRenderer | null)
@@ -76,12 +73,9 @@ onMounted(async () => {
   controls.value.target = new Vector3(0, 0, 0)
   scene.value.background = new Color('black')
   birdsGeometry.value = new BufferGeometry()
-  // birdsGeometry.value.toNonIndexed()
-
   birdsMaterial.value = new LineBasicMaterial({
     vertexColors: true
   })
-
   camera.value.aspect = width.value / height.value
   birdsLine.value = new LineSegments(birdsGeometry.value, birdsMaterial.value)
   scene.value.add(birdsLine.value)
@@ -171,7 +165,7 @@ function render (): void {
 }
 
 function mouseMove (event: MouseEvent) {
-  if (!isDragging) { return }
+  if (!isDragging.value) { return }
   addBirdFromEvent(event.x, event.y)
 }
 
