@@ -23,7 +23,7 @@ jobs:
           version: 'latest'
       # build node
       - run: npm run build:wasm
-      - run: NUXT_APP_BASE_URL=/info/ npx nuxt build --preset github_pages
+      - run: npx nuxt build --preset github_pages
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
