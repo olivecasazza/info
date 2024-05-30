@@ -10,7 +10,6 @@ export default defineNuxtConfig({
   typescript: {
     shim: false
   },
-  buildDir: "./dist",
   vite: {
     plugins: [
       wasmPack(['./wasm/flock'])
