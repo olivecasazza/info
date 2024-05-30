@@ -1,5 +1,5 @@
 <template>
-  <div v-if="pathItems?.length != 0" class="p-1 flex flex-row">
+  <div v-if="pathItems?.length != 0" class="p-1 flex flex-row nav">
     <div v-for="(item, index) of pathItems" :key="index">
       <span>
         <NuxtLink v-if="!isActiveItem(item)" class="link" :to="getTo(item)">{{ item }}</NuxtLink>
@@ -39,3 +39,10 @@ function getTo (item: string) {
   }
 }
 </script>
+
+<style>
+.link{}
+::selection { background: transparent; }
+::-moz-selection { background: transparent; }
+</style>
+
