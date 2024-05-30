@@ -24,13 +24,11 @@ jobs:
       # build nuxt app
       - run: npm run build:wasm
       - run: npm run build:pages
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
+      # upload artifacts
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
           path: ./.output/public
-      # deploy job
+      # deploy to pages
       - name: Deploy
         run: npm run deploy:pages
