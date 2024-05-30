@@ -31,4 +31,7 @@ jobs:
           path: ./.output/public
       # deploy to pages
       - name: Deploy
-        run: npm install gh-pages && npm run deploy:pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./.output/public
