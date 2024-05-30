@@ -5,7 +5,7 @@
     "build:wasm": "wasm-pack build ./wasm/flock/ --target web",
     "dev": "nuxt dev",
     "build:pages": "NUXT_APP_BASE_URL=/info/ npx nuxt generate && touch .output/public/.nojekyll",
-    "deploy": "gh-pages --dotfiles -d .output/public",
+    "deploy:pages": "gh-pages --dotfiles -d .output/public",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",

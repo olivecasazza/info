@@ -33,4 +33,4 @@ jobs:
           path: ./.output/public
       # deploy job
       - name: Deploy
-        run: npm run deploy:gh-pages
+        run: npm run deploy:pages
