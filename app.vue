@@ -3,7 +3,7 @@
     <BackgroundWrapper />
     <div class="z-20 fullscreen flex flex-col overflow-scroll">
       <NuxtPage class="flex-grow overflow-y-scroll" />
-      <NavBar class="h-fit" />
+      <NavBar class="h-fit z-50" />
     </div>
   </div>
 </template>

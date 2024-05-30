@@ -10,7 +10,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <div class="w-full h-full flex items-center justify-center z-20 absolute">
+  <div class="w-full h-full flex items-center justify-center z-20">
     <iframe
       :ref="props.notebookPath"
       :src="props.notebookPath"
