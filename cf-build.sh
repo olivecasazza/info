@@ -9,4 +9,4 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -y ;
 npm run build:wasm
 
 # build nuxt package
-npm run build:pages
+npm run build
