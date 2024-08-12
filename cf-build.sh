@@ -9,7 +9,7 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -y ;
 npm install 
 
 # build wasm package
-npm run build:wasm
+wasm-pack build ./wasm/flock/ --target web
 
 # build nuxt package
-npm run build
+npx nuxt generate
