@@ -28,6 +28,7 @@
     "typescript": "^4.9.5",
     "vite-plugin-wasm-pack": "^0.1.12",
     "vue-tsc": "^1.0.24",
+    "wasm-pack": "^0.13.0",
     "weighted-array": "^0.2.0"
   },
   "overrides": {
