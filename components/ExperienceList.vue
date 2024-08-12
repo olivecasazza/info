@@ -31,7 +31,7 @@ const experiences: IExperienceItem[] = [
   {
     company: 'Nvidia',
     subItems: [
-      { description: 'Senior HPC Data Analyst', date: { start: '2024', end: 'current' } }
+      { description: 'Senior HPC Data Analyst', date: { start: '2024', end: '2024' } }
     ]
   },
   {
