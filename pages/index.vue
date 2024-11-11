@@ -28,13 +28,6 @@
       </div>
       <ProjectsWrapper />
     </div>
-    <br>
-    <div>
-      <div class="text-xl text-primary-300">
-        Custom Hosting Solutions
-      </div>
-      <span>I provide hosting solutions for specialized needs. <router-link class="link" to="contact">Contact me</router-link> to discuss hosting your next application.</span>
-    </div>
     <div class="flex-grow" />
   </div>
 </template>
