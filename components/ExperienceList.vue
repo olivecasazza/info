@@ -29,6 +29,12 @@ interface IExperienceItem {
 
 const experiences: IExperienceItem[] = [
   {
+    company: 'Schrödinger',
+    subItems: [
+      { description: 'Systems Engineer', date: { start: '2024', end: 'present' } }
+    ]
+  },
+  {
     company: 'Nvidia',
     subItems: [
       { description: 'Senior HPC Data Analyst', date: { start: '2024', end: '2024' } }
