@@ -225,7 +225,7 @@ impl PipeSim {
             segments: Vec::new(),
             rng: oorandom::Rand32::new(seed),
             min_spacing,
-            straightness: 6,
+            straightness: 10,
             turn_delay: Vec::new(),
         };
         s.reset(pipe_count, &HashSet::new());
@@ -465,15 +465,11 @@ impl Default for IsoRenderer {
 }
 
 impl IsoRenderer {
-    fn project(&self, p: IVec3) -> Pos2 {
-        let x = p.x as f32;
-        let y = p.y as f32;
-        let z = p.z as f32;
+    fn project(&self, x: f32, y: f32, z: f32) -> Pos2 {
         let sx = (x - y) * self.scale;
         let sy = (x + y) * 0.5 * self.scale - z * self.scale;
         pos2(sx, sy)
     }
-
 }
 
 pub struct Ethernet3DPipesApp {
@@ -525,10 +521,10 @@ impl Ethernet3DPipesApp {
         }
     }
 
-    fn iso_centered(&self, rect: Rect, p: IVec3) -> Pos2 {
+    fn iso_centered(&self, rect: Rect, x: f32, y: f32, z: f32) -> Pos2 {
         let center = rect.center();
         // Return raw projected position; quantization happens in rasterizer.
-        self.renderer.project(p) + center.to_vec2()
+        self.renderer.project(x, y, z) + center.to_vec2()
     }
 
     /// Software rasterizer: draws an aliased line by stepping along the path
@@ -568,93 +564,64 @@ impl Ethernet3DPipesApp {
         }
     }
 
-    /// Draws a simple 3D box in isometric projection using pixel-art filled faces.
+    /// Draws a true 3D box in isometric projection.
+    /// `center` is in world units (f32). `size` is (x, y, z) dimensions in world units.
     fn draw_iso_box(
         &self,
         painter: &egui::Painter,
         rect: Rect,
-        center_pos: IVec3,
-        size: Vec2, // (width, height/depth) in world units approximation
+        center: [f32; 3],
+        size: [f32; 3],
         color: Color32,
     ) {
-        // 3 visible faces for a box: Top, Left, Right.
-        // Simplified: we just draw a few quads offset from the center.
-        // Ideally we project the 8 corners, but we can cheat for the connector.
+        let (cx, cy, cz) = (center[0], center[1], center[2]);
+        let (sx, sy, sz) = (size[0] * 0.5, size[1] * 0.5, size[2] * 0.5);
 
-        let center_2d = self.iso_centered(rect, center_pos);
+        // Visible faces from standard iso angle: Top (+Z), Right (+X), Left (+Y).
+
+        // Define key corners in world space
+        // Top Face (+Z)
+        let t_back  = self.iso_centered(rect, cx - sx, cy - sy, cz + sz);
+        let t_right = self.iso_centered(rect, cx + sx, cy - sy, cz + sz);
+        let t_front = self.iso_centered(rect, cx + sx, cy + sy, cz + sz);
+        let t_left  = self.iso_centered(rect, cx - sx, cy + sy, cz + sz);
+
+        // Bottom Face (+Z) - only needed for side connections
+        let b_right = self.iso_centered(rect, cx + sx, cy - sy, cz - sz);
+        let b_front = self.iso_centered(rect, cx + sx, cy + sy, cz - sz);
+        let b_left  = self.iso_centered(rect, cx - sx, cy + sy, cz - sz);
+
         let px = self.renderer.pixel.max(1.0);
-
-        // Dimensions in screen space (roughly)
-        let w = size.x * self.renderer.scale;
-        let h = size.y * self.renderer.scale;
-
-        // Top face (diamond)
-        // We simulate faces by offsetting pixel lines or drawing quads.
-        // But to keep the "pixel look", we should use `draw_pixel_line`?
-        // No, for the connector block, a small filled polygon is okay if it aligns well,
-        // but to match the style, let's draw it as a stack of lines.
-
-        // Actually, let's just draw a small cube by drawing 3 rhombuses (quads).
-        // Since the user wants "3D object", this is the best way.
-        // We rely on egui's aliasing for the edges if we don't manually rasterize.
-        // Given the constraints, let's manually rasterize the edges of the box OR
-        // just draw small filled rects to fill the volume.
-
-        // BETTER APPROACH: Just draw a "sprite" of a box.
-        // Since we are isometric, a cube always looks the same (hexagon).
-        // Unless we rotate it.
-        // Let's stick to the previous implementation but make it look 3D by adding depth/shading faces.
-
-        // Face 1: Top (Lightest)
-        let top_offset = vec2(0.0, -h * 0.5);
-
-        let c = center_2d;
-
-        // Top Face
-        let t0 = c + top_offset;
-        let t1 = c + top_offset + vec2(w * 0.5, h * 0.25);
-        let t2 = c + top_offset + vec2(0.0, h * 0.5);
-        let t3 = c + top_offset + vec2(-w * 0.5, h * 0.25);
-
-        // We will just draw filled polys, but rely on the coarse grid of the *positions*
-        // to make it look retro.
-        // To enforce pixelation, we snap the vertices.
         let snap = |p: Pos2| {
             let q = px;
             pos2((p.x / q).round() * q, (p.y / q).round() * q)
         };
 
-        let t0 = snap(t0); let t1 = snap(t1); let t2 = snap(t2); let t3 = snap(t3);
+        let t = [t_back, t_right, t_front, t_left].map(snap);
+        let b_r = snap(b_right);
+        let b_f = snap(b_front);
+        let b_l = snap(b_left);
 
+        // Draw Visible Faces
+
+        // Right Face (+X): t_right, t_front, b_front, b_right
         painter.add(Shape::convex_polygon(
-            vec![t0, t1, t2, t3],
-            self.palette.pipe_light(color),
-            Stroke::NONE, //Stroke::new(px, self.palette.outline),
-        ));
-
-        // Side Right (Medium)
-        let r0 = t1;
-        let r1 = r0 + vec2(0.0, h * 0.6); // Height of the box
-        let r2 = t2 + vec2(0.0, h * 0.6);
-        let r3 = t2;
-        let r0=snap(r0); let r1=snap(r1); let r2=snap(r2); let r3=snap(r3);
-
-        painter.add(Shape::convex_polygon(
-            vec![r0, r1, r2, r3],
+            vec![t[1], t[2], b_f, b_r],
             self.palette.pipe_dark(color),
             Stroke::NONE,
         ));
 
-        // Side Left (Darkest/Base)
-        let l0 = t3;
-        let l1 = t2;
-        let l2 = t2 + vec2(0.0, h * 0.6);
-        let l3 = l0 + vec2(0.0, h * 0.6);
-        let l0=snap(l0); let l1=snap(l1); let l2=snap(l2); let l3=snap(l3);
-
+        // Left Face (+Y): t_left, t_front, b_front, b_left
         painter.add(Shape::convex_polygon(
-            vec![l0, l1, l2, l3],
-            color, //self.palette.pipe_dark(self.palette.pipe_dark(color)),
+            vec![t[3], t[2], b_f, b_l],
+            color, // Base color
+            Stroke::NONE,
+        ));
+
+        // Top Face (+Z): t_back, t_right, t_front, t_left
+        painter.add(Shape::convex_polygon(
+            vec![t[0], t[1], t[2], t[3]],
+            self.palette.pipe_light(color),
             Stroke::NONE,
         ));
     }
@@ -672,10 +639,10 @@ impl Ethernet3DPipesApp {
             let p2 = IVec3::new(panel.pos.x + panel.w, panel.pos.y + panel.h, z);
             let p3 = IVec3::new(panel.pos.x, panel.pos.y + panel.h, z);
 
-            let v0 = self.iso_centered(rect, p0);
-            let v1 = self.iso_centered(rect, p1);
-            let v2 = self.iso_centered(rect, p2);
-            let v3 = self.iso_centered(rect, p3);
+            let v0 = self.iso_centered(rect, p0.x as f32, p0.y as f32, p0.z as f32);
+            let v1 = self.iso_centered(rect, p1.x as f32, p1.y as f32, p1.z as f32);
+            let v2 = self.iso_centered(rect, p2.x as f32, p2.y as f32, p2.z as f32);
+            let v3 = self.iso_centered(rect, p3.x as f32, p3.y as f32, p3.z as f32);
 
             let poly = vec![v0, v1, v2, v3];
             painter.add(Shape::convex_polygon(poly.clone(), self.palette.panel_body, Stroke::NONE));
@@ -699,31 +666,70 @@ impl Ethernet3DPipesApp {
         }
     }
 
-    fn draw_rj45(&self, painter: &egui::Painter, rect: Rect, pos: IVec3, _dir: Dir) {
-        // Draw a 3D block representing the connector.
-        // We slightly offset it in the direction of the pipe end.
+    fn draw_rj45(&self, painter: &egui::Painter, rect: Rect, pos: IVec3, dir: Dir) {
+        // Dimensions relative to grid.
+        // L = 3.2 (approx 4x current 0.8), W = 1.0 (approx 3x wire 0.3), H = 0.6 (approx 2x wire 0.3)
+        let l = 3.2;
+        let w = 1.0;
+        let h = 0.6;
 
-        // Connector color (clear plastic-ish, but solid for 3D look)
-        let color = Color32::from_rgb(200, 200, 220);
+        // Determine dimensions based on orientation
+        let (sx, sy, sz) = match dir {
+            Dir::PosX | Dir::NegX => (l, w, h),
+            Dir::PosY | Dir::NegY => (w, l, h),
+            Dir::PosZ | Dir::NegZ => (w, h, l),
+        };
 
-        // Offset in world space? No, let's just draw it at the pos.
-        // Ideally we shift it by `dir` * 0.5.
-        // But `draw_iso_box` takes a center position.
-        // Let's rely on the rendering scale.
+        // Center position: The pipe ends at `pos`.
+        // We want the connector to extend in `dir` direction, starting roughly from `pos`.
+        let px = pos.x as f32;
+        let py = pos.y as f32;
+        let pz = pos.z as f32;
 
-        // We want it to look like it's attached.
-        // The pipe segment ends at `pos`.
+        let dv = dir.vec();
+        // Offset center: push out by half length, slightly pulled back to overlap
+        let cx = px + (dv.x as f32) * (l * 0.35);
+        let cy = py + (dv.y as f32) * (l * 0.35);
+        let cz = pz + (dv.z as f32) * (l * 0.35);
+
+        // 1. Draw Main Body
+        let color_body = Color32::from_rgb(210, 210, 230); // Clear plastic
+        self.draw_iso_box(painter, rect, [cx, cy, cz], [sx, sy, sz], color_body);
+
+        // 2. Draw Latch (Clip)
+        // Latch is on the "Top" face usually.
+        let lx = if sx == l { l * 0.5 } else { sx * 0.4 };
+        let ly = if sy == l { l * 0.5 } else { sy * 0.4 };
+        let lz = if sz == l { l * 0.5 } else { sz * 0.4 };
+
+        // Offset: Move "Up" (Z+) or "Out" (Y+ for vertical?)
+        let (ox, oy, oz) = match dir {
+             Dir::PosZ | Dir::NegZ => (0.0, sy * 0.5, 0.0), // Side latch for vertical
+             _ => (0.0, 0.0, sz * 0.5), // Top latch for horizontal
+        };
 
         self.draw_iso_box(
             painter,
             rect,
-            pos,
-            vec2(0.8, 0.8), // Size relative to grid cell
-            color
+            [cx + ox, cy + oy, cz + oz],
+            [lx, ly, lz],
+            color_body
         );
 
-        // Maybe add gold contacts on top?
-        // For now, the 3D shape is the priority.
+        // 3. Gold Contacts (Tip)
+        let tip_offset_scale = 0.45;
+        let tx = px + (dv.x as f32) * (l * tip_offset_scale);
+        let ty = py + (dv.y as f32) * (l * tip_offset_scale);
+        let tz = pz + (dv.z as f32) * (l * tip_offset_scale);
+
+        let cs = 0.2;
+        self.draw_iso_box(
+            painter,
+            rect,
+            [tx, ty, tz],
+            [cs, cs, cs],
+            Color32::from_rgb(255, 215, 0)
+        );
     }
 
     fn draw_pipes(&self, painter: &egui::Painter, rect: Rect) {
@@ -738,8 +744,8 @@ impl Ethernet3DPipesApp {
         let px = self.renderer.pixel.max(1.0);
 
         for seg in &segs {
-            let a = self.iso_centered(rect, seg.from);
-            let b = self.iso_centered(rect, seg.to);
+            let a = self.iso_centered(rect, seg.from.x as f32, seg.from.y as f32, seg.from.z as f32);
+            let b = self.iso_centered(rect, seg.to.x as f32, seg.to.y as f32, seg.to.z as f32);
 
             let base_color = self.palette.pipe(seg.pipe_id);
             let highlight = self.palette.pipe_light(base_color);
