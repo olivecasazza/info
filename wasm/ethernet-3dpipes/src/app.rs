@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use egui::{pos2, vec2, Color32, Pos2, Rect, Shape, Stroke};
+use egui::{pos2, vec2, Color32, Pos2, Rect, Shape, Stroke, Vec2};
 
 mod theme {
     include!(concat!(env!("OUT_DIR"), "/theme_gen.rs"));
@@ -474,13 +474,6 @@ impl IsoRenderer {
         pos2(sx, sy)
     }
 
-    fn quantize(&self, p: Pos2) -> Pos2 {
-        // Snap to a slightly larger grid than `pixel` itself. This helps keep
-        // the isometric lines aligned on a coarse pixel lattice so they feel
-        // more "8-bit" and less like subpixel anti-aliased lines.
-        let q = (self.pixel * 3.0).max(1.0);
-        pos2((p.x / q).round() * q, (p.y / q).round() * q)
-    }
 }
 
 pub struct Ethernet3DPipesApp {
@@ -534,7 +527,136 @@ impl Ethernet3DPipesApp {
 
     fn iso_centered(&self, rect: Rect, p: IVec3) -> Pos2 {
         let center = rect.center();
-        self.renderer.quantize(self.renderer.project(p)) + center.to_vec2()
+        // Return raw projected position; quantization happens in rasterizer.
+        self.renderer.project(p) + center.to_vec2()
+    }
+
+    /// Software rasterizer: draws an aliased line by stepping along the path
+    /// and drawing a square (voxel) at each grid point.
+    fn draw_pixel_line(
+        &self,
+        painter: &egui::Painter,
+        p1: Pos2,
+        p2: Pos2,
+        color: Color32,
+        thickness_in_pixels: f32,
+    ) {
+        let px = self.renderer.pixel.max(1.0);
+        let d = p2 - p1;
+        let len = d.length();
+        if len < 0.1 {
+            return;
+        }
+
+        // Number of steps to ensure we don't have gaps.
+        // Stepping by 0.5 * px ensures good overlap.
+        let step_size = px * 0.5;
+        let steps = (len / step_size).ceil() as i32;
+
+        for i in 0..=steps {
+            let t = i as f32 / steps as f32;
+            let pos = p1 + d * t;
+
+            // Snap to grid
+            let cx = (pos.x / px).round() * px;
+            let cy = (pos.y / px).round() * px;
+
+            // Draw a square of the desired thickness
+            let size = px * thickness_in_pixels;
+            let r = Rect::from_center_size(pos2(cx, cy), vec2(size, size));
+            painter.rect_filled(r, 0.0, color);
+        }
+    }
+
+    /// Draws a simple 3D box in isometric projection using pixel-art filled faces.
+    fn draw_iso_box(
+        &self,
+        painter: &egui::Painter,
+        rect: Rect,
+        center_pos: IVec3,
+        size: Vec2, // (width, height/depth) in world units approximation
+        color: Color32,
+    ) {
+        // 3 visible faces for a box: Top, Left, Right.
+        // Simplified: we just draw a few quads offset from the center.
+        // Ideally we project the 8 corners, but we can cheat for the connector.
+
+        let center_2d = self.iso_centered(rect, center_pos);
+        let px = self.renderer.pixel.max(1.0);
+
+        // Dimensions in screen space (roughly)
+        let w = size.x * self.renderer.scale;
+        let h = size.y * self.renderer.scale;
+
+        // Top face (diamond)
+        // We simulate faces by offsetting pixel lines or drawing quads.
+        // But to keep the "pixel look", we should use `draw_pixel_line`?
+        // No, for the connector block, a small filled polygon is okay if it aligns well,
+        // but to match the style, let's draw it as a stack of lines.
+
+        // Actually, let's just draw a small cube by drawing 3 rhombuses (quads).
+        // Since the user wants "3D object", this is the best way.
+        // We rely on egui's aliasing for the edges if we don't manually rasterize.
+        // Given the constraints, let's manually rasterize the edges of the box OR
+        // just draw small filled rects to fill the volume.
+
+        // BETTER APPROACH: Just draw a "sprite" of a box.
+        // Since we are isometric, a cube always looks the same (hexagon).
+        // Unless we rotate it.
+        // Let's stick to the previous implementation but make it look 3D by adding depth/shading faces.
+
+        // Face 1: Top (Lightest)
+        let top_offset = vec2(0.0, -h * 0.5);
+
+        let c = center_2d;
+
+        // Top Face
+        let t0 = c + top_offset;
+        let t1 = c + top_offset + vec2(w * 0.5, h * 0.25);
+        let t2 = c + top_offset + vec2(0.0, h * 0.5);
+        let t3 = c + top_offset + vec2(-w * 0.5, h * 0.25);
+
+        // We will just draw filled polys, but rely on the coarse grid of the *positions*
+        // to make it look retro.
+        // To enforce pixelation, we snap the vertices.
+        let snap = |p: Pos2| {
+            let q = px;
+            pos2((p.x / q).round() * q, (p.y / q).round() * q)
+        };
+
+        let t0 = snap(t0); let t1 = snap(t1); let t2 = snap(t2); let t3 = snap(t3);
+
+        painter.add(Shape::convex_polygon(
+            vec![t0, t1, t2, t3],
+            self.palette.pipe_light(color),
+            Stroke::NONE, //Stroke::new(px, self.palette.outline),
+        ));
+
+        // Side Right (Medium)
+        let r0 = t1;
+        let r1 = r0 + vec2(0.0, h * 0.6); // Height of the box
+        let r2 = t2 + vec2(0.0, h * 0.6);
+        let r3 = t2;
+        let r0=snap(r0); let r1=snap(r1); let r2=snap(r2); let r3=snap(r3);
+
+        painter.add(Shape::convex_polygon(
+            vec![r0, r1, r2, r3],
+            self.palette.pipe_dark(color),
+            Stroke::NONE,
+        ));
+
+        // Side Left (Darkest/Base)
+        let l0 = t3;
+        let l1 = t2;
+        let l2 = t2 + vec2(0.0, h * 0.6);
+        let l3 = l0 + vec2(0.0, h * 0.6);
+        let l0=snap(l0); let l1=snap(l1); let l2=snap(l2); let l3=snap(l3);
+
+        painter.add(Shape::convex_polygon(
+            vec![l0, l1, l2, l3],
+            color, //self.palette.pipe_dark(self.palette.pipe_dark(color)),
+            Stroke::NONE,
+        ));
     }
 
     fn draw_background(&self, painter: &egui::Painter, rect: Rect) {
@@ -577,45 +699,31 @@ impl Ethernet3DPipesApp {
         }
     }
 
-    fn draw_rj45(&self, painter: &egui::Painter, pos: Pos2, dir: Dir) {
-        let px = self.renderer.pixel.max(1.0);
-        let size = px * 8.0;
+    fn draw_rj45(&self, painter: &egui::Painter, rect: Rect, pos: IVec3, _dir: Dir) {
+        // Draw a 3D block representing the connector.
+        // We slightly offset it in the direction of the pipe end.
 
-        // Offset based on direction so it doesn't overlap the pipe completely
-        let offset = match dir {
-            Dir::PosX | Dir::NegX => vec2(px * 2.0, 0.0),
-            Dir::PosY | Dir::NegY => vec2(-px * 2.0, 0.0),
-            Dir::PosZ | Dir::NegZ => vec2(0.0, -px * 2.0),
-        };
+        // Connector color (clear plastic-ish, but solid for 3D look)
+        let color = Color32::from_rgb(200, 200, 220);
 
-        // Draw a plastic connector housing
-        let rect = Rect::from_center_size(pos + offset, vec2(size, size * 0.6));
+        // Offset in world space? No, let's just draw it at the pos.
+        // Ideally we shift it by `dir` * 0.5.
+        // But `draw_iso_box` takes a center position.
+        // Let's rely on the rendering scale.
 
-        // Clear plastic body
-        painter.rect_filled(
+        // We want it to look like it's attached.
+        // The pipe segment ends at `pos`.
+
+        self.draw_iso_box(
+            painter,
             rect,
-            px,
-            Color32::from_rgba_premultiplied(200, 200, 220, 180)
+            pos,
+            vec2(0.8, 0.8), // Size relative to grid cell
+            color
         );
-        painter.rect_stroke(rect, px, Stroke::new(px, self.palette.outline));
 
-        // Gold contacts (visible through plastic)
-        let teeth_w = size * 0.1;
-        let teeth_h = size * 0.3;
-        for i in 0..4 {
-            let offset = (i as f32 - 1.5) * (teeth_w * 1.5);
-            let t_pos = pos2(pos.x + offset, pos.y);
-            let t_rect = Rect::from_center_size(t_pos, vec2(teeth_w, teeth_h));
-            painter.rect_filled(t_rect, 0.0, Color32::from_rgb(220, 180, 50));
-        }
-
-        // Latch clip (on top)
-        let latch_rect = Rect::from_center_size(
-            pos - vec2(0.0, size * 0.4),
-            vec2(size * 0.4, size * 0.2)
-        );
-        painter.rect_filled(latch_rect, px * 0.5, Color32::from_rgba_premultiplied(180, 180, 200, 200));
-        painter.rect_stroke(latch_rect, px * 0.5, Stroke::new(px * 0.5, self.palette.outline));
+        // Maybe add gold contacts on top?
+        // For now, the 3D shape is the priority.
     }
 
     fn draw_pipes(&self, painter: &egui::Painter, rect: Rect) {
@@ -637,47 +745,27 @@ impl Ethernet3DPipesApp {
             let highlight = self.palette.pipe_light(base_color);
             let shadow = self.palette.pipe_dark(base_color);
 
+            // Draw "Tube" using pixel rasterization.
+            // We draw 3 lines with different offsets perpendicular to the screen-space direction.
+            // Since draw_pixel_line centers the line, we just offset the start/end points.
+
             let d = (b - a).normalized();
             let perp = vec2(-d.y, d.x);
 
-            // We draw 3 strips to simulate a tube:
-            // 1. Shadow/Outline (Wide, Bottom/Right)
+            // 1. Shadow (Widest, drawn behind/offset right)
+            self.draw_pixel_line(painter, a + perp * px, b + perp * px, shadow, 4.0);
+
             // 2. Base (Medium, Center)
-            // 3. Highlight (Narrow, Top/Left)
+            self.draw_pixel_line(painter, a, b, base_color, 3.0);
 
-            let draw_strip = |color: Color32, width: f32, offset: f32| {
-                let o = perp * offset;
-                let p0 = a + o - (perp * width * 0.5);
-                let p1 = b + o - (perp * width * 0.5);
-                let p2 = b + o + (perp * width * 0.5);
-                let p3 = a + o + (perp * width * 0.5);
-
-                painter.add(Shape::convex_polygon(
-                    vec![p0, p1, p2, p3],
-                    color,
-                    Stroke::NONE,
-                ));
-            };
-
-            // Layer 1: Outline/Shadow (Background)
-            draw_strip(self.palette.outline, px * 4.0, 0.0);
-
-            // Layer 2: Base Color (Main Body)
-            draw_strip(base_color, px * 3.0, 0.0);
-
-            // Layer 3: Highlight (Top/Left reflection)
-            // Offset slightly by -perp/2 to look "round"
-            draw_strip(highlight, px * 1.5, -px * 0.5);
-
-            // Layer 4: Deep Shadow (Bottom/Right shading)
-            draw_strip(shadow, px * 1.0, px * 1.0);
+            // 3. Highlight (Thin, offset left)
+            self.draw_pixel_line(painter, a - perp * px * 0.5, b - perp * px * 0.5, highlight, 1.0);
         }
 
         // RJ45 ends at heads
         for (pipe_id, head) in self.sim.heads.iter().enumerate() {
-            let pos = self.iso_centered(rect, *head);
             let dir = self.sim.dirs[pipe_id];
-            self.draw_rj45(painter, pos, dir);
+            self.draw_rj45(painter, rect, *head, dir);
         }
     }
 }
