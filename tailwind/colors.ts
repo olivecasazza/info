@@ -69,3 +69,17 @@ export const themeColors = {
   highlight: colors[0].gold,
   compliment: colors[0].navy
 }
+
+// When executed directly (e.g. `nix-shell -p tsx --run "tsx ./tailwind/colors.ts" > tailwind/themeColors.json`),
+// print `themeColors` as JSON so other build steps (e.g. Rust WASM) can consume it.
+//
+// This is intentionally side-effect free when imported.
+if (
+  typeof process !== 'undefined' &&
+  process.argv?.[1] &&
+  (process.argv[1].endsWith('/tailwind/colors.ts') || process.argv[1].endsWith('tailwind/colors.ts'))
+) {
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify(themeColors, null, 2))
+  process.exit(0)
+}

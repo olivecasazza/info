@@ -1,10 +1,4 @@
 <template>
-  <BackgroundGUI v-if="isReady" />
+  <!-- UI is now rendered inside the wasm canvas via egui -->
+  <div />
 </template>
-
-<script setup lang="ts">
-import { storeToRefs } from 'pinia'
-import { useFlockStore } from '~/stores/flock'
-
-const { isReady } = storeToRefs(useFlockStore())
-</script>

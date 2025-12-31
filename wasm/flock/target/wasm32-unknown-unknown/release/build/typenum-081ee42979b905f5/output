@@ -1,2 +1,0 @@
-cargo:rustc-env=TYPENUM_BUILD_CONSTS=/home/olive/Code/info/wasm/flock/target/wasm32-unknown-unknown/release/build/typenum-081ee42979b905f5/out/consts.rs
-cargo:rustc-env=TYPENUM_BUILD_OP=/home/olive/Code/info/wasm/flock/target/wasm32-unknown-unknown/release/build/typenum-081ee42979b905f5/out/op.rs

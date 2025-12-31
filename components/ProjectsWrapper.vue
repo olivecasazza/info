@@ -24,6 +24,11 @@ const categories = [
         heading: 'Flocking',
         text: 'Simulated flocking behavior based on separation, alignment, and cohesion. Written in Rust, compiled to WASM.',
         link: '/projects/flock'
+      },
+      {
+        heading: 'Ethernet 3D Pipes',
+        text: '3D Pipes-style ethernet cables in an 8-bit arcade aesthetic. Written in Rust, compiled to WASM.',
+        link: '/projects/ethernet-3dpipes'
       }
     ]
   },

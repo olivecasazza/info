@@ -1,8 +1,11 @@
 mod utils;
 mod flock;
 
-// When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
-// allocator.
-#[cfg(feature = "wee_alloc")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+// `mod app;` uses `src/app/mod.rs`.
+mod app;
+mod web;
+
+pub use web::WebHandle;
+
+// NOTE: wee_alloc support removed during egui migration to avoid a dangling
+// feature flag warning. Re-add when needed.

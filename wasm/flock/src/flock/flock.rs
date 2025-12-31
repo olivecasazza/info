@@ -120,12 +120,31 @@ impl Flock {
         time_step: f32,
         update_flock_geometry: &js_sys::Function,
     ) {
+        let (vertices, colors) = self.step_collect_geometry(width, height, time_step);
+
+        let js_vertices = js_sys::Float32Array::from(vertices.as_slice());
+        let js_colors = js_sys::Float32Array::from(colors.as_slice());
+        let e = update_flock_geometry.call2(&JsValue::null(), &js_vertices, &js_colors);
+        if e.is_err() {
+            log("could not call js update vertex buffer function from rust");
+        }
+    }
+}
+
+impl Flock {
+    /// Step the simulation and return line-segment geometry.
+    ///
+    /// Returns two vectors:
+    /// - vertices: [x,y,0, x,y,0, ...] (two vertices per segment)
+    /// - colors:   [r,g,b, r,g,b, ...] (per vertex)
+    pub fn step_collect_geometry(&mut self, width: f32, height: f32, time_step: f32) -> (Vec<f32>, Vec<f32>) {
         // for collecting vertices and colors
         let mut vertices: Vec<f32> = Vec::new();
         let mut colors: Vec<f32> = Vec::new();
+
         // we need to store the current state of the flock
         // (just position for each bird)
-        let new_flock = self
+        let new_flock: Vec<Bird> = self
             .birds
             .clone()
             .to_vec()
@@ -136,7 +155,7 @@ impl Flock {
                     Some(bird_config) => {
                         bird.update_bird(
                             &self.birds,
-                            bird_config.clone(),
+                            bird_config,
                             &width,
                             &height,
                             &time_step,
@@ -150,20 +169,17 @@ impl Flock {
                             colors.push(bird_config.color_b);
                         }
                         Some(bird.to_owned())
-                    },
-                    _ => None
+                    }
+                    _ => None,
                 }
             })
             .collect();
 
-        let js_vertices = js_sys::Float32Array::from(vertices.as_slice());
-        let js_colors = js_sys::Float32Array::from(colors.as_slice());
-        let e = update_flock_geometry.call2(&JsValue::null(), &js_vertices, &js_colors);
-        if e.is_err() {
-            log("could not call js update vertex buffer function from rust");
-        }
         // rebuild tree
-        self.birds =
-            kd_tree::KdTree2::build_by_key(new_flock, |bird, k| OrderedFloat(bird.position[k]));
+        self.birds = kd_tree::KdTree2::build_by_key(new_flock, |bird, k| {
+            OrderedFloat(bird.position[k])
+        });
+
+        (vertices, colors)
     }
 }

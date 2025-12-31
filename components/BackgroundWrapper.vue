@@ -1,188 +1,178 @@
 <template>
   <canvas
     ref="canvasElement"
-    class="absolute w-full h-full"
-    @mousedown="isDragging = true"
-    @mouseup="isDragging = false"
-    @mousemove="mouseMove"
-    @touchmove="touchMove"
+    class="absolute w-full h-full touch-none"
+    @pointerdown="onPointerDown"
+    @pointerup="onPointerUp"
+    @pointermove="onPointerMove"
   />
+
+  <!-- Dark overlay for readability on non-project pages -->
   <div
-    v-if="!(useRoute().path == '/projects/flock')"
+    v-if="!isWasmProjectRoute"
     class="absolute left-0 top-0 w-full h-full bg-black bg-opacity-60 z-10"
   />
 </template>
 
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
-import { animate } from 'popmotion'
+import throttle from '~/utils/throttle'
 import {
-  BufferAttribute,
-  BufferGeometry,
-  Color,
-  LineBasicMaterial,
-  LineSegments,
-  PerspectiveCamera,
-  Scene,
-  Vector3,
-  WebGLRenderer
-} from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
-import { lerp } from 'three/src/math/MathUtils'
-import { useFlockStore } from '~/stores/flock'
+  WASM_PROJECTS,
+  getWasmProjectSlugFromRoutePath,
+  isWasmProjectRoutePath
+} from '~/utils/wasmProjects'
 
-const { init, dispose, addBirdAtRandomPosition, addBirdAtPosition, cycleAnimateBirdConfigs } = useFlockStore()
-const { isDragging, maxFlockSize, flock } = storeToRefs(useFlockStore())
-
-const stopped = ref(false)
-const renderer = ref(null as WebGLRenderer | null)
-const canvasElement: Ref<HTMLCanvasElement | undefined> = ref()
-const scene = ref(new Scene())
-const camera = ref(new PerspectiveCamera())
-const controls = ref(null as OrbitControls | null)
-const birdsGeometry = ref(null as BufferGeometry | null)
-const birdsMaterial = ref(null as LineBasicMaterial | null)
-const birdsLine = ref(null as LineSegments | null)
-
-const visibleHeightAtZDepth = computed(() => {
-  // compensate for cameras not positioned at z=0
-  const depth = camera.value.position.z
-  // vertical fov in radians
-  const vFOV = (camera.value.fov * Math.PI) / 180
-  // Math.abs to ensure the result is always positive
-  return 2 * Math.tan(vFOV / 2.0) * Math.abs(depth)
-})
-const visibleWidthAtZDepth = computed(() => {
-  const visibleHeight = visibleHeightAtZDepth.value
-  return visibleHeight * (width.value / height.value)
-})
-
-const height = computed(() => {
-  return window.innerHeight ?? 0
-})
-
-const width = computed(() => {
-  return window.innerWidth ?? 0
-})
-
-onMounted(async () => {
-  renderer.value = new WebGLRenderer({ canvas: canvasElement.value })
-  camera.value = new PerspectiveCamera(75, (width.value / height.value), 0.1, 10000)
-  camera.value.position.z = 1000
-  controls.value = new OrbitControls(camera.value, canvasElement.value)
-  controls.value.target = new Vector3(0, 0, 0)
-  scene.value.background = new Color('black')
-  birdsGeometry.value = new BufferGeometry()
-  birdsMaterial.value = new LineBasicMaterial({
-    vertexColors: true
-  })
-  camera.value.aspect = width.value / height.value
-  birdsLine.value = new LineSegments(birdsGeometry.value, birdsMaterial.value)
-  scene.value.add(birdsLine.value)
-
-  await init()
-
-  animate({
-    from: 0,
-    to: maxFlockSize.value,
-    duration: 1000 * 2,
-    onUpdate: () => {
-      if (flock.value && flock.value.current_flock_size > maxFlockSize.value) { return }
-      addBirdAtRandomPosition({
-        viewWidth: visibleWidthAtZDepth.value,
-        viewHeight: visibleHeightAtZDepth.value
-      })
-    },
-    onComplete: () => animate({
-      from: 0,
-      to: 100,
-      duration: 1000 * 10,
-      repeat: Infinity,
-      onRepeat: cycleAnimateBirdConfigs
-    })
-  })
-
-  window.addEventListener('resize', resize)
-  window.addEventListener('touchstart', throttle(touchMove, 40), false)
-  window.addEventListener('touchmove', throttle(touchMove, 40), false)
-  window.addEventListener('mousedown', () => (isDragging.value = true), false)
-  window.addEventListener('mousemove', throttle(mouseMove, 40), false)
-  window.addEventListener('mouseup', () => (isDragging.value = false), false)
-
-  render()
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', resize)
-  window.removeEventListener('touchstart', throttle(touchMove, 40), false)
-  window.removeEventListener('touchmove', throttle(touchMove, 40), false)
-  window.removeEventListener('mousedown', () => (isDragging.value = true), false)
-  window.removeEventListener('mousemove', throttle(mouseMove, 40), false)
-  window.removeEventListener('mouseup', () => (isDragging.value = false), false)
-  dispose()
-})
-
-function resize (): void {
-  // first resize the renderer root viewport
-  if (!renderer.value) { return }
-  const { innerWidth: width, innerHeight: height } = window
-  renderer.value.setSize(width, height, true)
-  camera.value.aspect = width / height
+type AnyWebHandle = {
+  start: (canvas: HTMLCanvasElement) => Promise<unknown>
+  destroy: () => void
+  spawn_at_norm: (xNorm: number, yNorm: number) => void
+  set_ui_visible: (visible: boolean) => void
+  is_pointer_over_ui: () => boolean
 }
-function updateFlockGeometry (vertices: Float32Array, colors: Float32Array) {
-  if (!birdsLine.value) {
+
+type WasmModule = {
+  default: () => Promise<unknown>
+  WebHandle: new () => AnyWebHandle
+}
+
+const moduleCache = new Map<string, Promise<WasmModule>>()
+let loadSeq = 0
+
+const route = useRoute()
+
+const canvasElement: Ref<HTMLCanvasElement | undefined> = ref()
+const handle = ref<AnyWebHandle | null>(null)
+const loadedSlug = ref<string | null>(null)
+const isDragging = ref(false)
+
+const isWasmProjectRoute = computed(() => isWasmProjectRoutePath(route.path))
+const forcedSlug = computed(() => getWasmProjectSlugFromRoutePath(route.path))
+
+function pickRandomBackgroundSlug (): string {
+  // Exclude any project-specific routes from randomness by selecting from registry.
+  const options = WASM_PROJECTS.map(p => p.slug)
+  return options[Math.floor(Math.random() * options.length)]
+}
+
+const backgroundSlug = ref<string>(pickRandomBackgroundSlug())
+
+const desiredSlug = computed(() => {
+  // On /projects/<slug>, force that slug.
+  if (forcedSlug.value) { return forcedSlug.value }
+  // Otherwise use the random background slug.
+  return backgroundSlug.value
+})
+
+function isUiVisibleForSlug (slug: string, path: string): boolean {
+  return path === `/projects/${slug}`
+}
+
+async function loadWasmProject (slug: string): Promise<void> {
+  // If already loaded, never reload; just update UI visibility.
+  if (loadedSlug.value === slug && handle.value) {
+    handle.value.set_ui_visible(isUiVisibleForSlug(slug, route.path))
     return
   }
-  birdsLine.value.geometry.setAttribute(
-    'position',
-    new BufferAttribute(vertices, 3)
-  )
-  birdsLine.value.geometry.setAttribute(
-    'color',
-    new BufferAttribute(colors, 3)
-  )
+
+  const mySeq = ++loadSeq
+
+  // Tear down existing project (if any) before loading the next.
+  if (handle.value) {
+    handle.value.destroy()
+    handle.value = null
+    loadedSlug.value = null
+  }
+
+  const def = WASM_PROJECTS.find(p => p.slug === slug) ?? WASM_PROJECTS[0]
+  if (!def) { throw new Error('No WASM projects registered') }
+
+  // Cache the module + init so we don't re-fetch/re-init repeatedly.
+  if (!moduleCache.has(def.slug)) {
+    moduleCache.set(def.slug, (async () => {
+      const mod = await def.loader() as unknown as WasmModule
+      await mod.default()
+      return mod
+    })())
+  }
+
+  const mod = await moduleCache.get(def.slug)!
+
+  // If another route change happened while we were loading, abort.
+  if (mySeq !== loadSeq) {
+    return
+  }
+
+  const newHandle = new mod.WebHandle()
+  handle.value = newHandle
+  loadedSlug.value = def.slug
+
+  if (!canvasElement.value) { return }
+
+  await newHandle.start(canvasElement.value)
+
+  // If another route change happened during start(), abort and cleanup.
+  if (mySeq !== loadSeq) {
+    try { newHandle.destroy() } catch {}
+    if (handle.value === newHandle) {
+      handle.value = null
+      loadedSlug.value = null
+    }
+    return
+  }
+
+  newHandle.set_ui_visible(isUiVisibleForSlug(def.slug, route.path))
 }
 
-function start (): void {
-  stopped.value = false
-  render()
+function spawnFromEvent (clientX: number, clientY: number) {
+  if (!handle.value || !canvasElement.value) { return }
+  const rect = canvasElement.value.getBoundingClientRect()
+  const xNorm = (clientX - rect.left) / rect.width
+  const yNorm = (clientY - rect.top) / rect.height
+  handle.value.spawn_at_norm(xNorm, yNorm)
 }
 
-function render (): void {
-  resize()
-  requestAnimationFrame(() => start())
-  const flockStore = useFlockStore()
-  const { updateFlock, timeStep } = flockStore
-  updateFlock({
-    sceneWidth: visibleWidthAtZDepth.value,
-    sceneHeight: visibleHeightAtZDepth.value,
-    timeStep,
-    updateFlockGeometryCallback: updateFlockGeometry
-  })
-  renderer.value?.render(toRaw(scene.value), camera.value)
-  camera.value.updateProjectionMatrix()
-  controls.value?.update()
+const throttledSpawn = throttle((x: number, y: number) => spawnFromEvent(x, y), 40)
+
+function onPointerDown (e: PointerEvent) {
+  // If the user is interacting with egui UI, don't spawn birds.
+  if (handle.value?.is_pointer_over_ui()) { return }
+
+  isDragging.value = true
+  spawnFromEvent(e.clientX, e.clientY)
 }
 
-function mouseMove (event: MouseEvent) {
+function onPointerUp () {
+  isDragging.value = false
+}
+
+function onPointerMove (e: PointerEvent) {
   if (!isDragging.value) { return }
-  addBirdFromEvent(event.x, event.y)
+  if (handle.value?.is_pointer_over_ui()) { return }
+  throttledSpawn(e.clientX, e.clientY)
 }
 
-function touchMove (event: TouchEvent) {
-  const touch = event.touches.item(event.touches.length - 1)
-  if (!touch) { return }
-  addBirdFromEvent(touch.clientX, touch.clientY)
-}
+onMounted(async () => {
+  await loadWasmProject(desiredSlug.value)
+})
 
-function addBirdFromEvent (eventX: number, eventY: number) {
-  const { innerWidth: width, innerHeight: height } = window
-  const normClickX = eventX / width
-  const normClickY = eventY / height
-  const halfSceneWidth = visibleWidthAtZDepth.value / 2
-  const halfSceneHeight = visibleHeightAtZDepth.value / 2
-  const x = lerp(-halfSceneWidth, halfSceneWidth, normClickX)
-  const y = -lerp(-halfSceneHeight, halfSceneHeight, normClickY)
-  addBirdAtPosition({ x, y })
-}
+// Critical: keep UI + loaded wasm project in sync on client-side navigation.
+watch(
+  () => route.path,
+  async (newPath, oldPath) => {
+    // If we navigated into a project route, keep it as the "background" when leaving.
+    // This prevents unnecessary teardown/recreate loops (and feels nicer UX-wise).
+    const forced = forcedSlug.value
+    if (forced && newPath !== oldPath) {
+      backgroundSlug.value = forced
+    }
+
+    await loadWasmProject(desiredSlug.value)
+  }
+)
+
+onUnmounted(() => {
+  handle.value?.destroy()
+  handle.value = null
+  loadedSlug.value = null
+})
 </script>
