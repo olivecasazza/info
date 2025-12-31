@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use egui::{pos2, vec2, Color32, Pos2, Rect, Shape, Stroke, Vec2};
+use egui::{pos2, vec2, Color32, Pos2, Rect, Shape, Stroke};
 
 mod theme {
     include!(concat!(env!("OUT_DIR"), "/theme_gen.rs"));
@@ -209,6 +209,10 @@ struct PipeSim {
 
     /// Minimum Manhattan spacing between pipe cells (0 = allow adjacent).
     pub min_spacing: i32,
+    /// Max number of steps to go straight before forcing a turn check.
+    pub straightness: u32,
+    /// Counters for each pipe: how many straight steps remaining.
+    pub turn_delay: Vec<u32>,
 }
 
 impl PipeSim {
@@ -221,6 +225,8 @@ impl PipeSim {
             segments: Vec::new(),
             rng: oorandom::Rand32::new(seed),
             min_spacing,
+            straightness: 6,
+            turn_delay: Vec::new(),
         };
         s.reset(pipe_count, &HashSet::new());
         s
@@ -316,6 +322,7 @@ impl PipeSim {
         self.segments.clear();
         self.heads.clear();
         self.dirs.clear();
+        self.turn_delay.clear();
 
         for i in 0..pipe_count {
             let head = self.find_free_cell(reserved);
@@ -323,6 +330,7 @@ impl PipeSim {
             self.heads.push(head);
             self.dirs.push(dir);
             self.visited.insert(head);
+            self.turn_delay.push(0);
 
             // Prime with a single segment if possible.
             let to = head.add(dir.vec());
@@ -342,6 +350,18 @@ impl PipeSim {
     fn step_one(&mut self, pipe_id: usize, reserved: &HashSet<IVec3>) {
         let head = self.heads[pipe_id];
         let cur_dir = self.dirs[pipe_id];
+
+        // If we have "momentum" to go straight, try that first.
+        if self.turn_delay[pipe_id] > 0 {
+            let next = head.add(cur_dir.vec());
+            if self.is_free_with_margin(next, reserved, Some(pipe_id)) {
+                self.turn_delay[pipe_id] -= 1;
+                self.advance_pipe(pipe_id, next, cur_dir);
+                return;
+            }
+            // Blocked? Force a turn decision now.
+            self.turn_delay[pipe_id] = 0;
+        }
 
         let mut dirs = [
             cur_dir,
@@ -366,6 +386,11 @@ impl PipeSim {
             if d == back {
                 continue;
             }
+            // If we are choosing a new direction (turning), ensure we don't pick
+            // straight again if we just failed it, or do we? The shuffle includes
+            // cur_dir at index 0. If it's valid, we might continue straight
+            // even if turn_delay was 0. That's fine, it just means we "re-rolled"
+            // straight.
             let next = head.add(d.vec());
             if self.is_free_with_margin(next, reserved, Some(pipe_id)) {
                 best = Some(d);
@@ -386,12 +411,21 @@ impl PipeSim {
             self.heads[pipe_id] = new_head;
             self.dirs[pipe_id] = self.rand_dir();
             self.visited.insert(new_head);
+            self.turn_delay[pipe_id] = 0;
             return;
         };
 
-        let from = head;
-        let to = head.add(d.vec());
+        // Pick a new random run length for this direction.
+        // 1..straightness+1
+        let run = 1 + (self.rng.rand_u32() % self.straightness);
+        self.turn_delay[pipe_id] = run;
 
+        let to = head.add(d.vec());
+        self.advance_pipe(pipe_id, to, d);
+    }
+
+    fn advance_pipe(&mut self, pipe_id: usize, to: IVec3, d: Dir) {
+        let from = self.heads[pipe_id];
         self.segments.push(Segment {
             from,
             to,
@@ -444,7 +478,7 @@ impl IsoRenderer {
         // Snap to a slightly larger grid than `pixel` itself. This helps keep
         // the isometric lines aligned on a coarse pixel lattice so they feel
         // more "8-bit" and less like subpixel anti-aliased lines.
-        let q = (self.pixel * 2.0).max(1.0);
+        let q = (self.pixel * 3.0).max(1.0);
         pos2((p.x / q).round() * q, (p.y / q).round() * q)
     }
 }
@@ -544,30 +578,44 @@ impl Ethernet3DPipesApp {
     }
 
     fn draw_rj45(&self, painter: &egui::Painter, pos: Pos2, dir: Dir) {
-        // Very simple pixel-art RJ45 plug drawn in screen space.
         let px = self.renderer.pixel.max(1.0);
+        let size = px * 8.0;
 
-        let (w, h) = (px * 6.0, px * 3.0);
-        let mut rect = Rect::from_center_size(pos, vec2(w, h));
-
-        // Slight directional offset so it sits at the end of the segment.
+        // Offset based on direction so it doesn't overlap the pipe completely
         let offset = match dir {
             Dir::PosX | Dir::NegX => vec2(px * 2.0, 0.0),
             Dir::PosY | Dir::NegY => vec2(-px * 2.0, 0.0),
             Dir::PosZ | Dir::NegZ => vec2(0.0, -px * 2.0),
         };
-        rect = rect.translate(offset);
 
-        painter.rect_filled(rect, 1.0, self.palette.rj45_body);
-        painter.rect_stroke(rect, 1.0, Stroke::new(px, self.palette.outline));
+        // Draw a plastic connector housing
+        let rect = Rect::from_center_size(pos + offset, vec2(size, size * 0.6));
 
-        // Teeth
+        // Clear plastic body
+        painter.rect_filled(
+            rect,
+            px,
+            Color32::from_rgba_premultiplied(200, 200, 220, 180)
+        );
+        painter.rect_stroke(rect, px, Stroke::new(px, self.palette.outline));
+
+        // Gold contacts (visible through plastic)
+        let teeth_w = size * 0.1;
+        let teeth_h = size * 0.3;
         for i in 0..4 {
-            let t = (i as f32 + 0.5) / 4.0;
-            let x = rect.left() + t * rect.width();
-            let tooth = Rect::from_center_size(pos2(x, rect.top() + px), vec2(px * 0.6, px));
-            painter.rect_filled(tooth, 0.0, self.palette.rj45_teeth);
+            let offset = (i as f32 - 1.5) * (teeth_w * 1.5);
+            let t_pos = pos2(pos.x + offset, pos.y);
+            let t_rect = Rect::from_center_size(t_pos, vec2(teeth_w, teeth_h));
+            painter.rect_filled(t_rect, 0.0, Color32::from_rgb(220, 180, 50));
         }
+
+        // Latch clip (on top)
+        let latch_rect = Rect::from_center_size(
+            pos - vec2(0.0, size * 0.4),
+            vec2(size * 0.4, size * 0.2)
+        );
+        painter.rect_filled(latch_rect, px * 0.5, Color32::from_rgba_premultiplied(180, 180, 200, 200));
+        painter.rect_stroke(latch_rect, px * 0.5, Stroke::new(px * 0.5, self.palette.outline));
     }
 
     fn draw_pipes(&self, painter: &egui::Painter, rect: Rect) {
@@ -582,43 +630,47 @@ impl Ethernet3DPipesApp {
         let px = self.renderer.pixel.max(1.0);
 
         for seg in &segs {
-            // Build a tiny "voxel tube" quad around each endpoint and fill the
-            // strip between them, instead of drawing anti-aliased strokes. This
-            // keeps everything locked to the quantized grid.
             let a = self.iso_centered(rect, seg.from);
             let b = self.iso_centered(rect, seg.to);
 
-            let base = self.palette.pipe(seg.pipe_id);
-            let (fill, shadow) = match seg.dir {
-                Dir::PosZ | Dir::NegZ => (self.palette.pipe_light(base), base),
-                Dir::PosX | Dir::NegX => (base, self.palette.pipe_dark(base)),
-                Dir::PosY | Dir::NegY => (base, self.palette.pipe_dark(base)),
-            };
+            let base_color = self.palette.pipe(seg.pipe_id);
+            let highlight = self.palette.pipe_light(base_color);
+            let shadow = self.palette.pipe_dark(base_color);
 
-            // Direction in screen space, snapped so segments are piecewise
-            // axis-aligned in isometric space.
             let d = (b - a).normalized();
             let perp = vec2(-d.y, d.x);
 
-            let half_w = px * 1.5;
-            let o = perp * half_w;
+            // We draw 3 strips to simulate a tube:
+            // 1. Shadow/Outline (Wide, Bottom/Right)
+            // 2. Base (Medium, Center)
+            // 3. Highlight (Narrow, Top/Left)
 
-            let v0 = a + o;
-            let v1 = b + o;
-            let v2 = b - o;
-            let v3 = a - o;
+            let draw_strip = |color: Color32, width: f32, offset: f32| {
+                let o = perp * offset;
+                let p0 = a + o - (perp * width * 0.5);
+                let p1 = b + o - (perp * width * 0.5);
+                let p2 = b + o + (perp * width * 0.5);
+                let p3 = a + o + (perp * width * 0.5);
 
-            let poly = vec![v0, v1, v2, v3];
-            painter.add(Shape::convex_polygon(poly, fill, Stroke::new(px * 0.5, self.palette.outline)));
+                painter.add(Shape::convex_polygon(
+                    vec![p0, p1, p2, p3],
+                    color,
+                    Stroke::NONE,
+                ));
+            };
 
-            // Simple shadow offset for 8-bit depth.
-            let sh = vec2(px, px);
-            let shadow_poly = vec![v0 + sh, v1 + sh, v2 + sh, v3 + sh];
-            painter.add(Shape::convex_polygon(
-                shadow_poly,
-                Color32::from_rgba_unmultiplied(shadow.r(), shadow.g(), shadow.b(), 180),
-                Stroke::NONE,
-            ));
+            // Layer 1: Outline/Shadow (Background)
+            draw_strip(self.palette.outline, px * 4.0, 0.0);
+
+            // Layer 2: Base Color (Main Body)
+            draw_strip(base_color, px * 3.0, 0.0);
+
+            // Layer 3: Highlight (Top/Left reflection)
+            // Offset slightly by -perp/2 to look "round"
+            draw_strip(highlight, px * 1.5, -px * 0.5);
+
+            // Layer 4: Deep Shadow (Bottom/Right shading)
+            draw_strip(shadow, px * 1.0, px * 1.0);
         }
 
         // RJ45 ends at heads
@@ -672,6 +724,7 @@ impl eframe::App for Ethernet3DPipesApp {
 
                     ui.add(egui::Slider::new(&mut self.pipe_count, 1..=8).text("pipes"));
                     ui.add(egui::Slider::new(&mut self.sim.min_spacing, 0..=2).text("min spacing"));
+                    ui.add(egui::Slider::new(&mut self.sim.straightness, 1..=20).text("straightness"));
 
                     if ui.button("reset pipes").clicked() {
                         self.sim.reset(self.pipe_count, &self.endpoints.occupied);
