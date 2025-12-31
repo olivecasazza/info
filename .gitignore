@@ -82,5 +82,4 @@ wasm/*/target
 # wasm-pack output (committed or not depending on your workflow)
 # If you want to commit it, comment this out.
 wasm/*/pkg
-wasm/*/target/**/*
-wasm/flock/target/
+wasm/*/target
