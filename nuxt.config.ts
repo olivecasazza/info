@@ -12,7 +12,10 @@ export default defineNuxtConfig({
   },
   vite: {
     plugins: [
-      wasmPack(['./wasm/flock'])
+      wasmPack([
+        './wasm/flock',
+        './wasm/ethernet-3dpipes'
+      ])
     ]
   }
 })

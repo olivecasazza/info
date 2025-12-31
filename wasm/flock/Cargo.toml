@@ -1,7 +1,7 @@
 [package]
 name = "flock"
 version = "0.1.0"
-authors = ["Colin Casazza <colanzio5@gmail.com>"]
+authors = ["Olive Casazza <olive@casazza.info>"]
 edition = "2018"
 
 [lib]
@@ -11,7 +11,8 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
-wasm-bindgen = "0.2.63"
+# Pinned to match the Nix-provided `wasm-bindgen-cli` version.
+wasm-bindgen = "=0.2.104"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
@@ -25,12 +26,26 @@ console_error_panic_hook = { version = "0.1.6", optional = true }
 # Unfortunately, `wee_alloc` requires nightly Rust when targeting wasm for now.
 # wee_alloc = { version = "0.4.5", optional = true }
 
+# egui/eframe web app (renders birds + GUI)
+egui = "0.29"
+eframe = { version = "0.29", default-features = false, features = ["glow", "default_fonts"] }
+log = "0.4"
+web-sys = { version = "0.3", features = ["HtmlCanvasElement"] }
+# Keep in sync with wasm-bindgen 0.2.104.
+wasm-bindgen-futures = "=0.4.54"
+
+# Fix wasm32-unknown-unknown builds for dependencies that use `getrandom`
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
+
 js-sys = "0.3.56"
 typenum = "1.15.0"
-nalgebra = " 0.30.1"
+nalgebra = "0.30.1"
 ordered-float = "2.10.0"
 oorandom = "11.1.3"
 kd-tree = { version = "0.4.1", features = ["nalgebra"] }
+
+[build-dependencies]
+serde_json = "1.0"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.13"
