@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use egui::{pos2, vec2, Color32, Pos2, Rect, Shape, Stroke};
+use egui::{pos2, vec2, Color32, FontFamily, FontId, Pos2, Rect, Shape, Stroke, TextStyle};
 
 mod theme {
     include!(concat!(env!("OUT_DIR"), "/theme_gen.rs"));
@@ -667,14 +667,14 @@ impl Ethernet3DPipesApp {
     }
 
     fn draw_rj45(&self, painter: &egui::Painter, rect: Rect, pos: IVec3, dir: Dir) {
-        // Dimensions relative to grid.
-        // User updated: L = 2/3 of 3.2 (~2.2). H = 1.5x of 0.6 (0.9). W = 1.0 (unchanged).
-        // Scaling: applying these ratios.
-        let l = 2.2;
+        // Updated per user feedback:
+        // Length = 2.0 (Shorter)
+        // Height = 0.7 (Taller than 0.6 but flatter than 0.9)
+        // Width = 1.0 (Same)
+        let l = 2.0;
         let w = 1.0;
-        let h = 0.9;
+        let h = 0.7;
 
-        // Determine dimensions based on orientation
         let (sx, sy, sz) = match dir {
             Dir::PosX | Dir::NegX => (l, w, h),
             Dir::PosY | Dir::NegY => (w, l, h),
@@ -687,7 +687,7 @@ impl Ethernet3DPipesApp {
         let pz = pos.z as f32;
 
         let dv = dir.vec();
-        // Offset center: push out by half length
+        // Offset center
         let cx = px + (dv.x as f32) * (l * 0.4);
         let cy = py + (dv.y as f32) * (l * 0.4);
         let cz = pz + (dv.z as f32) * (l * 0.4);
@@ -696,7 +696,7 @@ impl Ethernet3DPipesApp {
         let color_body = Color32::from_rgb(210, 210, 230); // Clear plastic
         self.draw_iso_box(painter, rect, [cx, cy, cz], [sx, sy, sz], color_body);
 
-        // 2. Draw Latch (Clip)
+        // 2. Draw Latch (Clip) - Yellow tab requested
         let lx = if sx == l { l * 0.5 } else { sx * 0.4 };
         let ly = if sy == l { l * 0.5 } else { sy * 0.4 };
         let lz = if sz == l { l * 0.5 } else { sz * 0.4 };
@@ -711,15 +711,13 @@ impl Ethernet3DPipesApp {
             rect,
             [cx + ox, cy + oy, cz + oz],
             [lx, ly, lz],
-            color_body
+            Color32::from_rgb(230, 200, 100) // Yellow tab
         );
 
         // 3. Gold Contacts (Pins)
-        // 4 pins on the front face.
-        let pin_len = 0.15; // Protrusion length
+        let pin_len = 0.15;
         let pin_color = Color32::from_rgb(255, 215, 0);
 
-        // Pin box dimensions
         let (pdx, pdy, pdz) = match dir {
             Dir::PosX | Dir::NegX => (pin_len, w * 0.15, h * 0.2),
             Dir::PosY | Dir::NegY => (w * 0.15, pin_len, h * 0.2),
@@ -727,20 +725,20 @@ impl Ethernet3DPipesApp {
         };
 
         for i in 0..4 {
-            let t = i as f32 - 1.5; // -1.5, -0.5, 0.5, 1.5
-            let shift = w * 0.22 * t; // Spread factor
+            let t = i as f32 - 1.5;
+            let shift = w * 0.22 * t;
 
-            // Calculate offset from tip center for each pin
             let (off_x, off_y, off_z) = match dir {
                 Dir::PosX | Dir::NegX => (0.0, shift, -h * 0.35),
                 Dir::PosY | Dir::NegY => (shift, 0.0, -h * 0.35),
                 Dir::PosZ | Dir::NegZ => (shift, -h * 0.35, 0.0),
             };
 
-            // Tip position (Face center + small offset)
-            let tx = px + (dv.x as f32) * (l * 0.5 + pin_len) + off_x;
-            let ty = py + (dv.y as f32) * (l * 0.5 + pin_len) + off_y;
-            let tz = pz + (dv.z as f32) * (l * 0.5 + pin_len) + off_z;
+            // Push pins slightly further out to prevent "clipping through front"
+            let push_out = 0.6; // Increased from 0.5
+            let tx = px + (dv.x as f32) * (l * push_out) + off_x;
+            let ty = py + (dv.y as f32) * (l * push_out) + off_y;
+            let tz = pz + (dv.z as f32) * (l * push_out) + off_z;
 
             self.draw_iso_box(painter, rect, [tx, ty, tz], [pdx, pdy, pdz], pin_color);
         }
@@ -792,6 +790,37 @@ impl Ethernet3DPipesApp {
 
 impl eframe::App for Ethernet3DPipesApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Apply Flock style (Dark, high contrast, monospace)
+        let mut style = (*ctx.style()).clone();
+        style.text_styles = [
+            (TextStyle::Heading, FontId::new(18.0, FontFamily::Monospace)),
+            (TextStyle::Body, FontId::new(14.0, FontFamily::Monospace)),
+            (TextStyle::Monospace, FontId::new(14.0, FontFamily::Monospace)),
+            (TextStyle::Button, FontId::new(14.0, FontFamily::Monospace)),
+            (TextStyle::Small, FontId::new(12.0, FontFamily::Monospace)),
+        ].into();
+
+        let gray_text = Color32::from_gray(160);
+        let gray_border = Stroke::new(1.0, gray_text);
+
+        style.visuals.window_fill = Color32::from_rgba_unmultiplied(0, 0, 0, 120);
+        style.visuals.panel_fill = Color32::from_rgba_unmultiplied(0, 0, 0, 120);
+        style.visuals.window_rounding = egui::Rounding::ZERO;
+
+        style.visuals.widgets.noninteractive.fg_stroke = gray_border;
+        style.visuals.widgets.inactive.fg_stroke = gray_border;
+        style.visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, Color32::from_gray(220));
+        style.visuals.widgets.active.fg_stroke = Stroke::new(1.0, Color32::from_gray(240));
+
+        style.visuals.widgets.noninteractive.bg_stroke = gray_border;
+        style.visuals.widgets.inactive.bg_stroke = gray_border;
+        style.visuals.widgets.hovered.bg_stroke = gray_border;
+        style.visuals.widgets.active.bg_stroke = gray_border;
+
+        style.visuals.override_text_color = Some(gray_text);
+
+        ctx.set_style(style);
+
         // Drain click events (we'll use these later for interactions).
         self.pending_spawn.borrow_mut().clear();
 
@@ -822,6 +851,12 @@ impl eframe::App for Ethernet3DPipesApp {
         if self.ui_visible.get() {
             egui::Window::new("ethernet-3dpipes")
                 .default_pos((16.0, 16.0))
+                .frame(
+                    egui::Frame::none()
+                        .fill(Color32::TRANSPARENT)
+                        .rounding(egui::Rounding::ZERO)
+                        .stroke(gray_border),
+                )
                 .show(ctx, |ui| {
                     ui.label("WIP: 8-bit 3D Pipes-style ethernet cables");
                     ui.separator();
