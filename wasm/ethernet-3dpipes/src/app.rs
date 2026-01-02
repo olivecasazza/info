@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use egui::{pos2, vec2, Color32, Pos2, Rect, Shape, Stroke, Vec2};
+use egui::{pos2, vec2, Color32, Pos2, Rect, Shape, Stroke};
 
 mod theme {
     include!(concat!(env!("OUT_DIR"), "/theme_gen.rs"));
@@ -668,10 +668,11 @@ impl Ethernet3DPipesApp {
 
     fn draw_rj45(&self, painter: &egui::Painter, rect: Rect, pos: IVec3, dir: Dir) {
         // Dimensions relative to grid.
-        // L = 3.2 (approx 4x current 0.8), W = 1.0 (approx 3x wire 0.3), H = 0.6 (approx 2x wire 0.3)
-        let l = 3.2;
+        // User updated: L = 2/3 of 3.2 (~2.2). H = 1.5x of 0.6 (0.9). W = 1.0 (unchanged).
+        // Scaling: applying these ratios.
+        let l = 2.2;
         let w = 1.0;
-        let h = 0.6;
+        let h = 0.9;
 
         // Determine dimensions based on orientation
         let (sx, sy, sz) = match dir {
@@ -680,32 +681,29 @@ impl Ethernet3DPipesApp {
             Dir::PosZ | Dir::NegZ => (w, h, l),
         };
 
-        // Center position: The pipe ends at `pos`.
-        // We want the connector to extend in `dir` direction, starting roughly from `pos`.
+        // Center position
         let px = pos.x as f32;
         let py = pos.y as f32;
         let pz = pos.z as f32;
 
         let dv = dir.vec();
-        // Offset center: push out by half length, slightly pulled back to overlap
-        let cx = px + (dv.x as f32) * (l * 0.35);
-        let cy = py + (dv.y as f32) * (l * 0.35);
-        let cz = pz + (dv.z as f32) * (l * 0.35);
+        // Offset center: push out by half length
+        let cx = px + (dv.x as f32) * (l * 0.4);
+        let cy = py + (dv.y as f32) * (l * 0.4);
+        let cz = pz + (dv.z as f32) * (l * 0.4);
 
         // 1. Draw Main Body
         let color_body = Color32::from_rgb(210, 210, 230); // Clear plastic
         self.draw_iso_box(painter, rect, [cx, cy, cz], [sx, sy, sz], color_body);
 
         // 2. Draw Latch (Clip)
-        // Latch is on the "Top" face usually.
         let lx = if sx == l { l * 0.5 } else { sx * 0.4 };
         let ly = if sy == l { l * 0.5 } else { sy * 0.4 };
         let lz = if sz == l { l * 0.5 } else { sz * 0.4 };
 
-        // Offset: Move "Up" (Z+) or "Out" (Y+ for vertical?)
         let (ox, oy, oz) = match dir {
-             Dir::PosZ | Dir::NegZ => (0.0, sy * 0.5, 0.0), // Side latch for vertical
-             _ => (0.0, 0.0, sz * 0.5), // Top latch for horizontal
+             Dir::PosZ | Dir::NegZ => (0.0, sy * 0.5, 0.0),
+             _ => (0.0, 0.0, sz * 0.5),
         };
 
         self.draw_iso_box(
@@ -716,20 +714,36 @@ impl Ethernet3DPipesApp {
             color_body
         );
 
-        // 3. Gold Contacts (Tip)
-        let tip_offset_scale = 0.45;
-        let tx = px + (dv.x as f32) * (l * tip_offset_scale);
-        let ty = py + (dv.y as f32) * (l * tip_offset_scale);
-        let tz = pz + (dv.z as f32) * (l * tip_offset_scale);
+        // 3. Gold Contacts (Pins)
+        // 4 pins on the front face.
+        let pin_len = 0.15; // Protrusion length
+        let pin_color = Color32::from_rgb(255, 215, 0);
 
-        let cs = 0.2;
-        self.draw_iso_box(
-            painter,
-            rect,
-            [tx, ty, tz],
-            [cs, cs, cs],
-            Color32::from_rgb(255, 215, 0)
-        );
+        // Pin box dimensions
+        let (pdx, pdy, pdz) = match dir {
+            Dir::PosX | Dir::NegX => (pin_len, w * 0.15, h * 0.2),
+            Dir::PosY | Dir::NegY => (w * 0.15, pin_len, h * 0.2),
+            Dir::PosZ | Dir::NegZ => (w * 0.15, h * 0.2, pin_len),
+        };
+
+        for i in 0..4 {
+            let t = i as f32 - 1.5; // -1.5, -0.5, 0.5, 1.5
+            let shift = w * 0.22 * t; // Spread factor
+
+            // Calculate offset from tip center for each pin
+            let (off_x, off_y, off_z) = match dir {
+                Dir::PosX | Dir::NegX => (0.0, shift, -h * 0.35),
+                Dir::PosY | Dir::NegY => (shift, 0.0, -h * 0.35),
+                Dir::PosZ | Dir::NegZ => (shift, -h * 0.35, 0.0),
+            };
+
+            // Tip position (Face center + small offset)
+            let tx = px + (dv.x as f32) * (l * 0.5 + pin_len) + off_x;
+            let ty = py + (dv.y as f32) * (l * 0.5 + pin_len) + off_y;
+            let tz = pz + (dv.z as f32) * (l * 0.5 + pin_len) + off_z;
+
+            self.draw_iso_box(painter, rect, [tx, ty, tz], [pdx, pdy, pdz], pin_color);
+        }
     }
 
     fn draw_pipes(&self, painter: &egui::Painter, rect: Rect) {
