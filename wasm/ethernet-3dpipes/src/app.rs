@@ -845,6 +845,14 @@ impl Ethernet3DPipesApp {
 
         // 4. Draw
         let px = self.renderer.pixel.max(1.0);
+        let s = self.renderer.scale;
+
+        // Scale pipe thickness with zoom so it matches the RJ45 model size.
+        // Base width target is ~0.9 world units (scale * 0.9).
+        // The draw_pixel_line function multiplies input by px, so we divide by px here.
+        let base_thick = ((0.9 * s) / px).max(1.0);
+        let shadow_thick = ((1.2 * s) / px).max(1.0);
+        let high_thick = ((0.3 * s) / px).max(1.0);
 
         for cmd in cmds {
             match cmd {
@@ -866,10 +874,10 @@ impl Ethernet3DPipesApp {
                     let perp = vec2(-d.y, d.x);
 
                     // 1. Shadow (Widest, drawn behind/offset right)
-                    self.draw_pixel_line(painter, a + perp * px, b + perp * px, shadow, 4.0);
+                    self.draw_pixel_line(painter, a + perp * px, b + perp * px, shadow, shadow_thick);
 
                     // 2. Base (Medium, Center)
-                    self.draw_pixel_line(painter, a, b, base_color, 3.0);
+                    self.draw_pixel_line(painter, a, b, base_color, base_thick);
 
                     // 3. Highlight (Thin, offset left)
                     self.draw_pixel_line(
@@ -877,7 +885,7 @@ impl Ethernet3DPipesApp {
                         a - perp * px * 0.5,
                         b - perp * px * 0.5,
                         highlight,
-                        1.0,
+                        high_thick,
                     );
                 }
                 DrawCmd::Rj45 { pos, dir, .. } => {
