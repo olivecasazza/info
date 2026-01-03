@@ -687,32 +687,44 @@ impl Ethernet3DPipesApp {
         let pz = pos.z as f32;
 
         let dv = dir.vec();
-        // Offset center
+        // Offset center: body is shifted so it connects to the pipe
         let cx = px + (dv.x as f32) * (l * 0.4);
         let cy = py + (dv.y as f32) * (l * 0.4);
         let cz = pz + (dv.z as f32) * (l * 0.4);
 
-        // 1. Draw Main Body
-        let color_body = Color32::from_rgb(210, 210, 230); // Clear plastic
-        self.draw_iso_box(painter, rect, [cx, cy, cz], [sx, sy, sz], color_body);
+        struct Part {
+            center: [f32; 3],
+            size: [f32; 3],
+            color: Color32,
+        }
+        let mut parts = Vec::with_capacity(6);
 
-        // 2. Draw Latch (Clip) - Yellow tab requested
+        // 1. Main Body
+        let color_body = Color32::from_rgb(210, 210, 230); // Clear plastic
+        parts.push(Part {
+            center: [cx, cy, cz],
+            size: [sx, sy, sz],
+            color: color_body,
+        });
+
+        // 2. Latch (Clip) - Yellow tab
+        // Adjusted logic: Place latch strictly ON TOP of the surface to avoid intersection clipping.
         let lx = if sx == l { l * 0.5 } else { sx * 0.4 };
         let ly = if sy == l { l * 0.5 } else { sy * 0.4 };
         let lz = if sz == l { l * 0.5 } else { sz * 0.4 };
 
         let (ox, oy, oz) = match dir {
-             Dir::PosZ | Dir::NegZ => (0.0, sy * 0.5, 0.0),
-             _ => (0.0, 0.0, sz * 0.5),
+            // If vertical, latch is on +Y side (width side)
+            Dir::PosZ | Dir::NegZ => (0.0, sy * 0.5 + ly * 0.5, 0.0),
+            // If horizontal, latch is on +Z side (top)
+            _ => (0.0, 0.0, sz * 0.5 + lz * 0.5),
         };
 
-        self.draw_iso_box(
-            painter,
-            rect,
-            [cx + ox, cy + oy, cz + oz],
-            [lx, ly, lz],
-            Color32::from_rgb(230, 200, 100) // Yellow tab
-        );
+        parts.push(Part {
+            center: [cx + ox, cy + oy, cz + oz],
+            size: [lx, ly, lz],
+            color: Color32::from_rgb(230, 200, 100),
+        });
 
         // 3. Gold Contacts (Pins)
         let pin_len = 0.15;
@@ -735,12 +747,27 @@ impl Ethernet3DPipesApp {
             };
 
             // Push pins slightly further out to prevent "clipping through front"
-            let push_out = 0.6; // Increased from 0.5
+            let push_out = 0.6;
             let tx = px + (dv.x as f32) * (l * push_out) + off_x;
             let ty = py + (dv.y as f32) * (l * push_out) + off_y;
             let tz = pz + (dv.z as f32) * (l * push_out) + off_z;
 
-            self.draw_iso_box(painter, rect, [tx, ty, tz], [pdx, pdy, pdz], pin_color);
+            parts.push(Part {
+                center: [tx, ty, tz],
+                size: [pdx, pdy, pdz],
+                color: pin_color,
+            });
+        }
+
+        // Sort by depth (x+y+z) to handle occlusion
+        parts.sort_by(|a, b| {
+            let da = a.center[0] + a.center[1] + a.center[2];
+            let db = b.center[0] + b.center[1] + b.center[2];
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        for p in parts {
+            self.draw_iso_box(painter, rect, p.center, p.size, p.color);
         }
     }
 
