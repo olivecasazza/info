@@ -727,27 +727,34 @@ impl Ethernet3DPipesApp {
         });
 
         // 3. Gold Contacts (Pins)
-        let pin_len = 0.15;
         let pin_color = Color32::from_rgb(255, 215, 0);
 
+        // Pins are now flat on the "Tip" face.
+        // Thickness along the length axis.
+        let pt = 0.05;
+        let pw = w * 0.15;
+        let ph = h * 0.2;
+
         let (pdx, pdy, pdz) = match dir {
-            Dir::PosX | Dir::NegX => (pin_len, w * 0.15, h * 0.2),
-            Dir::PosY | Dir::NegY => (w * 0.15, pin_len, h * 0.2),
-            Dir::PosZ | Dir::NegZ => (w * 0.15, h * 0.2, pin_len),
+            Dir::PosX | Dir::NegX => (pt, pw, ph),
+            Dir::PosY | Dir::NegY => (pw, pt, ph),
+            Dir::PosZ | Dir::NegZ => (pw, ph, pt),
         };
 
         for i in 0..4 {
             let t = i as f32 - 1.5;
             let shift = w * 0.22 * t;
 
+            // Center on the tip face (offset 0 on height axis)
             let (off_x, off_y, off_z) = match dir {
-                Dir::PosX | Dir::NegX => (0.0, shift, -h * 0.35),
-                Dir::PosY | Dir::NegY => (shift, 0.0, -h * 0.35),
-                Dir::PosZ | Dir::NegZ => (shift, -h * 0.35, 0.0),
+                Dir::PosX | Dir::NegX => (0.0, shift, 0.0),
+                Dir::PosY | Dir::NegY => (shift, 0.0, 0.0),
+                Dir::PosZ | Dir::NegZ => (shift, 0.0, 0.0),
             };
 
-            // Push pins slightly further out to prevent "clipping through front"
-            let push_out = 0.6;
+            // Push pins to the tip face
+            // Center of body is at 0.4*l. Front face is at 0.4*l + 0.5*l = 0.9*l.
+            let push_out = 0.9;
             let tx = px + (dv.x as f32) * (l * push_out) + off_x;
             let ty = py + (dv.y as f32) * (l * push_out) + off_y;
             let tz = pz + (dv.z as f32) * (l * push_out) + off_z;
