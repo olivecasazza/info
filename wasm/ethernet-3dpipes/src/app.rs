@@ -502,9 +502,9 @@ impl Ethernet3DPipesApp {
         // Double each axis vs the original grid (22x22x12) so the volume is
         // ~8x larger overall, and make it a cube for a more classic 3D pipes
         // feel.
-        let bounds = IVec3::new(44, 44, 44);
-        let pipe_count = 4;
-        let min_spacing = 1; // 1 => don't allow adjacent cells
+        let bounds = IVec3::new(88, 88, 88);
+        let pipe_count = 8;
+        let min_spacing = 5; // 5 => don't allow adjacent cells
 
         let endpoints = Endpoints::new(seed, bounds);
         let sim = PipeSim::new(seed, bounds, pipe_count, min_spacing);
@@ -517,7 +517,7 @@ impl Ethernet3DPipesApp {
             renderer: IsoRenderer::default(),
             bounds,
             pipe_count,
-            speed: 70.0,
+            speed: 20.0,
             accumulator: 0.0,
             endpoints,
             sim,
@@ -764,7 +764,6 @@ impl Ethernet3DPipesApp {
             let tx = px + (dv.x as f32) * (l * push_out) + off_x;
             let ty = py + (dv.y as f32) * (l * push_out) + off_y;
             let tz = pz + (dv.z as f32) * (l * push_out) + off_z;
-
             parts.push(Part {
                 center: [tx, ty, tz],
                 size: [pdx, pdy, pdz],
