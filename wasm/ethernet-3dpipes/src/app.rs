@@ -779,45 +779,111 @@ impl Ethernet3DPipesApp {
     }
 
     fn draw_pipes(&self, painter: &egui::Painter, rect: Rect) {
-        // Sort by depth so closer segments draw last.
-        let mut segs = self.sim.segments.clone();
-        segs.sort_by(|a, b| {
-            let da = a.to.x + a.to.y + a.to.z;
-            let db = b.to.x + b.to.y + b.to.z;
-            da.cmp(&db)
-        });
-
-        let px = self.renderer.pixel.max(1.0);
-
-        for seg in &segs {
-            let a = self.iso_centered(rect, seg.from.x as f32, seg.from.y as f32, seg.from.z as f32);
-            let b = self.iso_centered(rect, seg.to.x as f32, seg.to.y as f32, seg.to.z as f32);
-
-            let base_color = self.palette.pipe(seg.pipe_id);
-            let highlight = self.palette.pipe_light(base_color);
-            let shadow = self.palette.pipe_dark(base_color);
-
-            // Draw "Tube" using pixel rasterization.
-            // We draw 3 lines with different offsets perpendicular to the screen-space direction.
-            // Since draw_pixel_line centers the line, we just offset the start/end points.
-
-            let d = (b - a).normalized();
-            let perp = vec2(-d.y, d.x);
-
-            // 1. Shadow (Widest, drawn behind/offset right)
-            self.draw_pixel_line(painter, a + perp * px, b + perp * px, shadow, 4.0);
-
-            // 2. Base (Medium, Center)
-            self.draw_pixel_line(painter, a, b, base_color, 3.0);
-
-            // 3. Highlight (Thin, offset left)
-            self.draw_pixel_line(painter, a - perp * px * 0.5, b - perp * px * 0.5, highlight, 1.0);
+        enum DrawCmd {
+            Segment {
+                from: IVec3,
+                to: IVec3,
+                pipe_id: usize,
+                depth: f32,
+            },
+            Rj45 {
+                pos: IVec3,
+                dir: Dir,
+                depth: f32,
+            },
         }
 
-        // RJ45 ends at heads
+        let mut cmds = Vec::with_capacity(self.sim.segments.len() + self.sim.heads.len());
+
+        // 1. Collect Segments
+        for seg in &self.sim.segments {
+            // Depth: midpoint
+            let mx = (seg.from.x + seg.to.x) as f32 * 0.5;
+            let my = (seg.from.y + seg.to.y) as f32 * 0.5;
+            let mz = (seg.from.z + seg.to.z) as f32 * 0.5;
+            let depth = mx + my + mz;
+
+            cmds.push(DrawCmd::Segment {
+                from: seg.from,
+                to: seg.to,
+                pipe_id: seg.pipe_id,
+                depth,
+            });
+        }
+
+        // 2. Collect RJ45s
         for (pipe_id, head) in self.sim.heads.iter().enumerate() {
             let dir = self.sim.dirs[pipe_id];
-            self.draw_rj45(painter, rect, *head, dir);
+
+            // Calculate center depth matching draw_rj45 logic
+            let l = 2.0;
+            let dv = dir.vec();
+            let cx = head.x as f32 + (dv.x as f32) * (l * 0.4);
+            let cy = head.y as f32 + (dv.y as f32) * (l * 0.4);
+            let cz = head.z as f32 + (dv.z as f32) * (l * 0.4);
+            let depth = cx + cy + cz;
+
+            cmds.push(DrawCmd::Rj45 {
+                pos: *head,
+                dir,
+                depth,
+            });
+        }
+
+        // 3. Sort (Ascending depth = Far to Near)
+        cmds.sort_by(|a, b| {
+            let da = match a {
+                DrawCmd::Segment { depth, .. } => *depth,
+                DrawCmd::Rj45 { depth, .. } => *depth,
+            };
+            let db = match b {
+                DrawCmd::Segment { depth, .. } => *depth,
+                DrawCmd::Rj45 { depth, .. } => *depth,
+            };
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // 4. Draw
+        let px = self.renderer.pixel.max(1.0);
+
+        for cmd in cmds {
+            match cmd {
+                DrawCmd::Segment {
+                    from,
+                    to,
+                    pipe_id,
+                    ..
+                } => {
+                    let a = self.iso_centered(rect, from.x as f32, from.y as f32, from.z as f32);
+                    let b = self.iso_centered(rect, to.x as f32, to.y as f32, to.z as f32);
+
+                    let base_color = self.palette.pipe(pipe_id);
+                    let highlight = self.palette.pipe_light(base_color);
+                    let shadow = self.palette.pipe_dark(base_color);
+
+                    // Draw "Tube" using pixel rasterization.
+                    let d = (b - a).normalized();
+                    let perp = vec2(-d.y, d.x);
+
+                    // 1. Shadow (Widest, drawn behind/offset right)
+                    self.draw_pixel_line(painter, a + perp * px, b + perp * px, shadow, 4.0);
+
+                    // 2. Base (Medium, Center)
+                    self.draw_pixel_line(painter, a, b, base_color, 3.0);
+
+                    // 3. Highlight (Thin, offset left)
+                    self.draw_pixel_line(
+                        painter,
+                        a - perp * px * 0.5,
+                        b - perp * px * 0.5,
+                        highlight,
+                        1.0,
+                    );
+                }
+                DrawCmd::Rj45 { pos, dir, .. } => {
+                    self.draw_rj45(painter, rect, pos, dir);
+                }
+            }
         }
     }
 }
