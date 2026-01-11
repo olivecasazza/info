@@ -971,9 +971,6 @@ impl eframe::App for Ethernet3DPipesApp {
                         .stroke(gray_border),
                 )
                 .show(ctx, |ui| {
-                    ui.label("WIP: 8-bit 3D Pipes-style ethernet cables");
-                    ui.separator();
-
                     ui.add(egui::Slider::new(&mut self.speed, 5.0..=240.0).text("speed"));
                     ui.add(egui::Slider::new(&mut self.renderer.scale, 6.0..=26.0).text("scale"));
                     ui.add(egui::Slider::new(&mut self.renderer.pixel, 1.0..=8.0).text("pixel"));
