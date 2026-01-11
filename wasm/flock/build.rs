@@ -12,7 +12,7 @@ fn get_hex(v: &serde_json::Value, group: &str, shade: &str) -> String {
     v.get(group)
         .and_then(|g| g.get(shade))
         .and_then(|s| s.as_str())
-        .unwrap_or_else(|| panic!("missing theme color {group}.{shade}"))
+        .unwrap_or_else(|| panic!("missing theme color {}.{}", group, shade))
         .to_string()
 }
 
