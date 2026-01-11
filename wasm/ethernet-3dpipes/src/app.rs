@@ -732,7 +732,9 @@ impl Ethernet3DPipesApp {
         // Pins are now flat on the "Tip" face.
         // Thickness along the length axis.
         let pt = 0.05;
-        let pw = w * 0.15;
+        // 8 pins fit in width 1.0.
+        // Margin 0.1, Width 0.8. 8 pins -> ~0.1 pitch.
+        let pw = 0.06;
         let ph = h * 0.2;
 
         let (pdx, pdy, pdz) = match dir {
@@ -741,9 +743,9 @@ impl Ethernet3DPipesApp {
             Dir::PosZ | Dir::NegZ => (pw, ph, pt),
         };
 
-        for i in 0..4 {
-            let t = i as f32 - 1.5;
-            let shift = w * 0.22 * t;
+        for i in 0..8 {
+            let t = i as f32 - 3.5;
+            let shift = 0.1 * t;
 
             // Center on the tip face (offset 0 on height axis)
             let (off_x, off_y, off_z) = match dir {
@@ -754,7 +756,8 @@ impl Ethernet3DPipesApp {
 
             // Push pins to the tip face
             // Center of body is at 0.4*l. Front face is at 0.4*l + 0.5*l = 0.9*l.
-            let push_out = 0.9;
+            // Add slight epsilon (0.02) to ensure they sit ON TOP of the face and don't Z-fight/clip.
+            let push_out = 0.92;
             let tx = px + (dv.x as f32) * (l * push_out) + off_x;
             let ty = py + (dv.y as f32) * (l * push_out) + off_y;
             let tz = pz + (dv.z as f32) * (l * push_out) + off_z;
