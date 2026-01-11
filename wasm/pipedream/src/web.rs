@@ -50,7 +50,7 @@ impl WebHandle {
                 canvas,
                 eframe::WebOptions::default(),
                 Box::new(move |_cc| {
-                    Ok(Box::new(crate::app::Ethernet3DPipesApp::new(
+                    Ok(Box::new(crate::app::PipedreamApp::new(
                         seed,
                         ui_visible.clone(),
                         pointer_over_ui.clone(),
