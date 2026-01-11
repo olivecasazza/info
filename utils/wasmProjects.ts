@@ -27,10 +27,10 @@ export const WASM_PROJECTS: WasmProjectDefinition[] = [
     loader: () => import('~/wasm/flock/pkg/flock.js')
   },
   {
-    slug: 'ethernet-3dpipes',
-    title: 'Ethernet 3D Pipes',
+    slug: 'pipedream',
+    title: 'Pipedream',
     // Explicit .js extension avoids Vite/Nuxt dynamic-import resolution edge cases.
-    loader: () => import('~/wasm/ethernet-3dpipes/pkg/ethernet_3dpipes.js')
+    loader: () => import('~/wasm/pipedream/pkg/ethernet_3dpipes.js')
   }
 ]
 

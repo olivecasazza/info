@@ -28,8 +28,8 @@ npm ci
 echo "Building wasm/flock..."
 wasm-pack build ./wasm/flock/ --target web --release
 
-echo "Building wasm/ethernet-3dpipes..."
-wasm-pack build ./wasm/ethernet-3dpipes/ --target web --release
+echo "Building wasm/pipedream..."
+wasm-pack build ./wasm/pipedream/ --target web --release
 
 # build nuxt package
 echo "Generating static site..."
