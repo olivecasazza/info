@@ -211,6 +211,8 @@ struct PipeSim {
     pub min_spacing: i32,
     /// Max number of steps to go straight before forcing a turn check.
     pub straightness: u32,
+    /// Max length per pipe (in segments).
+    pub max_len_per_pipe: usize,
     /// Counters for each pipe: how many straight steps remaining.
     pub turn_delay: Vec<u32>,
 }
@@ -226,6 +228,7 @@ impl PipeSim {
             rng: oorandom::Rand32::new(seed),
             min_spacing,
             straightness: 10,
+            max_len_per_pipe: 500,
             turn_delay: Vec::new(),
         };
         s.reset(pipe_count, &HashSet::new());
@@ -436,8 +439,8 @@ impl PipeSim {
         self.dirs[pipe_id] = d;
         self.visited.insert(to);
 
-        const MAX_SEGMENTS: usize = 10000;
-        if self.segments.len() > MAX_SEGMENTS {
+        let limit = self.max_len_per_pipe * self.heads.len().max(1);
+        if self.segments.len() > limit {
             let old = self.segments.remove(0);
             self.visited.remove(&old.from);
         }
@@ -979,6 +982,7 @@ impl eframe::App for Ethernet3DPipesApp {
                     ui.add(egui::Slider::new(&mut self.pipe_count, 1..=8).text("pipes"));
                     ui.add(egui::Slider::new(&mut self.sim.min_spacing, 0..=2).text("min spacing"));
                     ui.add(egui::Slider::new(&mut self.sim.straightness, 1..=20).text("straightness"));
+                    ui.add(egui::Slider::new(&mut self.sim.max_len_per_pipe, 10..=2000).text("max length"));
 
                     if ui.button("reset pipes").clicked() {
                         self.sim.reset(self.pipe_count, &self.endpoints.occupied);
