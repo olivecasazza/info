@@ -475,7 +475,7 @@ impl IsoRenderer {
     }
 }
 
-pub struct Ethernet3DPipesApp {
+pub struct PipedreamApp {
     pub ui_visible: std::rc::Rc<std::cell::Cell<bool>>,
     pub pointer_over_ui: std::rc::Rc<std::cell::Cell<bool>>,
     pub pending_spawn: std::rc::Rc<std::cell::RefCell<Vec<(f32, f32)>>>,
@@ -492,7 +492,7 @@ pub struct Ethernet3DPipesApp {
     sim: PipeSim,
 }
 
-impl Ethernet3DPipesApp {
+impl PipedreamApp {
     pub fn new(
         seed: u64,
         ui_visible: std::rc::Rc<std::cell::Cell<bool>>,
@@ -901,7 +901,7 @@ impl Ethernet3DPipesApp {
     }
 }
 
-impl eframe::App for Ethernet3DPipesApp {
+impl eframe::App for PipedreamApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Apply Flock style (Dark, high contrast, monospace)
         let mut style = (*ctx.style()).clone();

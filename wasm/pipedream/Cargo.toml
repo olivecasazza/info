@@ -1,5 +1,5 @@
 [package]
-name = "ethernet_3dpipes"
+name = "pipedream"
 version = "0.1.0"
 authors = ["Olive Casazza <olive@casazza.info>"]
 edition = "2018"
