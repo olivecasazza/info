@@ -10,7 +10,7 @@
   <!-- Dark overlay for readability on non-project pages -->
   <div
     v-if="!isWasmProjectRoute"
-    class="absolute left-0 top-0 w-full h-full bg-black bg-opacity-60 z-10"
+    class="absolute left-0 top-0 w-full h-full bg-black bg-opacity-75 z-10"
   />
 </template>
 

@@ -14,7 +14,7 @@ export default defineNuxtConfig({
     plugins: [
       wasmPack([
         './wasm/flock',
-        './wasm/ethernet-3dpipes'
+        './wasm/pipedream'
       ])
     ]
   }

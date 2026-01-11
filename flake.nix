@@ -4,10 +4,8 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-
     # Rust toolchains
     rust-overlay.url = "github:oxalica/rust-overlay";
-
     # Reproducible Rust builds
     crane.url = "github:ipetkov/crane";
   };
@@ -96,9 +94,9 @@
         themeColors = true;
       };
 
-      ethernet-3dpipes-wasm-pkg = mkWasmPkg {
-        name = "ethernet-3dpipes";
-        path = ./wasm/ethernet-3dpipes;
+      pipedream-wasm-pkg = mkWasmPkg {
+        name = "pipedream";
+        path = ./wasm/pipedream;
         themeColors = true; # Both use themeColors.json
       };
 
@@ -116,11 +114,11 @@
           cp -r ${flock-wasm-pkg}/* wasm/flock/pkg/
           chmod -R u+rwX wasm/flock/pkg
 
-          echo "Syncing wasm/ethernet-3dpipes/pkg from Nix store..."
-          rm -rf wasm/ethernet-3dpipes/pkg
-          mkdir -p wasm/ethernet-3dpipes/pkg
-          cp -r ${ethernet-3dpipes-wasm-pkg}/* wasm/ethernet-3dpipes/pkg/
-          chmod -R u+rwX wasm/ethernet-3dpipes/pkg
+          echo "Syncing wasm/pipedream/pkg from Nix store..."
+          rm -rf wasm/pipedream/pkg
+          mkdir -p wasm/pipedream/pkg
+          cp -r ${pipedream-wasm-pkg}/* wasm/pipedream/pkg/
+          chmod -R u+rwX wasm/pipedream/pkg
 
           echo "WASM packages synced."
         '';
@@ -163,7 +161,7 @@
             npm install
           fi
 
-          if [ ! -d wasm/flock/pkg ] || [ ! -d wasm/ethernet-3dpipes/pkg ]; then
+          if [ ! -d wasm/flock/pkg ] || [ ! -d wasm/pipedream/pkg ]; then
             ${sync-wasm}/bin/sync-wasm
           fi
 
@@ -215,7 +213,7 @@
 
       packages = {
         flock-wasm-pkg = flock-wasm-pkg;
-        ethernet-3dpipes-wasm-pkg = ethernet-3dpipes-wasm-pkg;
+        pipedream-wasm-pkg = pipedream-wasm-pkg;
         sync-wasm = sync-wasm;
         build-pages = build-pages;
         dev = dev;

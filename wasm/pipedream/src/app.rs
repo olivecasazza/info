@@ -962,7 +962,7 @@ impl eframe::App for Ethernet3DPipesApp {
         self.pointer_over_ui.set(over_ui);
 
         if self.ui_visible.get() {
-            egui::Window::new("ethernet-3dpipes")
+            egui::Window::new("pipedream")
                 .default_pos((16.0, 16.0))
                 .frame(
                     egui::Frame::none()

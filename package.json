@@ -2,7 +2,7 @@
   "private": true,
   "scripts": {
     "build": "nuxt build",
-    "build:wasm": "wasm-pack build ./wasm/flock/ --target web && wasm-pack build ./wasm/ethernet-3dpipes/ --target web",
+    "build:wasm": "wasm-pack build ./wasm/flock/ --target web && wasm-pack build ./wasm/pipedream/ --target web",
     "dev": "nuxt dev",
     "build:pages": "NUXT_APP_BASE_URL=/info/ npx nuxt generate && touch .output/public/.nojekyll",
     "deploy:pages": "gh-pages --dotfiles -d .output/public",
