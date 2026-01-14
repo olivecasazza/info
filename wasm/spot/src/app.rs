@@ -14,8 +14,10 @@ pub struct SpotApp {
 impl SpotApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let gl = cc.gl.as_ref().expect("No glow context available");
-        // FIX: Context::from_gl_context
-        let three_d_context = Context::from_gl_context(Arc::new(gl.clone())).unwrap();
+        // FIX: Context::from_gl_context expects Arc<glow::Context>.
+        // eframe's gl is Arc<glow::Context>.
+        // So just clone the Arc.
+        let three_d_context = Context::from_gl_context(gl.clone()).unwrap();
 
         let mut physics = PhysicsWorld::new();
         let mut renderer = SceneRenderer::new(three_d_context);
@@ -48,22 +50,29 @@ impl eframe::App for SpotApp {
                         let t = body.translation();
                         let r = body.rotation();
 
-                        // Convert nalgebra::Rotation -> Matrix4 -> three_d::Mat4
-                        // nalgebra Matrix4 is column-major.
-                        // three_d::Mat4 is likely column-major (it's typical for GL).
-
                         let rot = r.to_rotation_matrix();
 
-                        // Construct Mat4 manually to be safe across library versions
-                        // set_transformation takes impl Into<Mat4>
-                        let m = Mat4::new(
-                            rot[(0,0)], rot[(1,0)], rot[(2,0)], 0.0,
-                            rot[(0,1)], rot[(1,1)], rot[(2,1)], 0.0,
-                            rot[(0,2)], rot[(1,2)], rot[(2,2)], 0.0,
-                            t.x,        t.y,        t.z,        1.0
-                        );
+                        // Fix: Mat4::new takes column vectors in three-d (mint)? Or separate floats?
+                        // three_d::Mat4 is an alias for `mint::ColumnMatrix4` or similar if no feature?
+                        // If it's standard glam/nalgebra/cgmath:
+                        // `Mat4::new` usually takes m11, m12, m13... row major?
+                        // Let's assume standard `new(c0r0, c0r1...` ? No, documentation varies.
 
-                        model.set_transformation(m);
+                        // Safest approach: `Mat4::from_cols` if available.
+                        // Or `Mat4::from(array)`.
+
+                        // Try `Mat4::from_cols` assuming we have it.
+                        // If not, we will use `Mat4::from_translation(..)` * `Mat4::from(Quaternion)`.
+                        // But we have `rotation_matrix` from nalgebra.
+
+                        let mat_trans = Mat4::from_translation(vec3(t.x, t.y, t.z));
+                        // Convert nalgebra rotation to three-d rotation.
+                        // Try quaternion?
+                        let q = body.rotation(); // UnitQuaternion
+                        // Quat::new(w, x, y, z)
+                        let mat_rot = Mat4::from(Quaternion::new(q.w, q.i, q.j, q.k));
+
+                        model.set_transformation(mat_trans * mat_rot);
                     }
                 }
             }

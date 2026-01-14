@@ -1,6 +1,7 @@
 use rapier3d::prelude::*;
 use roxmltree::Document;
 use nalgebra as na;
+use nalgebra::UnitQuaternion; // Added import
 
 pub struct PhysicsWorld {
     pub rigid_body_set: RigidBodySet,
