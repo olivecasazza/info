@@ -7,9 +7,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  NODE_VERSION: "20"
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,45 +16,21 @@ jobs:
         with:
           lfs: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
-      - name: Setup Rust
-        uses: dtolnay/rust-action@stable
+      - name: Cache Nix store
+        uses: cachix/cachix-action@v15
         with:
-          targets: wasm32-unknown-unknown
+          name: nix-community
+          skipPush: true
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: wasm
-
-      - name: Install wasm-pack
-        uses: jetli/wasm-pack-action@v0.4.0
-        with:
-          version: 'latest'
-
-      - name: Install wasm-opt (binaryen)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y binaryen
-
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Build WASM packages
-        run: |
-          cd wasm
-          for pkg in flock pipedream spot; do
-            echo "Building $pkg..."
-            (cd $pkg && wasm-pack build . --target web --release)
-          done
-
-      - name: Build Nuxt static site
-        run: npx nuxt generate
+      - name: Build with Nix
+        run: nix run .#build-pages
 
       - name: Check WASM sizes
         id: wasm-sizes
@@ -66,7 +39,6 @@ jobs:
           echo "spot_size=$SPOT_SIZE" >> $GITHUB_OUTPUT
           echo "Spot WASM size: $((SPOT_SIZE / 1024 / 1024)) MB"
 
-          # If over 24MB, we need to use R2
           if [ "$SPOT_SIZE" -gt 25165824 ]; then
             echo "needs_r2=true" >> $GITHUB_OUTPUT
             echo "::warning::spot_bg.wasm is over 25MB, will upload to R2"
@@ -74,7 +46,7 @@ jobs:
             echo "needs_r2=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Upload to Cloudflare R2 (large assets)
+      - name: Upload large WASM to R2
         if: steps.wasm-sizes.outputs.needs_r2 == 'true' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
@@ -82,13 +54,9 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: r2 object put info-assets/spot_bg.wasm --file .output/public/_nuxt/spot_bg.*.wasm
 
-      # Remove large files before Pages deploy (if using R2)
-      - name: Remove large WASM for Pages deploy
+      - name: Remove large WASM for Pages
         if: steps.wasm-sizes.outputs.needs_r2 == 'true'
-        run: |
-          # Replace large WASM with a redirect stub or remove
-          rm -f .output/public/_nuxt/spot_bg.*.wasm
-          echo "Large WASM removed, will be served from R2"
+        run: rm -f .output/public/_nuxt/spot_bg.*.wasm
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
