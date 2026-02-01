@@ -27,30 +27,46 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      # Cache Nix store using GitHub Actions cache
       - name: Cache Nix store
-        uses: cachix/cachix-action@v15
-        with:
-          name: nix-community
-          skipPush: true
+        uses: DeterminateSystems/magic-nix-cache-action@v8
 
-      - name: Build with Nix
-        run: nix run .#build-pages
+      # Build WASM packages separately first
+      - name: Build WASM packages
+        run: |
+          echo "Building WASM packages..."
+          nix build .#flock-wasm-pkg .#pipedream-wasm-pkg .#spot-wasm-pkg --no-link
+          echo "WASM packages built successfully"
+
+      # Sync WASM to wasm/*/pkg directories
+      - name: Sync WASM packages
+        run: nix run .#sync-wasm
+
+      # Verify WASM files exist
+      - name: Verify WASM sync
+        run: |
+          echo "=== Checking WASM pkg directories ==="
+          ls -la wasm/flock/pkg/ || echo "flock/pkg missing!"
+          ls -la wasm/pipedream/pkg/ || echo "pipedream/pkg missing!"
+          ls -la wasm/spot/pkg/ || echo "spot/pkg missing!"
+
+      # Install npm dependencies
+      - name: Install npm dependencies
+        run: |
+          export npm_config_cache="$PWD/.npm-cache"
+          npm ci
+
+      # Generate static site
+      - name: Generate static site
+        run: |
+          export npm_config_cache="$PWD/.npm-cache"
+          npx nuxt generate
+          touch .output/public/.nojekyll
 
       - name: Show WASM sizes
         run: |
           echo "=== WASM file sizes ==="
           ls -lh .output/public/_nuxt/*.wasm 2>/dev/null || echo "No WASM files found"
-
-      - name: Upload all WASM to R2
-        if: github.ref == 'refs/heads/main'
-        run: |
-          # Upload each WASM file to R2 with its hashed filename
-          for wasm in .output/public/_nuxt/*.wasm; do
-            [ -f "$wasm" ] || continue
-            filename=$(basename "$wasm")
-            echo "Uploading $filename to R2..."
-          done
-        # Note: actual upload happens in next step
 
       - name: Upload WASM to R2
         if: github.ref == 'refs/heads/main'
@@ -63,21 +79,21 @@ jobs:
             r2 object put ${{ env.R2_BUCKET }}/_nuxt/$(ls .output/public/_nuxt/pipedream_bg.*.wasm | xargs basename) --file "$(ls .output/public/_nuxt/pipedream_bg.*.wasm)" --content-type application/wasm;
             r2 object put ${{ env.R2_BUCKET }}/_nuxt/$(ls .output/public/_nuxt/spot_bg.*.wasm | xargs basename) --file "$(ls .output/public/_nuxt/spot_bg.*.wasm)" --content-type application/wasm
 
-      - name: Create _redirects for WASM (serve from R2)
+      - name: Create _redirects for WASM
         if: github.ref == 'refs/heads/main'
         run: |
-          # Cloudflare Pages _redirects: proxy WASM requests to R2
-          cat >> .output/public/_redirects << 'EOF'
+          cat >> .output/public/_redirects << EOF
           # Serve WASM from R2 CDN
           /_nuxt/*.wasm ${{ env.R2_PUBLIC_URL }}/_nuxt/:splat 200
           EOF
+          echo "Created _redirects:"
           cat .output/public/_redirects
 
-      - name: Remove WASM from Pages (served via redirect)
+      - name: Remove WASM from Pages bundle
         if: github.ref == 'refs/heads/main'
         run: |
           rm -f .output/public/_nuxt/*.wasm
-          echo "WASM files removed from Pages bundle (will be served from R2)"
+          echo "WASM removed from Pages (served from R2)"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
