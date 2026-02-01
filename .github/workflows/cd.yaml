@@ -1,37 +1,118 @@
-# # https://github.com/actions/deploy-pages#usage
-# name: Deploy to GitHub Pages
-# on:
-#   workflow_dispatch:
-#   push:
-#     branches:
-#       - main
-# jobs:
-#   cd:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v3
-#       - run: corepack enable
-#       - uses: actions/setup-node@v3
-#         with:
-#           node-version: "20.14"
-#       # install node deps
-#       - run: npm install
-#       # build wasm deps
-#       - uses: Swatinem/rust-cache@v2
-#       - uses: jetli/wasm-pack-action@v0.4.0
-#         with:
-#           version: 'latest'
-#       # build nuxt app
-#       - run: npm run build:wasm
-#       - run: npm run build:pages
-#       # upload artifacts
-#       - name: Upload artifact
-#         uses: actions/upload-pages-artifact@v1
-#         with:
-#           path: ./.output/public
-#       # deploy to pages
-#       - name: Deploy
-#         uses: peaceiris/actions-gh-pages@v3
-#         with:
-#           github_token: ${{ secrets.GITHUB_TOKEN }}
-#           publish_dir: ./.output/public
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wasm
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: 'latest'
+
+      - name: Install wasm-opt (binaryen)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build WASM packages
+        run: |
+          cd wasm
+          for pkg in flock pipedream spot; do
+            echo "Building $pkg..."
+            (cd $pkg && wasm-pack build . --target web --release)
+          done
+
+      - name: Build Nuxt static site
+        run: npx nuxt generate
+
+      - name: Check WASM sizes
+        id: wasm-sizes
+        run: |
+          SPOT_SIZE=$(stat -c%s .output/public/_nuxt/spot_bg.*.wasm 2>/dev/null || echo 0)
+          echo "spot_size=$SPOT_SIZE" >> $GITHUB_OUTPUT
+          echo "Spot WASM size: $((SPOT_SIZE / 1024 / 1024)) MB"
+
+          # If over 24MB, we need to use R2
+          if [ "$SPOT_SIZE" -gt 25165824 ]; then
+            echo "needs_r2=true" >> $GITHUB_OUTPUT
+            echo "::warning::spot_bg.wasm is over 25MB, will upload to R2"
+          else
+            echo "needs_r2=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload to Cloudflare R2 (large assets)
+        if: steps.wasm-sizes.outputs.needs_r2 == 'true' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: r2 object put info-assets/spot_bg.wasm --file .output/public/_nuxt/spot_bg.*.wasm
+
+      # Remove large files before Pages deploy (if using R2)
+      - name: Remove large WASM for Pages deploy
+        if: steps.wasm-sizes.outputs.needs_r2 == 'true'
+        run: |
+          # Replace large WASM with a redirect stub or remove
+          rm -f .output/public/_nuxt/spot_bg.*.wasm
+          echo "Large WASM removed, will be served from R2"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-build
+          path: .output/public
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site-build
+          path: .output/public
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy .output/public --project-name=info
