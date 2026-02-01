@@ -1,8 +1,5 @@
-use std::collections::BTreeMap;
+use egui::{Color32, Context};
 
-use egui::{Color32, Context, FontFamily, FontId, Stroke, TextStyle, Vec2};
-
-use crate::app::theme::ui_colors;
 use crate::app::FlockApp;
 
 impl FlockApp {
@@ -11,45 +8,12 @@ impl FlockApp {
             return;
         }
 
-        // Styling: transparent background + gray text.
-        // Match site typography: monospace everywhere.
-        let mut style = (*ctx.style()).clone();
-        style.text_styles = BTreeMap::from([
-            (TextStyle::Heading, FontId::new(18.0, FontFamily::Monospace)),
-            (TextStyle::Body, FontId::new(14.0, FontFamily::Monospace)),
-            (TextStyle::Monospace, FontId::new(14.0, FontFamily::Monospace)),
-            (TextStyle::Button, FontId::new(14.0, FontFamily::Monospace)),
-            (TextStyle::Small, FontId::new(12.0, FontFamily::Monospace)),
-        ]);
-        style.visuals.window_fill = Color32::TRANSPARENT;
-        style.visuals.panel_fill = Color32::TRANSPARENT;
-        style.visuals.window_rounding = egui::Rounding::ZERO;
-        style.visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, ui_colors::text());
-        style.visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, ui_colors::text());
-        style.visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, ui_colors::text_hovered());
-        style.visuals.widgets.active.fg_stroke = Stroke::new(1.0, ui_colors::text_active());
+        // Apply shared high-contrast styling
+        ui_theme::apply_style(ctx);
 
-        // Grey borders for all widgets (sliders, buttons, etc), similar to tweakpane.
-        let border = Stroke::new(1.0, ui_colors::text());
-        style.visuals.widgets.noninteractive.bg_stroke = border;
-        style.visuals.widgets.inactive.bg_stroke = border;
-        style.visuals.widgets.hovered.bg_stroke = border;
-        style.visuals.widgets.active.bg_stroke = border;
-        style.visuals.override_text_color = Some(ui_colors::text());
-        ctx.set_style(style);
-
-        egui::Window::new("settings")
-            .frame(
-                egui::Frame::none()
-                    .fill(Color32::TRANSPARENT)
-                    .rounding(egui::Rounding::ZERO)
-                    .stroke(Stroke::new(1.0, ui_colors::text())),
-            )
-            .collapsible(true)
-            .default_open(self.settings_expanded)
-            .resizable(true)
+        // Responsive window positioning (top-right on desktop, bottom-center on mobile)
+        ui_theme::styled_window_responsive(ctx, "settings")
             .default_width(420.0)
-            .anchor(egui::Align2::LEFT_TOP, Vec2::new(16.0, 16.0))
             .show(ctx, |ui| {
                 ui.collapsing("flock settings", |ui| {
                     ui.checkbox(

@@ -14,7 +14,8 @@ export default defineNuxtConfig({
     plugins: [
       wasmPack([
         './wasm/flock',
-        './wasm/pipedream'
+        './wasm/pipedream',
+        './wasm/spot'
       ])
     ]
   }
