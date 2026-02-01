@@ -13,6 +13,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: cloudflare
     steps:
       - uses: actions/checkout@v4
         with:
@@ -99,6 +100,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    environment: cloudflare
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
