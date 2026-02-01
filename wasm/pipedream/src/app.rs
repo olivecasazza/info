@@ -1,10 +1,6 @@
 use std::collections::HashSet;
 
-use egui::{pos2, vec2, Color32, FontFamily, FontId, Pos2, Rect, Shape, Stroke, TextStyle};
-
-mod theme {
-    include!(concat!(env!("OUT_DIR"), "/theme_gen.rs"));
-}
+use egui::{pos2, vec2, Color32, Pos2, Rect, Shape, Stroke};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct IVec3 {
@@ -81,24 +77,41 @@ struct Palette {
 
 impl Palette {
     fn from_theme() -> Self {
-        let pipes = theme::PIPE_PALETTE
-            .iter()
-            .map(|(r, g, b)| Color32::from_rgb(*r, *g, *b))
-            .collect::<Vec<_>>();
+        // Use colors from the shared ui-theme crate
+        let primary = ui_theme::theme::primary();
+        let secondary = ui_theme::theme::secondary();
+        let highlight = ui_theme::theme::highlight();
+        let compliment = ui_theme::theme::compliment();
 
-        let (r, g, b) = theme::PRIMARY_500;
-        let bg = Color32::from_rgb(r / 12, g / 12, b / 12);
+        // Create pipe palette from theme colors
+        let pipes = vec![primary, secondary, highlight, compliment];
 
-        let (sr, sg, sb) = theme::SECONDARY_400;
-        let panel_body = Color32::from_rgb(sr / 4, sg / 4, sb / 4);
-        let panel_border = Color32::from_rgb(sr / 2, sg / 2, sb / 2);
+        // Derive background from primary (darkened)
+        let bg = Color32::from_rgb(
+            primary.r() / 12,
+            primary.g() / 12,
+            primary.b() / 12,
+        );
 
-        let (hr, hg, hb) = theme::HIGHLIGHT_300;
-        let port = Color32::from_rgb(hr, hg, hb);
+        let panel_body = Color32::from_rgb(
+            secondary.r() / 4,
+            secondary.g() / 4,
+            secondary.b() / 4,
+        );
+        let panel_border = Color32::from_rgb(
+            secondary.r() / 2,
+            secondary.g() / 2,
+            secondary.b() / 2,
+        );
 
-        let (cr, cg, cb) = theme::COMPLIMENT_300;
-        let rj45_body = Color32::from_rgb(cr, cg, cb);
-        let rj45_teeth = Color32::from_rgb(cr / 2, cg / 2, cb / 2);
+        let port = highlight;
+
+        let rj45_body = compliment;
+        let rj45_teeth = Color32::from_rgb(
+            compliment.r() / 2,
+            compliment.g() / 2,
+            compliment.b() / 2,
+        );
 
         Self {
             bg,
@@ -903,36 +916,8 @@ impl PipedreamApp {
 
 impl eframe::App for PipedreamApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Apply Flock style (Dark, high contrast, monospace)
-        let mut style = (*ctx.style()).clone();
-        style.text_styles = [
-            (TextStyle::Heading, FontId::new(18.0, FontFamily::Monospace)),
-            (TextStyle::Body, FontId::new(14.0, FontFamily::Monospace)),
-            (TextStyle::Monospace, FontId::new(14.0, FontFamily::Monospace)),
-            (TextStyle::Button, FontId::new(14.0, FontFamily::Monospace)),
-            (TextStyle::Small, FontId::new(12.0, FontFamily::Monospace)),
-        ].into();
-
-        let gray_text = Color32::from_gray(160);
-        let gray_border = Stroke::new(1.0, gray_text);
-
-        style.visuals.window_fill = Color32::from_rgba_unmultiplied(0, 0, 0, 120);
-        style.visuals.panel_fill = Color32::from_rgba_unmultiplied(0, 0, 0, 120);
-        style.visuals.window_rounding = egui::Rounding::ZERO;
-
-        style.visuals.widgets.noninteractive.fg_stroke = gray_border;
-        style.visuals.widgets.inactive.fg_stroke = gray_border;
-        style.visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, Color32::from_gray(220));
-        style.visuals.widgets.active.fg_stroke = Stroke::new(1.0, Color32::from_gray(240));
-
-        style.visuals.widgets.noninteractive.bg_stroke = gray_border;
-        style.visuals.widgets.inactive.bg_stroke = gray_border;
-        style.visuals.widgets.hovered.bg_stroke = gray_border;
-        style.visuals.widgets.active.bg_stroke = gray_border;
-
-        style.visuals.override_text_color = Some(gray_text);
-
-        ctx.set_style(style);
+        // Apply shared high-contrast styling
+        ui_theme::apply_style(ctx);
 
         // Drain click events (we'll use these later for interactions).
         self.pending_spawn.borrow_mut().clear();
@@ -962,14 +947,8 @@ impl eframe::App for PipedreamApp {
         self.pointer_over_ui.set(over_ui);
 
         if self.ui_visible.get() {
-            egui::Window::new("pipedream")
-                .default_pos((16.0, 16.0))
-                .frame(
-                    egui::Frame::none()
-                        .fill(Color32::TRANSPARENT)
-                        .rounding(egui::Rounding::ZERO)
-                        .stroke(gray_border),
-                )
+            ui_theme::styled_window_responsive(ctx, "pipedream")
+                .default_width(280.0)
                 .show(ctx, |ui| {
                     ui.add(egui::Slider::new(&mut self.speed, 5.0..=240.0).text("speed"));
                     ui.add(egui::Slider::new(&mut self.renderer.scale, 6.0..=26.0).text("scale"));

@@ -21,6 +21,7 @@
       pkgs = import nixpkgs {
         inherit system;
         overlays = [ (import rust-overlay) ];
+        config.allowUnfree = true;
       };
 
       rustToolchainFor = p:
@@ -36,21 +37,24 @@
       # -----------------------------
       # Rust/WASM (reproducible build)
       # -----------------------------
-      mkWasmPkg = { name, path, themeColors ? false }: let
-        # craneLib.cleanCargoSource uses a conservative filter that excludes non-standard files.
-        src = pkgs.lib.cleanSourceWith {
-          src = path;
-          filter = path: type:
-            (craneLib.filterCargoSources path type)
-            || (themeColors && (builtins.match ".*/themeColors\\.json$" (toString path) != null));
-        };
+      # Source for the entire wasm workspace (includes ui-theme)
+      wasmWorkspaceSrc = pkgs.lib.cleanSourceWith {
+        src = ./wasm;
+        filter = path: type:
+          (craneLib.filterCargoSources path type)
+          || (builtins.match ".*/themeColors\\.json$" (toString path) != null)
+          || (builtins.match ".*/assets$" (toString path) != null)
+          || (builtins.match ".*/assets/.*" (toString path) != null)
+          || (builtins.match ".*\\.(glb|urdf|stl|onnx)$" (toString path) != null);
+      };
 
+      mkWasmPkg = { name, subdir }: let
         commonArgs = {
-          inherit src;
+          src = wasmWorkspaceSrc;
           strictDeps = true;
 
-          # Always respect Cargo.lock and build for wasm.
-          cargoExtraArgs = "--locked --target wasm32-unknown-unknown";
+          # Build specific package from workspace
+          cargoExtraArgs = "--locked --target wasm32-unknown-unknown -p ${name}";
 
           nativeBuildInputs = [
             pkgs.wasm-pack
@@ -75,6 +79,7 @@
             export CARGO_TARGET_DIR="$TMPDIR/cargo-target"
             export WASM_PACK_CACHE="$TMPDIR/wasm-pack-cache"
             export WASM_PACK_USE_SYS_WASM_BINDGEN=1
+            cd ${subdir}
           '';
 
           buildPhaseCargoCommand = "wasm-pack build . --target web --release --mode no-install";
@@ -90,18 +95,22 @@
 
       flock-wasm-pkg = mkWasmPkg {
         name = "flock";
-        path = ./wasm/flock;
-        themeColors = true;
+        subdir = "flock";
       };
 
       pipedream-wasm-pkg = mkWasmPkg {
         name = "pipedream";
-        path = ./wasm/pipedream;
-        themeColors = true; # Both use themeColors.json
+        subdir = "pipedream";
+      };
+
+      spot-wasm-pkg = mkWasmPkg {
+        name = "spot";
+        subdir = "spot";
       };
 
       # Copy the Nix-built pkg output into the repo paths Nuxt imports from:
       #   ~/wasm/<project>/pkg/<package>
+      # TODO: turn into crane / cargo workspace so we can build all at once
       sync-wasm = pkgs.writeShellApplication {
         name = "sync-wasm";
         runtimeInputs = [ pkgs.coreutils ];
@@ -119,6 +128,12 @@
           mkdir -p wasm/pipedream/pkg
           cp -r ${pipedream-wasm-pkg}/* wasm/pipedream/pkg/
           chmod -R u+rwX wasm/pipedream/pkg
+
+          echo "Syncing wasm/spot/pkg from Nix store..."
+          rm -rf wasm/spot/pkg
+          mkdir -p wasm/spot/pkg
+          cp -r ${spot-wasm-pkg}/* wasm/spot/pkg/
+          chmod -R u+rwX wasm/spot/pkg
 
           echo "WASM packages synced."
         '';
@@ -161,7 +176,7 @@
             npm install
           fi
 
-          if [ ! -d wasm/flock/pkg ] || [ ! -d wasm/pipedream/pkg ]; then
+          if [ ! -d wasm/flock/pkg ] || [ ! -d wasm/pipedream/pkg ] || [ ! -d wasm/spot/pkg ]; then
             ${sync-wasm}/bin/sync-wasm
           fi
 
@@ -194,8 +209,12 @@
           pkgs.pkg-config
           pkgs.openssl
 
+          # Watcher
+          pkgs.watchexec
+
           # Editor tooling
           pkgs.rust-analyzer
+          pkgs.claude-code
         ];
 
         shellHook = ''
@@ -214,6 +233,7 @@
       packages = {
         flock-wasm-pkg = flock-wasm-pkg;
         pipedream-wasm-pkg = pipedream-wasm-pkg;
+        spot-wasm-pkg = spot-wasm-pkg;
         sync-wasm = sync-wasm;
         build-pages = build-pages;
         dev = dev;
