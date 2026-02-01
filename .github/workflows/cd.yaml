@@ -112,18 +112,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          cat > /tmp/cors.json << 'EOF'
-          {
-            "rules": [
-              {
-                "AllowedOrigins": ["https://olive.casazza.info", "https://casazza.info", "*"],
-                "AllowedMethods": ["GET", "HEAD"],
-                "AllowedHeaders": ["*"],
-                "MaxAgeSeconds": 86400
-              }
-            ]
-          }
-          EOF
+          echo '{"rules":[{"AllowedOrigins":["https://olive.casazza.info","https://casazza.info","*"],"AllowedMethods":["GET","HEAD"],"AllowedHeaders":["*"],"MaxAgeSeconds":86400}]}' > /tmp/cors.json
           npx wrangler r2 bucket cors set ${{ env.R2_BUCKET }} --file /tmp/cors.json
 
       - name: Upload WASM to R2
