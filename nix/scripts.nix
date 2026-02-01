@@ -32,8 +32,9 @@ let
     meta.description = "Build static site for Cloudflare Pages";
     text = ''
       export npm_config_cache="$PWD/.npm-cache"
-      npm ci
+      # Sync WASM first (nuxt prepare in postinstall needs it)
       ${sync-wasm}/bin/sync-wasm
+      npm ci
       npx nuxt generate
       touch .output/public/.nojekyll
       echo "Built static site at .output/public"
