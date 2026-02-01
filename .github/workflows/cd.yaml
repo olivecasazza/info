@@ -63,16 +63,32 @@ jobs:
       - name: Pre-copy WASM to node_modules
         run: |
           for pkg in flock pipedream spot; do
-            echo "Copying wasm/$pkg/pkg to node_modules/$pkg"
+            echo "=== Pre-copying wasm/$pkg/pkg to node_modules/$pkg ==="
             rm -rf "node_modules/$pkg"
-            cp -r "wasm/$pkg/pkg" "node_modules/$pkg"
+            mkdir -p "node_modules/$pkg"
+            # Copy with -L to follow symlinks and convert to regular files
+            cp -rL "wasm/$pkg/pkg/"* "node_modules/$pkg/"
             chmod -R u+rwX "node_modules/$pkg"
+            echo "Files in node_modules/$pkg:"
+            ls -la "node_modules/$pkg/"
+          done
+
+      # Verify the pre-copy worked
+      - name: Verify pre-copy
+        run: |
+          echo "=== Verifying node_modules WASM packages ==="
+          for pkg in flock pipedream spot; do
+            echo "--- $pkg ---"
+            ls -la "node_modules/$pkg/" || echo "MISSING!"
+            file "node_modules/$pkg"/*.js 2>/dev/null | head -2 || true
+            file "node_modules/$pkg"/*.wasm 2>/dev/null | head -2 || true
           done
 
       # Generate static site
       - name: Generate static site
         run: |
           export npm_config_cache="$PWD/.npm-cache"
+          echo "=== Starting nuxt generate ==="
           npx nuxt generate
           touch .output/public/.nojekyll
 
