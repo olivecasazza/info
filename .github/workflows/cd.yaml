@@ -7,6 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  R2_BUCKET: info-assets
+  # Set this to your R2 public domain after setup
+  R2_PUBLIC_URL: https://pub-info-assets.r2.dev
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,31 +37,48 @@ jobs:
       - name: Build with Nix
         run: nix run .#build-pages
 
-      - name: Check WASM sizes
-        id: wasm-sizes
+      - name: Show WASM sizes
         run: |
-          SPOT_SIZE=$(stat -c%s .output/public/_nuxt/spot_bg.*.wasm 2>/dev/null || echo 0)
-          echo "spot_size=$SPOT_SIZE" >> $GITHUB_OUTPUT
-          echo "Spot WASM size: $((SPOT_SIZE / 1024 / 1024)) MB"
+          echo "=== WASM file sizes ==="
+          ls -lh .output/public/_nuxt/*.wasm 2>/dev/null || echo "No WASM files found"
 
-          if [ "$SPOT_SIZE" -gt 25165824 ]; then
-            echo "needs_r2=true" >> $GITHUB_OUTPUT
-            echo "::warning::spot_bg.wasm is over 25MB, will upload to R2"
-          else
-            echo "needs_r2=false" >> $GITHUB_OUTPUT
-          fi
+      - name: Upload all WASM to R2
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Upload each WASM file to R2 with its hashed filename
+          for wasm in .output/public/_nuxt/*.wasm; do
+            [ -f "$wasm" ] || continue
+            filename=$(basename "$wasm")
+            echo "Uploading $filename to R2..."
+          done
+        # Note: actual upload happens in next step
 
-      - name: Upload large WASM to R2
-        if: steps.wasm-sizes.outputs.needs_r2 == 'true' && github.ref == 'refs/heads/main'
+      - name: Upload WASM to R2
+        if: github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: r2 object put info-assets/spot_bg.wasm --file .output/public/_nuxt/spot_bg.*.wasm
+          command: |
+            r2 object put ${{ env.R2_BUCKET }}/_nuxt/$(ls .output/public/_nuxt/flock_bg.*.wasm | xargs basename) --file "$(ls .output/public/_nuxt/flock_bg.*.wasm)" --content-type application/wasm;
+            r2 object put ${{ env.R2_BUCKET }}/_nuxt/$(ls .output/public/_nuxt/pipedream_bg.*.wasm | xargs basename) --file "$(ls .output/public/_nuxt/pipedream_bg.*.wasm)" --content-type application/wasm;
+            r2 object put ${{ env.R2_BUCKET }}/_nuxt/$(ls .output/public/_nuxt/spot_bg.*.wasm | xargs basename) --file "$(ls .output/public/_nuxt/spot_bg.*.wasm)" --content-type application/wasm
 
-      - name: Remove large WASM for Pages
-        if: steps.wasm-sizes.outputs.needs_r2 == 'true'
-        run: rm -f .output/public/_nuxt/spot_bg.*.wasm
+      - name: Create _redirects for WASM (serve from R2)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Cloudflare Pages _redirects: proxy WASM requests to R2
+          cat >> .output/public/_redirects << 'EOF'
+          # Serve WASM from R2 CDN
+          /_nuxt/*.wasm ${{ env.R2_PUBLIC_URL }}/_nuxt/:splat 200
+          EOF
+          cat .output/public/_redirects
+
+      - name: Remove WASM from Pages (served via redirect)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          rm -f .output/public/_nuxt/*.wasm
+          echo "WASM files removed from Pages bundle (will be served from R2)"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
