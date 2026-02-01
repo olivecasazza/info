@@ -34,6 +34,7 @@ let
   mkWasmPkg = { name, subdir }:
     craneLib.mkCargoDerivation (wasmCommonArgs // {
       pname = "${name}-wasm-pkg";
+      version = "0.1.1";  # Bumped to invalidate cache (tar.zst fix)
       cargoArtifacts = wasmWorkspaceDeps;
       cargoExtraArgs = "--locked --target wasm32-unknown-unknown -p ${name}";
       doCheck = false;
