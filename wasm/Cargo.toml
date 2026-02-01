@@ -9,3 +9,11 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
+
+# Aggressive size optimization for WASM (Cloudflare Pages has 25MB limit)
+[profile.release]
+opt-level = "z"        # Optimize for size over speed
+lto = true             # Link-time optimization (slow build, smaller binary)
+codegen-units = 1      # Single codegen unit for better optimization
+panic = "abort"        # Smaller panic handling
+strip = true           # Strip debug symbols
