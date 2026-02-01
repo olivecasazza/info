@@ -122,10 +122,8 @@ jobs:
       - name: Create _redirects for WASM
         if: github.ref == 'refs/heads/main'
         run: |
-          cat >> .output/public/_redirects << EOF
-          # Serve WASM from R2 CDN
-          /_nuxt/*.wasm ${{ env.R2_PUBLIC_URL }}/_nuxt/:splat 200
-          EOF
+          echo "# Redirect WASM to R2 CDN" >> .output/public/_redirects
+          echo "/_nuxt/* https://info-assets.casazza.info/_nuxt/:splat 200" >> .output/public/_redirects
           echo "Created _redirects:"
           cat .output/public/_redirects
 
