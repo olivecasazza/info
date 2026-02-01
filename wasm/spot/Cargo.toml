@@ -30,3 +30,7 @@ ui-theme = { path = "../ui-theme" }
 # tract dependencies that need WASM features
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
+
+# Disable wasm-opt (binaryen bulk-memory compat issue, Rust already optimizes)
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
