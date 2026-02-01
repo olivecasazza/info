@@ -111,7 +111,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          for wasm in .output/public/_nuxt/*_bg.wasm; do
+          echo "PWD: $(pwd)"
+          echo "Looking for WASM files..."
+          ls -la .output/public/_nuxt/*.wasm || echo "No .wasm files in _nuxt!"
+          shopt -s nullglob
+          for wasm in .output/public/_nuxt/*_bg*.wasm; do
             fname=$(basename "$wasm")
             echo "Uploading $fname to R2..."
             npx wrangler r2 object put "${{ env.R2_BUCKET }}/_nuxt/$fname" --file "$wasm" --content-type application/wasm
