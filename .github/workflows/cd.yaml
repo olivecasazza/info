@@ -123,7 +123,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: |
           echo "# Redirect WASM to R2 CDN" >> .output/public/_redirects
-          echo "/_nuxt/*.wasm https://info-assets.casazza.info/_nuxt/:splat 302" >> .output/public/_redirects
+          echo "/_nuxt/*_bg.*.wasm https://info-assets.casazza.info/_nuxt/:splat.wasm 302" >> .output/public/_redirects
           echo "Created _redirects:"
           cat .output/public/_redirects
 
