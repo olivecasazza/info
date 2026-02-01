@@ -42,10 +42,10 @@
       };
 
       apps = {
-        sync-wasm = flake-utils.lib.mkApp { drv = scripts.sync-wasm; } // { meta = scripts.sync-wasm.meta; };
-        build-pages = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta; };
-        dev = flake-utils.lib.mkApp { drv = scripts.dev; } // { meta = scripts.dev.meta; };
-        default = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta; };
+        sync-wasm = flake-utils.lib.mkApp { drv = scripts.sync-wasm; } // { meta = scripts.sync-wasm.meta or {}; };
+        build-pages = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta or {}; };
+        dev = flake-utils.lib.mkApp { drv = scripts.dev; } // { meta = scripts.dev.meta or {}; };
+        default = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta or {}; };
       };
     });
 }

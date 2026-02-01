@@ -86,3 +86,6 @@ wasm/*/target
 wasm/spot/training/.venv-submit
 wasm/target
 wasm/pkg
+
+# Prevent nested wasm build artifacts
+wasm/*/wasm/

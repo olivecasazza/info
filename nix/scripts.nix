@@ -2,95 +2,83 @@
 { pkgs, wasmPkgs }:
 
 let
+  # Sync WASM from Nix store (for CI/production - reproducible, optimized)
   sync-wasm = pkgs.writeShellApplication {
     name = "sync-wasm";
     runtimeInputs = [ pkgs.coreutils pkgs.git ];
-    meta = {
-      description = "Sync WASM packages from Nix store to local directories";
-      mainProgram = "sync-wasm";
-    };
+    meta.description = "Sync optimized WASM packages from Nix store";
     text = ''
-      set -euo pipefail
-
-      # Find and cd to repo root
       ROOT="$(git rev-parse --show-toplevel)"
       cd "$ROOT"
 
-      echo "Syncing wasm/flock/pkg from Nix store..."
-      rm -rf wasm/flock/pkg
-      mkdir -p wasm/flock/pkg
-      cp -r ${wasmPkgs.flock}/* wasm/flock/pkg/
-      chmod -R u+rwX wasm/flock/pkg
-
-      echo "Syncing wasm/pipedream/pkg from Nix store..."
-      rm -rf wasm/pipedream/pkg
-      mkdir -p wasm/pipedream/pkg
-      cp -r ${wasmPkgs.pipedream}/* wasm/pipedream/pkg/
-      chmod -R u+rwX wasm/pipedream/pkg
-
-      echo "Syncing wasm/spot/pkg from Nix store..."
-      rm -rf wasm/spot/pkg
-      mkdir -p wasm/spot/pkg
-      cp -r ${wasmPkgs.spot}/* wasm/spot/pkg/
-      chmod -R u+rwX wasm/spot/pkg
-
-      echo "WASM packages synced."
+      for pkg in flock pipedream spot; do
+        echo "Syncing wasm/$pkg/pkg..."
+        rm -rf "wasm/$pkg/pkg"
+        mkdir -p "wasm/$pkg/pkg"
+        case $pkg in
+          flock)     cp -r ${wasmPkgs.flock}/* "wasm/$pkg/pkg/" ;;
+          pipedream) cp -r ${wasmPkgs.pipedream}/* "wasm/$pkg/pkg/" ;;
+          spot)      cp -r ${wasmPkgs.spot}/* "wasm/$pkg/pkg/" ;;
+        esac
+        chmod -R u+rwX "wasm/$pkg/pkg"
+      done
+      echo "Done."
     '';
   };
 
   build-pages = pkgs.writeShellApplication {
     name = "build-pages";
     runtimeInputs = [ pkgs.nodejs_20 ];
-    meta = {
-      description = "Build static site for Cloudflare Pages";
-      mainProgram = "build-pages";
-    };
+    meta.description = "Build static site for Cloudflare Pages";
     text = ''
-      set -euo pipefail
-
       export npm_config_cache="$PWD/.npm-cache"
-
       npm ci
-
-      # Ensure wasm packages exist (from reproducible Nix build)
       ${sync-wasm}/bin/sync-wasm
-
-      # Generate the static site (Cloudflare Pages compatible)
       npx nuxt generate
       touch .output/public/.nojekyll
-
       echo "Built static site at .output/public"
     '';
   };
 
+  # Unified dev command: Vue HMR + WASM auto-rebuild
   dev = pkgs.writeShellApplication {
     name = "dev";
-    runtimeInputs = [ pkgs.nodejs_20 ];
-    meta = {
-      description = "Run Nuxt development server";
-      mainProgram = "dev";
-    };
+    runtimeInputs = [ pkgs.nodejs_20 pkgs.watchexec pkgs.wasm-pack pkgs.wasm-bindgen-cli pkgs.binaryen pkgs.coreutils pkgs.git ];
+    meta.description = "Dev server with auto-rebuild for Vue and WASM";
     text = ''
-      set -euo pipefail
-
+      ROOT="$(git rev-parse --show-toplevel)"
+      cd "$ROOT"
       export npm_config_cache="$PWD/.npm-cache"
 
-      if [ ! -x node_modules/.bin/nuxt ]; then
-        echo "node_modules missing; installing dependencies..."
-        npm install
-      fi
+      # Install npm deps if needed
+      [ -x node_modules/.bin/nuxt ] || npm install
 
-      if [ ! -d wasm/flock/pkg ] || [ ! -d wasm/pipedream/pkg ] || [ ! -d wasm/spot/pkg ]; then
-        ${sync-wasm}/bin/sync-wasm
-      fi
+      # Build WASM if missing
+      build_wasm() {
+        for pkg in flock pipedream spot; do
+          echo "Building $pkg..."
+          (cd "wasm/$pkg" && wasm-pack build . --target web --dev) || echo "$pkg failed"
+        done
+      }
 
-      # vite-plugin-wasm-pack copies into node_modules/flock; ensure no stale read-only dir.
-      rm -rf node_modules/flock || true
-      mkdir -p node_modules
+      [ -d wasm/flock/pkg ] && [ -d wasm/pipedream/pkg ] && [ -d wasm/spot/pkg ] || build_wasm
 
-      # Some prior syncs can leave read-only bits; ensure npm deps are writable too.
-      chmod -R u+rwX node_modules || true
+      # Clean stale modules
+      rm -rf node_modules/flock node_modules/pipedream node_modules/spot 2>/dev/null || true
+      chmod -R u+rwX node_modules 2>/dev/null || true
 
+      echo ""
+      echo "Starting dev server (Vue HMR + WASM auto-rebuild)..."
+      echo ""
+
+      # Cleanup on exit
+      trap 'kill $(jobs -p) 2>/dev/null' EXIT
+
+      # WASM watcher in background
+      watchexec -w wasm -e rs,toml --ignore 'wasm/*/pkg/**' --ignore 'wasm/target/**' \
+        --debounce 500ms -- sh -c 'for p in flock pipedream spot; do (cd wasm/$p && wasm-pack build . --target web --dev); done' &
+
+      # Vue dev server
       npm run dev -- "$@"
     '';
   };
