@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col max-w-2xl">
+  <div class="flex flex-col w-full">
     <div class="text-2xl text-primary-300 rainbow-text-animated mt-2 mb-2">
       Olive Casazza
     </div>

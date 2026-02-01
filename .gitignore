@@ -83,3 +83,6 @@ wasm/*/target
 # If you want to commit it, comment this out.
 wasm/*/pkg
 wasm/*/target
+wasm/spot/training/.venv-submit
+wasm/target
+wasm/pkg

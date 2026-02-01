@@ -3,7 +3,7 @@ import trimesh
 
 # Directories
 ASSETS_DIR = "wasm/spot/assets"
-GLB_DIR = os.path.join(ASSETS_DIR, "glb")
+GLB_DIR = "wasm/spot/assets/glb"
 
 # Ensure output directory exists
 os.makedirs(GLB_DIR, exist_ok=True)
@@ -22,6 +22,9 @@ def convert_stl_to_glb():
         try:
             # Load mesh
             mesh = trimesh.load_mesh(stl_path)
+
+            # Scale from mm to meters
+            mesh.apply_scale(0.001)
 
             # Export to GLB (binary GLTF)
             mesh.export(glb_path, file_type='glb')

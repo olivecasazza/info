@@ -1,0 +1,55 @@
+# Training Configuration for Spot Robot PPO
+
+training:
+  total_timesteps: 10000000  # 10M steps total (distributed across GPUs)
+  num_envs: 384  # Total envs (128 per GPU × 3 GPUs)
+  seed: 42
+
+  # PPO Hyperparameters
+  learning_rate: 0.0003
+  n_steps: 2048  # Steps per env before update
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE parameter
+  clip_range: 0.2  # PPO clip range
+  ent_coef: 0.01  # Entropy coefficient
+  vf_coef: 0.5  # Value function coefficient
+  max_grad_norm: 0.5
+
+  # Checkpointing
+  save_freq: 50000  # Steps between checkpoints
+  eval_freq: 25000  # Steps between evaluations
+
+model:
+  # Network architecture: [input(42)] → [128] → [64] → [output(12)]
+  net_arch:
+    - 128
+    - 64
+
+# Observation space (42D)
+observation:
+  gravity: 3  # Body-frame gravity vector
+  joint_positions: 12
+  joint_velocities: 12
+  previous_action: 12
+  command: 3  # [vel_x, vel_y, yaw_rate]
+
+# Action space (12D)
+action:
+  joint_targets: 12  # Target joint angles
+
+# Reward shaping
+rewards:
+  alive_bonus: 1.0
+  velocity_tracking: 2.0
+  orientation_penalty: 0.5
+  energy_penalty: 0.01
+  height_bonus: 0.5
+
+# Environment settings
+environment:
+  max_episode_steps: 1000
+  time_step: 0.00833  # 1/120 seconds (matches Rapier physics)
+  fall_height_threshold: 0.1  # meters
+  fall_angle_threshold: 1.047  # radians (~60 degrees)
