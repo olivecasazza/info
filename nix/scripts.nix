@@ -15,12 +15,25 @@ let
         echo "Syncing wasm/$pkg/pkg..."
         rm -rf "wasm/$pkg/pkg"
         mkdir -p "wasm/$pkg/pkg"
+
+        # Get source path
         case $pkg in
-          flock)     cp -r ${wasmPkgs.flock}/* "wasm/$pkg/pkg/" ;;
-          pipedream) cp -r ${wasmPkgs.pipedream}/* "wasm/$pkg/pkg/" ;;
-          spot)      cp -r ${wasmPkgs.spot}/* "wasm/$pkg/pkg/" ;;
+          flock)     SRC="${wasmPkgs.flock}" ;;
+          pipedream) SRC="${wasmPkgs.pipedream}" ;;
+          spot)      SRC="${wasmPkgs.spot}" ;;
         esac
+
+        # Copy only regular files (skip symlinks and tar archives)
+        for f in "$SRC"/*; do
+          fname=$(basename "$f")
+          # Skip symlinks and tar files
+          if [ ! -L "$f" ] && [[ ! "$fname" =~ \.tar\.zst ]]; then
+            cp "$f" "wasm/$pkg/pkg/"
+          fi
+        done
+
         chmod -R u+rwX "wasm/$pkg/pkg"
+        echo "  -> $(find wasm/$pkg/pkg/ -maxdepth 1 -type f | wc -l) files"
       done
       echo "Done."
     '';
