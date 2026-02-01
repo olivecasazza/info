@@ -31,6 +31,11 @@ export const WASM_PROJECTS: WasmProjectDefinition[] = [
     title: 'Pipedream',
     // Explicit .js extension avoids Vite/Nuxt dynamic-import resolution edge cases.
     loader: () => import('~/wasm/pipedream/pkg/pipedream.js')
+  },
+  {
+    slug: 'spot',
+    title: 'Spot Simulation',
+    loader: () => import('~/wasm/spot/pkg/spot.js')
   }
 ]
 

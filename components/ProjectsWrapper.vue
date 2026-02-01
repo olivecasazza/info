@@ -7,6 +7,10 @@
         </NuxtLink>
         <br>
         <span class="text">{{ item.text }}</span>
+        <template v-if="item.source">
+          <br>
+          <a :href="item.source" target="_blank" class="text-gray-500 hover:text-gray-300 text-xs">↳ source</a>
+        </template>
       </div>
     </div>
   </ClientOnly>
@@ -22,13 +26,21 @@ const categories = [
     items: [
       {
         heading: 'Flocking',
-        text: 'Simulated flocking behavior based on separation, alignment, and cohesion. Written in Rust, compiled to WASM.',
-        link: '/projects/flock'
+        text: 'Boids algorithm with dynamic species configuration and real-time parameter tuning.',
+        link: '/projects/flock',
+        source: 'https://github.com/olivecasazza/info/tree/main/wasm/flock'
       },
       {
         heading: 'Ethernet 3D Pipes',
-        text: '3D Pipes-style ethernet cables in an 8-bit arcade aesthetic. Written in Rust, compiled to WASM.',
-        link: '/projects/pipedream'
+        text: 'Procedural 3D path generation with collision avoidance and random-walk routing.',
+        link: '/projects/pipedream',
+        source: 'https://github.com/olivecasazza/info/tree/main/wasm/pipedream'
+      },
+      {
+        heading: 'Spot',
+        text: 'Quadruped robot with Ray cluster RL training and real-time 3D physics rendering.',
+        link: '/projects/spot',
+        source: 'https://github.com/olivecasazza/info/tree/main/wasm/spot'
       }
     ]
   },
