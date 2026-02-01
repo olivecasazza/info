@@ -122,7 +122,7 @@ jobs:
             }
           ]
           EOF
-          npx wrangler r2 bucket cors put ${{ env.R2_BUCKET }} --rules /tmp/cors.json
+          npx wrangler r2 bucket cors set ${{ env.R2_BUCKET }} --file /tmp/cors.json
 
       - name: Upload WASM to R2
         if: github.ref == 'refs/heads/main'
