@@ -14,7 +14,7 @@ fn main() {
     let json: serde_json::Value = serde_json::from_str(&json_str)
         .expect("Failed to parse themeColors.json");
 
-    let mut output = String::from("// Auto-generated theme colors from themeColors.json\n#![allow(dead_code)]\n\n");
+    let mut output = String::from("// Auto-generated theme colors from themeColors.json\n\n");
 
     for (palette_name, shades) in json.as_object().unwrap() {
         let upper_name = palette_name.to_uppercase();

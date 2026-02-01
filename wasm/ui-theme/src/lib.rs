@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use egui::{Color32, Context, FontFamily, FontId, Margin, Stroke, TextStyle};
 
 // Auto-generated theme values from themeColors.json
+#[allow(dead_code)]
 mod theme_gen {
     include!(concat!(env!("OUT_DIR"), "/theme_gen.rs"));
 }
