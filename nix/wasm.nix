@@ -52,7 +52,9 @@ let
         runHook preInstall
         mkdir -p $out
         cp -r pkg/* $out/
-        rm -f $out/target.tar.zst
+        # Remove crane cache artifacts and any symlinks
+        rm -f $out/target.tar.zst $out/target.tar.zst.prev
+        find $out -type l -delete
         runHook postInstall
       '';
     });
