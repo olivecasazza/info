@@ -59,6 +59,16 @@ jobs:
           export npm_config_cache="$PWD/.npm-cache"
           npm ci
 
+      # Pre-copy WASM packages to node_modules (prevents vite-plugin-wasm-pack copy failures)
+      - name: Pre-copy WASM to node_modules
+        run: |
+          for pkg in flock pipedream spot; do
+            echo "Copying wasm/$pkg/pkg to node_modules/$pkg"
+            rm -rf "node_modules/$pkg"
+            cp -r "wasm/$pkg/pkg" "node_modules/$pkg"
+            chmod -R u+rwX "node_modules/$pkg"
+          done
+
       # Generate static site
       - name: Generate static site
         run: |
