@@ -9,8 +9,7 @@ on:
 
 env:
   R2_BUCKET: info-assets
-  # Set this to your R2 public domain after setup
-  R2_PUBLIC_URL: https://pub-info-assets.r2.dev
+  R2_PUBLIC_URL: https://info-assets.casazza.info
 
 jobs:
   build:
