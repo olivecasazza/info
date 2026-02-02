@@ -15,6 +15,18 @@ export default defineNuxtConfig({
   vite: {
     plugins: [
       wasmPack(['./wasm/flock', './wasm/pipedream', './wasm/spot'])
+    ],
+    // Allow serving files from wasm/spot/assets during dev
+    server: {
+      fs: {
+        allow: ['..']
+      }
+    }
+  },
+  // Serve local WASM assets during development
+  nitro: {
+    publicAssets: [
+      { dir: 'wasm/spot/assets', baseURL: '/spot-assets', maxAge: 0 }
     ]
   }
 })
