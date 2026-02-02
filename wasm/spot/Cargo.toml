@@ -2,6 +2,9 @@
 name = "spot"
 version = "0.1.0"
 edition = "2021"
+description = "Spot robot simulation"
+license = "MIT"
+repository = "https://github.com/olivecasazza/info"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

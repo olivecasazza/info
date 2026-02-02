@@ -147,7 +147,7 @@ impl Default for SpotState {
             physics,
             controller,
             target_command: UserCommand::new(),
-            ui_visible: false,
+            ui_visible: true,
         }
     }
 }
