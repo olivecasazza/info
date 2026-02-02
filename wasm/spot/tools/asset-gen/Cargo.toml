@@ -1,0 +1,15 @@
+[package]
+name = "spot-assets"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+image = "0.24" # For PNG generation
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand = "0.8"
+noise = "0.9" # For Perlin noise (terrain)
+glam = "0.25" # Vector math
+byteorder = "1.5" # For binary writing

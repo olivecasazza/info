@@ -37,7 +37,7 @@
         flock-wasm-pkg = wasmPkgs.flock;
         pipedream-wasm-pkg = wasmPkgs.pipedream;
         spot-wasm-pkg = wasmPkgs.spot;
-        inherit (scripts) sync-wasm build-pages dev;
+        inherit (scripts) sync-wasm build-pages dev generate-assets;
         default = scripts.build-pages;
       };
 
@@ -45,6 +45,7 @@
         sync-wasm = flake-utils.lib.mkApp { drv = scripts.sync-wasm; } // { meta = scripts.sync-wasm.meta or {}; };
         build-pages = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta or {}; };
         dev = flake-utils.lib.mkApp { drv = scripts.dev; } // { meta = scripts.dev.meta or {}; };
+        generate-assets = flake-utils.lib.mkApp { drv = scripts.generate-assets; } // { meta = scripts.generate-assets.meta or {}; };
         default = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta or {}; };
       };
     });
