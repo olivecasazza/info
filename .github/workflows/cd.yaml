@@ -14,7 +14,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    environment: cloudflare
+    # environment: cloudflare  <-- REMOVED to avoid runner allocation hang
     permissions:
       contents: read
     steps:
@@ -99,8 +99,33 @@ jobs:
           echo "=== WASM file sizes ==="
           ls -lh .output/public/_nuxt/*.wasm 2>/dev/null || echo "No WASM files found"
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-build
+          path: .output/public
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-22.04
+    environment: cloudflare
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site-build
+          path: .output/public
+
       - name: Install wrangler
-        if: github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -108,14 +133,7 @@ jobs:
           wranglerVersion: "4"
           command: whoami
 
-      # NOTE: Configure R2 CORS via Cloudflare Dashboard:
-      # Bucket > Settings > CORS Policy
-      # AllowedOrigins: https://olive.casazza.info, https://casazza.info
-      # AllowedMethods: GET, HEAD
-      # AllowedHeaders: *
-
       - name: Upload WASM to R2
-        if: github.ref == 'refs/heads/main'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -128,7 +146,6 @@ jobs:
           done
 
       - name: Upload Spot GLB assets to R2
-        if: github.ref == 'refs/heads/main'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -143,7 +160,6 @@ jobs:
           echo "GLB upload complete"
 
       - name: Create _redirects for WASM
-        if: github.ref == 'refs/heads/main'
         run: |
           echo "# Redirect WASM to R2 CDN" >> .output/public/_redirects
           echo "/_nuxt/*.wasm https://info-assets.casazza.info/_nuxt/:splat.wasm 302" >> .output/public/_redirects
@@ -153,32 +169,9 @@ jobs:
           cat .output/public/_redirects
 
       - name: Remove WASM from Pages bundle
-        if: github.ref == 'refs/heads/main'
         run: |
           rm -f .output/public/_nuxt/*.wasm
           echo "WASM removed from Pages (served from R2)"
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: site-build
-          path: .output/public
-          retention-days: 1
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: cloudflare
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      deployments: write
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: site-build
-          path: .output/public
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
