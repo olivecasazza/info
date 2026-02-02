@@ -91,3 +91,4 @@ wasm/pkg
 wasm/*/wasm/
 result*
 dist
+wasm/spot/tools/asset-gen/target

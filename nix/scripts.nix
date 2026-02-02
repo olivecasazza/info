@@ -111,6 +111,19 @@ let
     '';
   };
 
+  # Generator for game assets (textures, terrain)
+  generate-assets = pkgs.writeShellApplication {
+    name = "generate-assets";
+    runtimeInputs = [ pkgs.cargo pkgs.rustc ];
+    meta.description = "Generate procedural assets (textures, terrain) using Rust";
+    text = ''
+      ROOT="$(git rev-parse --show-toplevel)"
+      cd "$ROOT/wasm/spot/tools/asset-gen"
+      echo "🔨 Compiling and running asset generator..."
+      cargo run --release
+    '';
+  };
+
 in {
-  inherit sync-wasm build-pages dev;
+  inherit sync-wasm build-pages dev generate-assets;
 }
