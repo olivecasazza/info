@@ -106,6 +106,16 @@ function fbm (x, y, octaves = 4, persistence = 0.5, lacunarity = 2.0) {
   return total / maxValue
 }
 
+// Load rock data
+const ROCKS_PATH = join(import.meta.dirname, '../assets/rocks.json')
+let rocks = []
+try {
+  rocks = JSON.parse(readFileSync(ROCKS_PATH, 'utf8'))
+  // Rocks loaded
+} catch (e) {
+  // Could not load rocks
+}
+
 // Get height at a point with interesting features
 // Must match physics/mod.rs get_terrain_height exactly!
 function getHeight (x, y) {
@@ -123,18 +133,49 @@ function getHeight (x, y) {
   const flattenFactor = Math.max(0, 1 - distFromCenter / 4)
   h *= (1 - flattenFactor * 0.8)
 
+  // Add rock heights
+  // Map world x,y to texture space (0-1024)
+  // World: -10 to 10
+  // Texture: 0 to 1024
+  const texSize = 1024
+  const texX = (x / SIZE + 0.5) * texSize
+  const texY = (y / SIZE + 0.5) * texSize
+
+  for (const rock of rocks) {
+    const dx = texX - rock.x
+    const dy = texY - rock.y
+
+    // Handle tiling distance
+    const distSq = dx * dx + dy * dy
+
+    // Check wrapped versions? (Optional, if rocks wrap)
+    // Since texture wraps, we should check closest wrapped distance
+    // But for heightmap simple check is usually enough if rocks aren't on exact edge
+
+    const r = rock.r
+    if (distSq < r * r) {
+      const dist = Math.sqrt(distSq)
+      // Cosine bump for smoother terrain integration (no spikes)
+      // Normalized 0 to 1 distance from center
+      const d = dist / r
+      const bumpProfile = (Math.cos(d * Math.PI) + 1.0) * 0.5 // 1 at center, 0 at edge
+
+      h += bumpProfile * 0.3 // 0.3 meters tall max (small rocks)
+    }
+  }
+
   // Normalize to [0, MAX_HEIGHT]
   return (h * 0.5 + 0.5) * MAX_HEIGHT
 }
 
 // Get color based on height (solid dark, grid rendered via gizmos)
 function getColor (_height, _normalY, _worldX, _worldZ) {
-  // Solid dark gray - grid lines drawn via Bevy gizmos for sharp edges
-  return [0.04, 0.04, 0.04]
+  // White vertex color to allow the texture and lighting to show through fully
+  return [1.0, 1.0, 1.0]
 }
 
 async function generateTerrain () {
-  console.log('Generating terrain mesh...')
+  // Generating terrain mesh...
 
   const vertices = []
   const normals = []
@@ -199,8 +240,7 @@ async function generateTerrain () {
     }
   }
 
-  console.log(`  Vertices: ${vertices.length / 3}`)
-  console.log(`  Triangles: ${indices.length / 3}`)
+  // Stats computed
 
   // Create GLTF document
   const document = new Document()
@@ -278,9 +318,7 @@ async function generateTerrain () {
   const io = new NodeIO()
   await io.write(OUTPUT_PATH, document)
 
-  console.log(`\n✅ Terrain saved to: ${OUTPUT_PATH}`)
-  console.log(`   Size: ${SIZE}x${SIZE} meters`)
-  console.log(`   Max height: ${MAX_HEIGHT} meters`)
+  // Terrain saved
 
   // Also output heightmap data for physics
   const heightmapPath = OUTPUT_PATH.replace('.glb', '.json')
@@ -291,7 +329,7 @@ async function generateTerrain () {
     heights: heights.flat()
   }
   writeFileSync(heightmapPath, JSON.stringify(heightmapData))
-  console.log(`   Heightmap: ${heightmapPath}`)
+  // Heightmap saved
 }
 
-generateTerrain().catch(console.error)
+generateTerrain().catch(() => {})

@@ -5,27 +5,33 @@ import { join } from 'path'
 import sharp from 'sharp'
 
 const OUTPUT_PATH = join(import.meta.dirname, '../assets/grid.png')
-const SIZE = 64 // Texture size in pixels
+const SIZE = 512 // Higher res for better rock details
 
-// Create raw pixel data (RGBA)
 const pixels = new Uint8Array(SIZE * SIZE * 4)
 
-const bgColor = [8, 8, 8, 255] // Very dark background
-const lineColor = [100, 100, 100, 255] // Slightly brighter grid lines
+// Rock generation removed (User requested minimal landscape)
 
 for (let y = 0; y < SIZE; y++) {
   for (let x = 0; x < SIZE; x++) {
     const i = (y * SIZE + x) * 4
 
-    // Draw grid lines at edges - 3 pixels wide (will tile seamlessly)
-    const lineWidth = 3
-    const isLine = x < lineWidth || y < lineWidth
-    const color = isLine ? lineColor : bgColor
+    // Background: Dark Grey (to blend with void)
+    let finalVal = 20
 
-    pixels[i + 0] = color[0]
-    pixels[i + 1] = color[1]
-    pixels[i + 2] = color[2]
-    pixels[i + 3] = color[3]
+    // Add Grid Lines (Border of the tile)
+    // 1 UV = 1 meter = 1 tile. So this creates a 1x1 meter grid.
+    const borderWidth = 4
+    if (x < borderWidth || x >= SIZE - borderWidth || y < borderWidth || y >= SIZE - borderWidth) {
+      finalVal = 180 // Bright grid line
+    }
+
+    // Add Rocks on top - DISABLED ("Minimal landscape")
+    // finalVal = getRockValue(x, y, rocks, finalVal)
+
+    pixels[i + 0] = finalVal
+    pixels[i + 1] = finalVal
+    pixels[i + 2] = finalVal
+    pixels[i + 3] = 255
   }
 }
 
@@ -36,5 +42,4 @@ await sharp(Buffer.from(pixels), {
   .png()
   .toFile(OUTPUT_PATH)
 
-console.log(`✅ Grid texture saved to: ${OUTPUT_PATH}`)
-console.log(`   Size: ${SIZE}x${SIZE} pixels`)
+// Grid texture saved
