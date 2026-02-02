@@ -63,8 +63,8 @@ pub fn setup_scene(
     });
 
     // Directional light to create dramatic shadows for the sketch shader
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+        DirectionalLight {
             shadows_enabled: true,
             illuminance: 10000.0, // Bright key light
             shadow_depth_bias: 0.02,
@@ -72,9 +72,8 @@ pub fn setup_scene(
             ..default()
         },
         // Low angle to emphasize terrain texture (sunset-like angle)
-        transform: Transform::from_xyz(15.0, 5.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+        Transform::from_xyz(15.0, 5.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
 
     // Load pre-generated terrain mesh with matching physics trimesh
     commands.spawn((

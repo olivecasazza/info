@@ -20,10 +20,10 @@ use crate::physics::PhysicsWorld;
 use crate::controller::SpotController;
 use crate::ml::UserCommand;
 use crate::{camera, render, scene, input, simulation, ui};
-use crate::hand_drawn::{HandDrawnPlugin, HandDrawnSettings, update_hand_drawn_settings};
+use crate::hand_drawn::{HandDrawnPlugin, update_hand_drawn_settings};
 
 // Re-export commonly used types
-pub use scene::{RobotLink, VisualOffset, VisualOffsets};
+pub use scene::{VisualOffset, VisualOffsets};
 
 /// WebHandle for Bevy-based Spot WASM app.
 #[wasm_bindgen]
