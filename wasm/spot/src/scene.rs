@@ -56,8 +56,7 @@ pub fn setup_scene(
         brightness: 2000.0, // Boosted since we removed directional light
     });
 
-    // Load pre-generated terrain mesh (visual only - physics uses flat ground at Y=0)
-    // Offset terrain down by ~3.0 so the flat center area aligns with physics ground
+    // Load pre-generated terrain mesh with matching physics trimesh
     commands.spawn((
         SceneRoot(asset_server.load("terrain.glb#Scene0")),
         Transform::from_xyz(0.0, -3.0, 0.0),

@@ -61,7 +61,7 @@ mod heightmap {
     }
 }
 
-/// Terrain Y offset (adjusted for max_height=6.0, center at ~3.0m)
+/// Terrain Y offset for max_height=6.0
 const TERRAIN_Y_OFFSET: f32 = -3.0;
 
 /// Draw sharp grid lines that follow terrain height

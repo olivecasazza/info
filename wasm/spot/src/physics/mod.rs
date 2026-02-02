@@ -80,8 +80,8 @@ fn fbm(x: f32, y: f32, octaves: u32, persistence: f32, lacunarity: f32) -> f32 {
     total / max_value
 }
 
-/// Maximum terrain height in meters - increased for more dramatic hills
-pub const TERRAIN_MAX_HEIGHT: f32 = 1.5;
+/// Maximum terrain height in meters - must match generate-terrain.mjs
+pub const TERRAIN_MAX_HEIGHT: f32 = 6.0;
 
 fn get_terrain_height(x: f32, z: f32, max_height: f32) -> f32 {
     // Base terrain - rolling hills (lower frequency for gradual changes)
@@ -179,16 +179,63 @@ impl PhysicsWorld {
         crate::urdf::UrdfLoader::load_robot(self, urdf_content);
     }
 
-    /// Create ground collider - simple flat ground for reliable physics
-    /// Visual terrain is separate (terrain.glb) but physics uses flat ground
+    /// Create trimesh terrain collider from embedded terrain.json
+    /// Uses exact same data as visual terrain for perfect physics alignment
     fn create_terrain_collider(&mut self) {
-        // Flat ground plane - 100x100 meters, surface at Y=0
-        // Ground is in GROUP_1, robot parts are in GROUP_2
-        // Ground filters for ALL to collide with everything
-        let ground_collider = ColliderBuilder::cuboid(50.0, 0.1, 50.0)
-            .translation(vector![0.0, -0.1, 0.0]) // Center at Y=-0.1, so top surface at Y=0
-            .friction(0.8)
-            // Ground is GROUP_1, must filter for GROUP_2 (robot) to collide
+        use serde::Deserialize;
+        use rapier3d::geometry::SharedShape;
+        use rapier3d::na::Point3;
+
+        #[derive(Deserialize)]
+        struct TerrainData {
+            size: f32,
+            resolution: usize,
+            #[serde(rename = "maxHeight")]
+            _max_height: f32,
+            heights: Vec<f32>,
+        }
+
+        let json = include_str!("../../assets/terrain.json");
+        let terrain: TerrainData = serde_json::from_str(json)
+            .expect("Failed to parse terrain.json");
+
+        const TERRAIN_Y_OFFSET: f32 = -3.0; // Match scene.rs for max_height=6.0
+
+        let res = terrain.resolution;
+        let half_size = terrain.size / 2.0;
+        let step = terrain.size / (res as f32 - 1.0);
+
+        // Build vertices from heightmap
+        let mut vertices: Vec<Point3<f32>> = Vec::with_capacity(res * res);
+        for z in 0..res {
+            for x in 0..res {
+                let world_x = (x as f32) * step - half_size;
+                let world_z = (z as f32) * step - half_size;
+                let y = terrain.heights[z * res + x] + TERRAIN_Y_OFFSET;
+                vertices.push(Point3::new(world_x, y, world_z));
+            }
+        }
+
+        // Build triangle indices (matching generate-terrain.mjs)
+        let mut indices: Vec<[u32; 3]> = Vec::new();
+        for z in 0..(res - 1) {
+            for x in 0..(res - 1) {
+                let tl = (z * res + x) as u32;
+                let tr = tl + 1;
+                let bl = ((z + 1) * res + x) as u32;
+                let br = bl + 1;
+
+                // Two triangles per quad
+                indices.push([tl, bl, tr]);
+                indices.push([tr, bl, br]);
+            }
+        }
+
+        let trimesh = SharedShape::trimesh(vertices, indices);
+
+        let ground_collider = ColliderBuilder::new(trimesh)
+            .friction(1.0)
+            .restitution(0.0)
             .collision_groups(InteractionGroups::new(Group::GROUP_1, Group::GROUP_2))
             .build();
 

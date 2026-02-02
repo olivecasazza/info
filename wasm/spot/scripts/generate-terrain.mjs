@@ -19,8 +19,8 @@ const GRID_TEXTURE_PATH = join(import.meta.dirname, '../assets/grid.png')
 
 // Terrain parameters - must match physics/mod.rs exactly!
 const SIZE = 20.0 // Total size in world units (20x20 meters)
-const RESOLUTION = 256 // Grid resolution
-const MAX_HEIGHT = 6.0 // Maximum terrain height (doubled again for even more dramatic hills)
+const RESOLUTION = 128 // Grid resolution (reduced for WebGL2 performance)
+const MAX_HEIGHT = 6.0 // Dramatic hills with accurate physics
 const SEED = 42 // Random seed for reproducibility
 
 // Perlin noise implementation (simple 2D)
