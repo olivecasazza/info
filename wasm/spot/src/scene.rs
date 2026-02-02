@@ -38,22 +38,42 @@ pub fn setup_scene(
     state: Res<SpotState>,
 ) {
     use bevy::core_pipeline::tonemapping::Tonemapping;
+    use crate::hand_drawn::HandDrawnSettings;
 
     // Camera with disabled tonemapping and MSAA for WebGL2 performance
     // TonyMcMapFace (default) requires tonemapping_luts feature which isn't available in WebGL2
+    // HandDrawnSettings enables the pencil sketch post-processing effect
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(2.0, 2.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         Tonemapping::None, // Disable tonemapping for WebGL2
         bevy::render::view::Msaa::Off, // Disable MSAA for performance
         MainCamera,
+        HandDrawnSettings {
+            intensity: 1.0, // Full effect
+            ..Default::default()
+        },
     ));
     commands.init_resource::<CameraOrbit>();
 
-    // Use ambient light only (directional light adds overhead)
+    // Ambient light (Balanced for grid visibility)
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
-        brightness: 2000.0, // Boosted since we removed directional light
+        brightness: 300.0,
+    });
+
+    // Directional light to create dramatic shadows for the sketch shader
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            shadows_enabled: true,
+            illuminance: 10000.0, // Bright key light
+            shadow_depth_bias: 0.02,
+            shadow_normal_bias: 0.02,
+            ..default()
+        },
+        // Low angle to emphasize terrain texture (sunset-like angle)
+        transform: Transform::from_xyz(15.0, 5.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
     });
 
     // Load pre-generated terrain mesh with matching physics trimesh

@@ -13,6 +13,7 @@ pub mod scene;
 pub mod input;
 pub mod simulation;
 pub mod ui;
+pub mod hand_drawn;
 
 mod web_bevy;
 pub use web_bevy::{WebHandle, SpotState};
