@@ -27,6 +27,10 @@ pub struct VisualOffsets {
     pub offsets: HashMap<String, Transform>,
 }
 
+/// Marker for terrain mesh
+#[derive(Component)]
+pub struct Terrain;
+
 /// Setup the scene: camera, lights, and load robot meshes from URDF
 pub fn setup_scene(
     mut commands: Commands,
@@ -52,8 +56,15 @@ pub fn setup_scene(
         brightness: 2000.0, // Boosted since we removed directional light
     });
 
-    // Note: Ground and grid are drawn via gizmos in draw_ground_grid system
-    // Mesh-based ground/grid fails on WebGL2 due to PBR shader incompatibility
+    // Load pre-generated terrain mesh (visual only - physics uses flat ground at Y=0)
+    // Offset terrain down by ~3.0 so the flat center area aligns with physics ground
+    commands.spawn((
+        SceneRoot(asset_server.load("terrain.glb#Scene0")),
+        Transform::from_xyz(0.0, -3.0, 0.0),
+        Terrain,
+    ));
+
+    // Ground grid is drawn via gizmos in draw_ground_grid system
 
     // Parse URDF for visual information (like original renderer)
     let urdf_content = include_str!("../assets/spot.urdf");

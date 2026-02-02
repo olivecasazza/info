@@ -79,11 +79,18 @@ pub fn camera_follow(
     mut camera_query: Query<&mut Transform, With<MainCamera>>,
 ) {
     // Compute camera position from orbit
-    let pos = orbit.target + Vec3::new(
+    let mut pos = orbit.target + Vec3::new(
         orbit.distance * orbit.yaw.sin() * orbit.pitch.cos(),
         orbit.distance * orbit.pitch.sin(),
         orbit.distance * orbit.yaw.cos() * orbit.pitch.cos(),
     );
+
+    // Prevent camera from going under the terrain
+    // Minimum height is 1.0m above ground (Y=0 is physics ground level)
+    const MIN_CAMERA_HEIGHT: f32 = 1.0;
+    if pos.y < MIN_CAMERA_HEIGHT {
+        pos.y = MIN_CAMERA_HEIGHT;
+    }
 
     if let Ok(mut camera_transform) = camera_query.get_single_mut() {
         *camera_transform = Transform::from_translation(pos).looking_at(orbit.target, Vec3::Y);
