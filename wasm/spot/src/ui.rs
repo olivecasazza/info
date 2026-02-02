@@ -1,0 +1,118 @@
+//! UI systems for Spot robot simulation.
+//!
+//! Provides egui debug interface with robot controls and diagnostics.
+
+use bevy::prelude::*;
+use bevy_egui::{egui, EguiContexts};
+
+use crate::camera::CameraOrbit;
+use crate::web_bevy::SpotState;
+
+/// Main UI system - renders egui debug interface
+pub fn ui_system(
+    mut contexts: EguiContexts,
+    mut state: ResMut<SpotState>,
+    mut orbit: ResMut<CameraOrbit>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+) {
+    // Toggle UI with Tab
+    if keyboard.just_pressed(KeyCode::Tab) {
+        state.ui_visible = !state.ui_visible;
+    }
+
+    if !state.ui_visible {
+        return;
+    }
+
+    let ctx = contexts.ctx_mut();
+    ui_theme::apply_style(ctx);
+
+    ui_theme::styled_window_responsive(ctx, "Settings")
+        .show(ctx, |ui| {
+            ui.heading("Camera");
+            ui.checkbox(&mut orbit.following, "Follow Robot");
+            ui.add(egui::Slider::new(&mut orbit.distance, 0.5..=10.0).text("Distance"));
+            ui.label("Control: Drag to Orbit, Shift+Drag to Pan, Scroll to Zoom");
+
+            ui.separator();
+            ui.heading("Robot Control");
+            ui.label("Keyboard Controls:");
+            ui.monospace("W/S: Forward/Backward");
+            ui.monospace("A/D: Rotate Left/Right");
+            ui.monospace("Q/E: Strafe Left/Right");
+
+            ui.separator();
+            // Show the lerped (smoothed) command, not the raw target
+            let cmd = &state.controller.command;
+            ui.label(format!("Command: [{:.2}, {:.2}, {:.2}]",
+                cmd.vel_x, cmd.vel_y, cmd.yaw_rate));
+
+            ui.checkbox(&mut state.controller.test_mode, "Test Mode (sine wave)");
+
+            // Policy output visualization - TIME SERIES GRAPH
+            ui.separator();
+            ui.heading("Policy Outputs (Graph)");
+
+            let history = &state.controller.action_history;
+            if !history.is_empty() {
+                use egui_plot::{Line, Plot, PlotPoints};
+
+                let joint_names = ["FL_upper", "FL_lower", "FR_upper", "FR_lower"];
+                let joint_indices = [1, 2, 4, 5]; // Front leg upper/lower joints
+                let colors = [
+                    egui::Color32::from_rgb(255, 100, 100), // FL upper - red
+                    egui::Color32::from_rgb(255, 200, 100), // FL lower - orange
+                    egui::Color32::from_rgb(100, 255, 100), // FR upper - green
+                    egui::Color32::from_rgb(100, 200, 255), // FR lower - cyan
+                ];
+
+                Plot::new("policy_plot")
+                    .height(150.0)
+                    .show_axes(true)
+                    .include_y(-2.0)
+                    .include_y(2.0)
+                    .show(ui, |plot_ui| {
+                        for (j, &idx) in joint_indices.iter().enumerate() {
+                            let points: PlotPoints = history
+                                .iter()
+                                .map(|(t, actions)| [*t as f64, actions[idx] as f64])
+                                .collect();
+                            plot_ui.line(
+                                Line::new(points)
+                                    .color(colors[j])
+                                    .name(joint_names[j])
+                            );
+                        }
+                    });
+
+                // Legend
+                ui.horizontal(|ui| {
+                    for (j, name) in joint_names.iter().enumerate() {
+                        ui.colored_label(colors[j], format!("■ {}", name));
+                    }
+                });
+            } else {
+                ui.label("No data yet...");
+            }
+
+            // Current values summary
+            ui.separator();
+            let action = &state.controller.previous_action.joint_targets;
+            ui.label(format!("FL: [{:+.2}, {:+.2}, {:+.2}]  FR: [{:+.2}, {:+.2}, {:+.2}]",
+                action[0], action[1], action[2], action[3], action[4], action[5]));
+
+            // Debug: Show observation being fed to policy
+            ui.separator();
+            ui.heading("Observation Debug");
+            let obs = &state.controller.last_observation;
+            if obs.len() >= 42 {
+                ui.label(format!("Gravity: [{:+.2}, {:+.2}, {:+.2}]", obs[0], obs[1], obs[2]));
+                ui.label(format!("Joint[0-2]: [{:+.2}, {:+.2}, {:+.2}]", obs[3], obs[4], obs[5]));
+                ui.label(format!("Command (obs[39-41]): [{:+.2}, {:+.2}, {:+.2}]", obs[39], obs[40], obs[41]));
+                ui.colored_label(
+                    if obs[39].abs() > 0.1 || obs[40].abs() > 0.1 { egui::Color32::GREEN } else { egui::Color32::RED },
+                    format!("Command active: {}", obs[39].abs() > 0.1 || obs[40].abs() > 0.1)
+                );
+            }
+        });
+}

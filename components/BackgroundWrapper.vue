@@ -1,5 +1,6 @@
 <template>
   <canvas
+    id="bevy-canvas"
     ref="canvasElement"
     class="absolute w-full h-full touch-none"
     @pointerdown="onPointerDown"
@@ -54,7 +55,10 @@ function pickRandomBackgroundSlug (): string {
   return options[Math.floor(Math.random() * options.length)]
 }
 
-const backgroundSlug = ref<string>(pickRandomBackgroundSlug())
+// Initialize to forced slug if on a project page, otherwise random
+// This prevents loading a random project then immediately tearing it down
+const initialForcedSlug = getWasmProjectSlugFromRoutePath(useRoute().path)
+const backgroundSlug = ref<string>(initialForcedSlug ?? pickRandomBackgroundSlug())
 
 const desiredSlug = computed(() => {
   // On /projects/<slug>, force that slug.
@@ -75,6 +79,13 @@ async function loadWasmProject (slug: string): Promise<void> {
   }
 
   const mySeq = ++loadSeq
+
+  // Bevy apps register global listeners and can't be cleanly destroyed.
+  // If switching to a different WASM project, force a hard reload.
+  if (loadedSlug.value && loadedSlug.value !== slug) {
+    window.location.reload()
+    return
+  }
 
   // Tear down existing project (if any) before loading the next.
   if (handle.value) {

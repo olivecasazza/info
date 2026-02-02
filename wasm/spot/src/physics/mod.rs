@@ -24,8 +24,9 @@ pub struct PhysicsWorld {
 impl PhysicsWorld {
     pub fn new() -> Self {
         let mut integration_parameters = IntegrationParameters::default();
-        integration_parameters.dt = 1.0 / 120.0;
-        integration_parameters.num_solver_iterations = std::num::NonZeroUsize::new(60).unwrap();
+        // 60Hz physics (Bevy Update runs at ~60fps, no substeps needed)
+        integration_parameters.dt = 1.0 / 60.0;
+        // 4 iterations is typical for real-time (60 was causing severe performance issues)
 
         Self {
             rigid_body_set: RigidBodySet::new(),
@@ -64,9 +65,9 @@ impl PhysicsWorld {
     }
 
     pub fn build_robot(&mut self, urdf_content: &str) {
-        // 1. Create Ground Plane
-        let ground_collider = ColliderBuilder::cuboid(10.0, 0.1, 10.0)
-            .translation(vector![0.0, -0.1, 0.0])
+        // 1. Create Ground Plane - thin collider with surface at Y=0
+        let ground_collider = ColliderBuilder::cuboid(10.0, 0.05, 10.0)
+            .translation(vector![0.0, -0.05, 0.0]) // Center at -0.05, so top surface is at Y=0
             .collision_groups(InteractionGroups::new(Group::GROUP_1, Group::ALL))
             .build();
         self.collider_set.insert(ground_collider);

@@ -52,9 +52,9 @@ pub mod theme {
 pub mod colors {
     use super::{Color32, Stroke};
 
-    /// Semi-transparent black background (70% opacity)
+    /// Opaque black background
     pub fn bg() -> Color32 {
-        Color32::from_rgba_unmultiplied(0, 0, 0, 180)
+        Color32::from_rgb(0, 0, 0)
     }
 
     /// Standard text color (gray)
@@ -72,10 +72,20 @@ pub mod colors {
         Color32::from_gray(240)
     }
 
+    /// Border color
+    pub fn border_color() -> Color32 {
+        Color32::from_gray(80)
+    }
+
     /// Border stroke
     pub fn border() -> Stroke {
-        Stroke::new(1.0, text())
+        Stroke::new(1.0, border_color())
     }
+}
+
+/// Standard corner rounding - square corners for industrial look
+pub fn rounding() -> egui::Rounding {
+    egui::Rounding::ZERO
 }
 
 /// Apply the shared high-contrast dark theme to the egui context.
@@ -86,17 +96,29 @@ pub fn apply_style(ctx: &Context) {
 
     // Monospace fonts throughout
     style.text_styles = BTreeMap::from([
-        (TextStyle::Heading, FontId::new(16.0, FontFamily::Monospace)),
-        (TextStyle::Body, FontId::new(13.0, FontFamily::Monospace)),
-        (TextStyle::Monospace, FontId::new(13.0, FontFamily::Monospace)),
-        (TextStyle::Button, FontId::new(13.0, FontFamily::Monospace)),
-        (TextStyle::Small, FontId::new(11.0, FontFamily::Monospace)),
+        (TextStyle::Heading, FontId::new(14.0, FontFamily::Monospace)),
+        (TextStyle::Body, FontId::new(12.0, FontFamily::Monospace)),
+        (TextStyle::Monospace, FontId::new(12.0, FontFamily::Monospace)),
+        (TextStyle::Button, FontId::new(12.0, FontFamily::Monospace)),
+        (TextStyle::Small, FontId::new(10.0, FontFamily::Monospace)),
     ]);
 
-    // Window/panel backgrounds
+    // Window/panel backgrounds - opaque black with rounding
     style.visuals.window_fill = colors::bg();
     style.visuals.panel_fill = colors::bg();
-    style.visuals.window_rounding = egui::Rounding::ZERO;
+    style.visuals.window_rounding = rounding();
+
+    // Widget backgrounds - opaque black for title bar, etc.
+    style.visuals.widgets.noninteractive.bg_fill = colors::bg();
+    style.visuals.widgets.inactive.bg_fill = colors::bg();
+    style.visuals.widgets.hovered.bg_fill = Color32::from_gray(20);
+    style.visuals.widgets.active.bg_fill = Color32::from_gray(30);
+
+    // Widget rounding
+    style.visuals.widgets.noninteractive.rounding = rounding();
+    style.visuals.widgets.inactive.rounding = rounding();
+    style.visuals.widgets.hovered.rounding = rounding();
+    style.visuals.widgets.active.rounding = rounding();
 
     // Text colors for widget states
     style.visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, colors::text());
@@ -104,17 +126,17 @@ pub fn apply_style(ctx: &Context) {
     style.visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, colors::text_hovered());
     style.visuals.widgets.active.fg_stroke = Stroke::new(1.0, colors::text_active());
 
-    // Border strokes for all widgets
-    let border = colors::border();
-    style.visuals.widgets.noninteractive.bg_stroke = border;
-    style.visuals.widgets.inactive.bg_stroke = border;
-    style.visuals.widgets.hovered.bg_stroke = border;
-    style.visuals.widgets.active.bg_stroke = border;
+    // No border strokes on widgets (we'll draw custom horizontal borders)
+    let no_stroke = Stroke::NONE;
+    style.visuals.widgets.noninteractive.bg_stroke = no_stroke;
+    style.visuals.widgets.inactive.bg_stroke = no_stroke;
+    style.visuals.widgets.hovered.bg_stroke = no_stroke;
+    style.visuals.widgets.active.bg_stroke = no_stroke;
 
     // Override text color globally
     style.visuals.override_text_color = Some(colors::text());
 
-    // Compact spacing
+    // Minimal spacing
     style.spacing.item_spacing = egui::vec2(6.0, 4.0);
     style.spacing.window_margin = Margin::same(8.0);
     style.spacing.button_padding = egui::vec2(6.0, 2.0);
@@ -122,27 +144,43 @@ pub fn apply_style(ctx: &Context) {
     ctx.set_style(style);
 }
 
+/// Create a custom frame with horizontal-only borders (top and bottom)
+fn horizontal_border_frame() -> egui::Frame {
+    egui::Frame {
+        fill: colors::bg(),
+        rounding: rounding(),
+        inner_margin: Margin::symmetric(8.0, 6.0),
+        outer_margin: Margin::ZERO,
+        stroke: Stroke::NONE, // We'll paint borders manually
+        shadow: egui::Shadow::NONE,
+    }
+}
+
+/// Paint horizontal borders (top and bottom only)
+pub fn paint_horizontal_borders(ui: &mut egui::Ui, rect: egui::Rect) {
+    let stroke = colors::border();
+    let painter = ui.painter();
+
+    // Top border
+    painter.hline(rect.x_range(), rect.top(), stroke);
+    // Bottom border
+    painter.hline(rect.x_range(), rect.bottom(), stroke);
+}
+
 /// Create a styled window with the shared theme.
 ///
 /// Returns an `egui::Window` preconfigured with:
-/// - Dark semi-transparent background
-/// - No rounding
-/// - Gray border
+/// - Dark opaque background
+/// - Rounded corners
+/// - Horizontal borders only (top/bottom)
 /// - Inner margin for content padding
-/// - Collapsible (default closed)
+/// - Collapsible (default open)
 /// - Resizable and draggable
-/// - Responsive positioning: top-right on desktop, bottom-center on mobile
 pub fn styled_window(title: &str) -> egui::Window<'_> {
     egui::Window::new(title)
-        .frame(
-            egui::Frame::none()
-                .fill(colors::bg())
-                .rounding(egui::Rounding::ZERO)
-                .stroke(colors::border())
-                .inner_margin(Margin::symmetric(10.0, 6.0)),
-        )
+        .frame(horizontal_border_frame())
         .collapsible(true)
-        .default_open(false)
+        .default_open(true)
         .resizable(true)
 }
 
@@ -156,7 +194,8 @@ pub fn styled_window_responsive<'a>(ctx: &Context, title: &'a str) -> egui::Wind
     let screen = ctx.screen_rect();
     let is_mobile = screen.width() <= 768.0;
 
-    let window = styled_window(title);
+    let window = styled_window(title)
+        .default_width(300.0); // Consistent width across all projects
 
     if is_mobile {
         // Bottom center on mobile

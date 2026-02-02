@@ -7,7 +7,7 @@
       On /projects/<wasm-project> we disable pointer events on the wrapper so clicks go to the canvas (egui + spawning),
       but we keep the NavBar interactive.
     -->
-    <div class="z-20 fullscreen flex flex-col overflow-scroll pointer-events-none">
+    <div class="z-20 fullscreen flex flex-col overflow-scroll pointer-events-none p-2">
       <!--
         On /projects/<wasm-project> we want the canvas to be fully interactive.
         Keep the page content hidden but in layout so the NavBar stays bottom.

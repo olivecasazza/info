@@ -101,7 +101,7 @@ impl SpotController {
             command: UserCommand::new(),
             previous_action: Action::zero(),
             total_time: 0.0,
-            dt: 1.0 / 120.0,
+            dt: 1.0 / 60.0,
             test_mode: false,
             action_history: Vec::with_capacity(500),
             last_observation: vec![0.0; 42],
@@ -233,12 +233,6 @@ impl SpotController {
         let obs = self.collect_observation(&base_rotation, joint_set);
         self.last_observation = obs.to_vec(); // Store for UI debugging
 
-        // Debug: Log command periodically
-        if (self.total_time * 10.0) as i32 % 50 == 0 {
-            log::info!("Command: [{:.2}, {:.2}, {:.2}]",
-                self.command.vel_x, self.command.vel_y, self.command.yaw_rate);
-        }
-
         // 2. Run policy OR test mode
         // TEST MODE: Checkbox toggles between policy and simple sinusoidal motion
         let use_test_mode = self.test_mode && (self.command.vel_x.abs() > 0.1 || self.command.vel_y.abs() > 0.1);
@@ -261,18 +255,12 @@ impl SpotController {
             targets[7] = 0.7; targets[8] = -1.8;
             targets[10] = 0.7; targets[11] = -1.8;
 
-            log::info!("TEST MODE: t={:.1} front_upper=[{:.2}, {:.2}]",
-                self.total_time, targets[1], targets[4]);
+            // Test mode logging removed - was causing performance issues
 
             Action { joint_targets: targets }
         } else if let Ok(output) = self.policy.forward(&obs.to_vec()) {
             // Normal policy mode
-            let has_command = self.command.vel_x.abs() > 0.1 || self.command.vel_y.abs() > 0.1;
-            if has_command || (self.total_time * 10.0) as i32 % 50 == 0 {
-                log::info!("OBS cmd=[{:.2},{:.2},{:.2}] | ACTION[1,2]=[{:.3},{:.3}] | t={:.1}",
-                    obs.command[0], obs.command[1], obs.command[2],
-                    output[1], output[2], self.total_time);
-            }
+            // Policy logging removed - was causing performance issues
             Action::from_vec(&output)
         } else {
             // Fallback to standing
@@ -329,12 +317,8 @@ impl SpotController {
                         );
                         link.joint.data.set_motor_max_force(JointAxis::AngX, SpotConfig::MAX_FORCE);
 
-                        // Debug: Log targets every second
-                        if (self.total_time * 1.0) as i32 % 1 == 0 && i == 0 {
-                            log::info!("Joint[0] target={:.3}, stiff={:.0}, cmd=[{:.2},{:.2},{:.2}]",
-                                target, current_stiffness,
-                                self.command.vel_x, self.command.vel_y, self.command.yaw_rate);
-                        }
+                        // Debug: Log targets sparingly (once per ~60 frames at 60fps)
+                        // Removed per-frame logging to avoid freezing browser
                     }
                 }
             }
