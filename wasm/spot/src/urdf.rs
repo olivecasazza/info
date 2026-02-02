@@ -111,7 +111,7 @@ impl UrdfLoader {
                 Isometry::from_parts(Translation::from(vector![0.0, 1.0, 0.0]), na::UnitQuaternion::identity())
             });
 
-            // FIXED: Set Dynamic Body (reverting debug fixed base)
+            // Dynamic body - heightfield terrain provides accurate collision
             let rb = RigidBodyBuilder::dynamic()
                 .position(pose)
                 .linear_damping(0.5)
@@ -149,9 +149,9 @@ impl UrdfLoader {
                             }
                         }
                     } else if let Some(_mesh_geom) = geometry.children().find(|n| n.has_tag_name("mesh")) {
-                         // FALLBACK FOOT: INCREASED SIZE AND FRICTION
-                         // This is critical for stability.
-                         collider_builder = Some(ColliderBuilder::ball(0.04));
+                         // FALLBACK FOOT: LARGER SIZE FOR BETTER GROUND CONTACT
+                         // Increased from 0.04 to 0.06 for more reliable collisions
+                         collider_builder = Some(ColliderBuilder::ball(0.06));
                     }
 
                     if let Some(mut builder) = collider_builder {
