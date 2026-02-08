@@ -12,10 +12,6 @@ pub fn keyboard_input(
     mut state: ResMut<SpotState>,
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
-    // Toggle UI
-    if keyboard.just_pressed(KeyCode::Tab) {
-        state.ui_visible = !state.ui_visible;
-    }
 
     // Movement commands
     let mut cmd = UserCommand::new();

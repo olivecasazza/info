@@ -79,14 +79,14 @@ impl FlockApp {
                 id.to_string(),
                 probability,
                 // Keep defaults close to what existed before.
-                40.0, // neighbor_distance
+                35.0, // neighbor_distance
                 25.0, // desired_separation
-                0.5,  // separation_multiplier
+                1.2,  // separation_multiplier
                 0.5,  // alignment_multiplier
                 0.3,  // cohesion_multiplier
                 5.0,  // max_speed
                 0.33, // max_force
-                6.0,  // bird_size (smaller initial birds)
+                3.5,  // bird_size
                 color.r() as f32 / 255.0,
                 color.g() as f32 / 255.0,
                 color.b() as f32 / 255.0,
@@ -282,7 +282,7 @@ impl FlockApp {
             }
         }
 
-        // Step simulation and collect line segments.
+        // Step simulation and collect triangle corners.
         let (vertices, colors) = self.flock.step_collect_geometry(
             self.scene_width,
             self.scene_height,
@@ -290,39 +290,29 @@ impl FlockApp {
         );
 
         let center = screen_rect.center();
-        let mut shapes: Vec<egui::Shape> = Vec::with_capacity(vertices.len() / 6);
+        let mut shapes: Vec<egui::Shape> = Vec::with_capacity(vertices.len() / 3);
 
-        // vertices: [x,y,0, x,y,0, ...] per vertex, so 2 vertices per segment = 6 floats.
-        // colors:   [r,g,b, r,g,b, ...] per vertex, so 2 vertices per segment = 6 floats.
+        // vertices: [x,y,0, x,y,0, x,y,0, ...] — 3 corner vertices per bird (9 floats)
         let mut vi = 0usize;
         let mut ci = 0usize;
-        while vi + 5 < vertices.len() && ci + 2 < colors.len() {
-            let x1 = vertices[vi];
-            let y1 = vertices[vi + 1];
-            let x2 = vertices[vi + 3];
-            let y2 = vertices[vi + 4];
-
-            let r = colors[ci];
-            let g = colors[ci + 1];
-            let b = colors[ci + 2];
+        while vi + 8 < vertices.len() && ci + 2 < colors.len() {
+            let p0 = Pos2::new(center.x + vertices[vi], center.y - vertices[vi + 1]);
+            let p1 = Pos2::new(center.x + vertices[vi + 3], center.y - vertices[vi + 4]);
+            let p2 = Pos2::new(center.x + vertices[vi + 6], center.y - vertices[vi + 7]);
 
             let color = Color32::from_rgb(
-                (r * 255.0).clamp(0.0, 255.0) as u8,
-                (g * 255.0).clamp(0.0, 255.0) as u8,
-                (b * 255.0).clamp(0.0, 255.0) as u8,
+                (colors[ci] * 255.0).clamp(0.0, 255.0) as u8,
+                (colors[ci + 1] * 255.0).clamp(0.0, 255.0) as u8,
+                (colors[ci + 2] * 255.0).clamp(0.0, 255.0) as u8,
             );
 
-            // World coords have origin at center, y up. Screen coords: y down.
-            let p1 = Pos2::new(center.x + x1, center.y - y1);
-            let p2 = Pos2::new(center.x + x2, center.y - y2);
+            let stroke = Stroke::new(1.0, color);
+            shapes.push(egui::Shape::line_segment([p0, p1], stroke));
+            shapes.push(egui::Shape::line_segment([p1, p2], stroke));
+            shapes.push(egui::Shape::line_segment([p2, p0], stroke));
 
-            shapes.push(egui::Shape::line_segment(
-                [p1, p2],
-                Stroke::new(1.0, color),
-            ));
-
-            vi += 6;
-            ci += 6;
+            vi += 9;
+            ci += 9;
         }
 
         painter.extend(shapes);

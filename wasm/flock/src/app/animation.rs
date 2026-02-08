@@ -183,14 +183,14 @@ impl BirdConfigTarget {
         // JS ranges from utils/background/background.ts
         Self {
             probability: rng.rand_range(25..75) as i32,
-            neighbor_distance: rng.rand_range(0..50) as f32,
-            desired_separation: rng.rand_range(50..250) as f32,
-            separation_multiplier: 0.001 + rng.rand_float() * 1.199,
+            neighbor_distance: 20.0 + rng.rand_float() * 30.0,
+            desired_separation: 20.0 + rng.rand_float() * 30.0,
+            separation_multiplier: 0.8 + rng.rand_float() * 1.2,
             alignment_multiplier: 0.001 + rng.rand_float() * 1.199,
             cohesion_multiplier: 0.001 + rng.rand_float() * 1.199,
             max_force: 0.001 + rng.rand_float() * 0.499,
             max_speed: 0.001 + rng.rand_float() * 9.999,
-            bird_size: 3.0 + rng.rand_float() * 12.0,
+            bird_size: 0.1 + rng.rand_float() * 4.9,
             color: Color32::from_rgb(
                 rng.rand_range(0..255) as u8,
                 rng.rand_range(0..255) as u8,

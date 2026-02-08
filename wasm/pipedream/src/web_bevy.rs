@@ -400,7 +400,7 @@ struct PipedreamState {
     speed: f32,
     accumulator: f32,
     sim: PipeSim,
-    ui_visible: bool,
+    ui: ui_theme::ProjectUi,
 }
 
 impl Default for PipedreamState {
@@ -420,7 +420,7 @@ impl Default for PipedreamState {
             speed: 20.0,
             accumulator: 0.0,
             sim,
-            ui_visible: true,
+            ui: ui_theme::ProjectUi::new("pipedream"),
         }
     }
 }
@@ -641,20 +641,19 @@ fn ui_system(
     mut contexts: EguiContexts,
     mut state: ResMut<PipedreamState>,
     keyboard: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
 ) {
     if keyboard.just_pressed(KeyCode::Tab) {
-        state.ui_visible = !state.ui_visible;
-    }
-
-    if !state.ui_visible {
-        return;
+        state.ui.toggle();
     }
 
     let ctx = contexts.ctx_mut();
-    ui_theme::apply_style(ctx);
+    let dt = time.delta_secs();
 
-    ui_theme::styled_window_responsive(ctx, "pipedream")
-        .show(ctx, |ui| {
+    let mut ui = std::mem::take(&mut state.ui);
+
+    ui.frame(ctx, dt, |egui_ui| {
+        egui_ui.collapsing("simulation", |ui| {
             ui.add(egui::Slider::new(&mut state.speed, 5.0..=240.0).text("speed"));
             ui.add(egui::Slider::new(&mut state.renderer.scale, 6.0..=26.0).text("scale"));
             ui.add(egui::Slider::new(&mut state.renderer.pixel, 1.0..=8.0).text("pixel"));
@@ -668,6 +667,9 @@ fn ui_system(
                 state.sim.reset(pipe_count);
             }
         });
+    });
+
+    state.ui = ui;
 
     ctx.request_repaint();
 }

@@ -1,11 +1,11 @@
 //! Shared Bevy plugins for WASM visualization projects.
 //!
 //! Provides common functionality across flock, pipedream, and spot:
-//! - Debug overlay (FPS, draw calls)
 //! - Pixel canvas for software rasterization
 //! - Theme integration with ui-theme crate
 //!
-//! Note: Cameras are project-specific (isometric, 2D, 3D orbit) so not shared.
+//! Performance overlay is now provided by `ui_theme::PerfOverlay`.
+//! The debug module is available for opt-in entity/memory diagnostics.
 
 pub mod debug;
 pub mod pixel_canvas;
@@ -19,7 +19,6 @@ pub struct BevyCorePlugins;
 impl Plugin for BevyCorePlugins {
     fn build(&self, app: &mut App) {
         app.add_plugins((
-            debug::DebugOverlayPlugin,
             theme::ThemePlugin,
         ));
     }
