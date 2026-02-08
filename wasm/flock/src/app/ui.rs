@@ -95,7 +95,7 @@ impl FlockApp {
                                     .text("max_force"),
                             );
                             ui.add(
-                                egui::Slider::new(&mut cfg.bird_size, 0.0..=25.0)
+                                egui::Slider::new(&mut cfg.bird_size, 0.1..=5.0)
                                     .text("bird_size"),
                             );
 

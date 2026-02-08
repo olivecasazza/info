@@ -63,18 +63,18 @@ impl BirdConfigTarget {
     fn random(rng: &mut oorandom::Rand32) -> Self {
         Self {
             probability: rng.rand_range(25..75) as i32,
-            neighbor_distance: rng.rand_range(0..50) as f32,
-            desired_separation: rng.rand_range(50..250) as f32,
-            separation_multiplier: 0.001 + rng.rand_float() * 1.199,
+            neighbor_distance: 20.0 + rng.rand_float() * 30.0,
+            desired_separation: 20.0 + rng.rand_float() * 30.0,
+            separation_multiplier: 0.8 + rng.rand_float() * 1.2,
             alignment_multiplier: 0.001 + rng.rand_float() * 1.199,
             cohesion_multiplier: 0.001 + rng.rand_float() * 1.199,
             max_force: 0.001 + rng.rand_float() * 0.499,
             max_speed: 0.001 + rng.rand_float() * 9.999,
-            bird_size: 3.0 + rng.rand_float() * 12.0,
+            bird_size: 0.1 + rng.rand_float() * 4.9,
             color: egui::Color32::from_rgb(
-                rng.rand_range(0..255) as u8,
-                rng.rand_range(0..255) as u8,
-                rng.rand_range(0..255) as u8,
+                rng.rand_range(100..255) as u8,
+                rng.rand_range(80..255) as u8,
+                rng.rand_range(80..255) as u8,
             ),
         }
     }
@@ -297,40 +297,42 @@ struct FlockState {
     max_flock_size: usize,
     initial_spawn_remaining: usize,
     initial_spawn_rate: f32,
-    ui_visible: bool,
     enable_randomization: bool,
     rng: oorandom::Rand32,
     animation: RandomizationAnimation,
+    ui: ui_theme::ProjectUi,
 }
 
 impl Default for FlockState {
     fn default() -> Self {
         let seed = js_sys::Date::now() as u64;
-        let max_flock_size = 1200;
+        let max_flock_size = 2400;
         let mut flock = Flock::new(max_flock_size, seed);
         let mut configs = HashMap::new();
+        let mut rng = oorandom::Rand32::new(seed);
 
-        // Use theme colors
-        let primary = ui_theme::theme::primary();
-        let secondary = ui_theme::theme::secondary();
-        let tertiary = ui_theme::theme::compliment();
-        let highlight = ui_theme::theme::highlight();
+        // Use brighter theme color shades for neon glow effect
+        // (200-300 range instead of 400-500 for more luminous appearance)
+        let primary = egui::Color32::from_hex("#98e7e1").unwrap_or(ui_theme::theme::primary());
+        let secondary = egui::Color32::from_hex("#f7d3c6").unwrap_or(ui_theme::theme::secondary());
+        let tertiary = egui::Color32::from_hex("#c2e1ec").unwrap_or(ui_theme::theme::compliment());
+        let highlight = egui::Color32::from_hex("#f0dd7d").unwrap_or(ui_theme::theme::highlight());
 
         let mk_cfg = |id: &str, prob: i32, c: egui::Color32| {
             BirdConfig::new(
                 id.to_string(),
                 prob,
-                40.0, 25.0, 0.5, 0.5, 0.3, 5.0, 0.33, 6.0,
+                35.0, 25.0, 1.2, 0.5, 0.3, 5.0, 0.33, 3.5,
                 c.r() as f32 / 255.0,
                 c.g() as f32 / 255.0,
                 c.b() as f32 / 255.0,
             )
         };
 
-        let cfg_primary = mk_cfg("primary", 40, primary);
+        let cfg_primary = mk_cfg("primary", 30, primary);
         let cfg_secondary = mk_cfg("secondary", 30, secondary);
         let cfg_tertiary = mk_cfg("tertiary", 20, tertiary);
-        let cfg_highlight = mk_cfg("highlight", 10, highlight);
+        let cfg_highlight = mk_cfg("highlight", 20, highlight);
 
         flock.insert_bird_config("primary".to_string(), cfg_primary.clone());
         flock.insert_bird_config("secondary".to_string(), cfg_secondary.clone());
@@ -342,21 +344,37 @@ impl Default for FlockState {
         configs.insert("tertiary".to_string(), cfg_tertiary);
         configs.insert("highlight".to_string(), cfg_highlight);
 
-        let initial_spawn = (max_flock_size / 8).max(30);
+        // Pre-spawn all birds for an immediately full, even distribution
+        let w = 900.0_f32;
+        let h = 700.0_f32;
+        let total: i32 = configs.values().map(|c| c.probability).sum();
+        for _ in 0..max_flock_size {
+            // Weighted random config selection
+            let mut r = (rng.rand_u32() % total as u32) as i32;
+            let mut chosen_id = configs.keys().next().cloned().unwrap();
+            for (id, cfg) in configs.iter() {
+                r -= cfg.probability;
+                if r < 0 {
+                    chosen_id = id.clone();
+                    break;
+                }
+            }
+            flock.add_bird_at_random_position(chosen_id, w, h);
+        }
 
         Self {
             flock,
             configs,
-            scene_width: 800.0,
-            scene_height: 600.0,
+            scene_width: 900.0,
+            scene_height: 700.0,
             timestep: 1.0,
             max_flock_size,
-            initial_spawn_remaining: initial_spawn,
-            initial_spawn_rate: initial_spawn as f32 / 2.0,
-            ui_visible: true,
+            initial_spawn_remaining: 0,
+            initial_spawn_rate: 0.0,
             enable_randomization: true,
-            rng: oorandom::Rand32::new(seed),
+            rng,
             animation: RandomizationAnimation::default(),
+            ui: ui_theme::ProjectUi::new("settings"),
         }
     }
 }
@@ -372,7 +390,7 @@ fn setup(
 ) {
     commands.spawn(Camera2d::default());
 
-    // Create a mesh for drawing all bird lines - will be updated each frame
+    // Create a mesh for drawing bird wireframe outlines - updated each frame
     let mesh = Mesh::new(
         bevy::render::mesh::PrimitiveTopology::LineList,
         bevy::render::render_asset::RenderAssetUsages::MAIN_WORLD | bevy::render::render_asset::RenderAssetUsages::RENDER_WORLD,
@@ -461,7 +479,6 @@ fn render_birds(
 
     let (vertices, colors) = state.flock.step_collect_geometry(width, height, timestep);
 
-    // Get the mesh handle
     let Ok(mesh_handle) = query.get_single() else {
         return;
     };
@@ -470,31 +487,57 @@ fn render_birds(
         return;
     };
 
-    // Build vertex positions and colors for GPU
-    // vertices format: [x1, y1, z1, x2, y2, z2, ...] - pairs of line endpoints
-    // colors format: [r1, g1, b1, r2, g2, b2, ...] - color per vertex
-    let num_vertices = vertices.len() / 3;
-    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(num_vertices);
-    let mut vertex_colors: Vec<[f32; 4]> = Vec::with_capacity(num_vertices);
+    // Each bird = 3 corner vertices (9 pos floats, 9 color floats).
+    // We render 3 layers of wireframe edges per bird:
+    //   outer glow (2.8× scale, 0.12 alpha) + inner glow (1.6×, 0.28 alpha) + core (1.0×)
+    // Each layer = 3 edges × 2 verts = 6 verts → 18 verts per bird.
+    let num_birds = vertices.len() / 9;
+    let total_verts = num_birds * 18;
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(total_verts);
+    let mut vertex_colors: Vec<[f32; 4]> = Vec::with_capacity(total_verts);
 
     let mut vi = 0usize;
     let mut ci = 0usize;
 
-    // Each line segment has 2 vertices (6 floats for positions, 6 for colors)
-    while vi + 5 < vertices.len() && ci + 5 < colors.len() {
-        // First vertex of line
-        positions.push([vertices[vi], vertices[vi + 1], 0.0]);
-        vertex_colors.push([colors[ci], colors[ci + 1], colors[ci + 2], 1.0]);
+    while vi + 8 < vertices.len() && ci + 8 < colors.len() {
+        let v0 = [vertices[vi], vertices[vi + 1], 0.0];
+        let v1 = [vertices[vi + 3], vertices[vi + 4], 0.0];
+        let v2 = [vertices[vi + 6], vertices[vi + 7], 0.0];
 
-        // Second vertex of line
-        positions.push([vertices[vi + 3], vertices[vi + 4], 0.0]);
-        vertex_colors.push([colors[ci + 3], colors[ci + 4], colors[ci + 5], 1.0]);
+        let cx = (v0[0] + v1[0] + v2[0]) / 3.0;
+        let cy = (v0[1] + v1[1] + v2[1]) / 3.0;
 
-        vi += 6;
-        ci += 6;
+        let r = colors[ci];
+        let g = colors[ci + 1];
+        let b = colors[ci + 2];
+
+        // Helper: scale a vertex outward from centroid
+        let scale_v = |v: [f32; 3], s: f32| -> [f32; 3] {
+            [cx + (v[0] - cx) * s, cy + (v[1] - cy) * s, 0.0]
+        };
+
+        // Push 3 line-segment edges for a given scale + alpha
+        let mut push_edges = |s: f32, a: f32| {
+            let sv0 = scale_v(v0, s);
+            let sv1 = scale_v(v1, s);
+            let sv2 = scale_v(v2, s);
+            let c = [r, g, b, a];
+            positions.push(sv0); positions.push(sv1);
+            vertex_colors.push(c); vertex_colors.push(c);
+            positions.push(sv1); positions.push(sv2);
+            vertex_colors.push(c); vertex_colors.push(c);
+            positions.push(sv2); positions.push(sv0);
+            vertex_colors.push(c); vertex_colors.push(c);
+        };
+
+        push_edges(2.8, 0.12);  // outer glow
+        push_edges(1.6, 0.28);  // inner glow
+        push_edges(1.0, 1.0);   // core wireframe
+
+        vi += 9;
+        ci += 9;
     }
 
-    // Update mesh with new vertex data
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
 }
@@ -523,90 +566,97 @@ fn ui_system(
     mut contexts: EguiContexts,
     mut state: ResMut<FlockState>,
     keyboard: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
 ) {
     if keyboard.just_pressed(KeyCode::Tab) {
-        state.ui_visible = !state.ui_visible;
-    }
-
-    if !state.ui_visible {
-        return;
+        state.ui.toggle();
     }
 
     let ctx = contexts.ctx_mut();
-    ui_theme::apply_style(ctx);
+    let dt = time.delta_secs();
 
-    ui_theme::styled_window_responsive(ctx, "settings")
-        .show(ctx, |ui| {
-            ui.collapsing("flock settings", |ui| {
-                ui.checkbox(&mut state.enable_randomization, "enable randomization animation");
-                ui.add(egui::Slider::new(&mut state.timestep, 0.0..=5.0).text("simulation timestep"));
+    // Take ProjectUi out so the closure gets full access to state fields.
+    // Swapped back after frame() — this is a standard Rust/Bevy pattern.
+    let mut ui = std::mem::take(&mut state.ui);
+    let mut should_add_species = false;
 
-                let mut max = state.max_flock_size as u32;
-                if ui.add(egui::Slider::new(&mut max, 0..=2000).text("max flock size")).changed() {
-                    state.max_flock_size = max as usize;
-                    let new_max = state.max_flock_size;
-                    state.flock.set_max_flock_size(new_max);
-                }
+    ui.frame(ctx, dt, |egui_ui| {
+        egui_ui.collapsing("flock settings", |ui| {
+            ui.checkbox(&mut state.enable_randomization, "enable randomization animation");
+            ui.add(egui::Slider::new(&mut state.timestep, 0.0..=5.0).text("simulation timestep"));
 
-                ui.label(format!("current_flock_size {}", state.flock.current_flock_size()));
+            let mut max = state.max_flock_size as u32;
+            if ui.add(egui::Slider::new(&mut max, 0..=5000).text("max flock size")).changed() {
+                state.max_flock_size = max as usize;
+                let new_max = state.max_flock_size;
+                state.flock.set_max_flock_size(new_max);
+            }
 
-                if ui.button("generate random species").clicked() {
-                    add_random_species(&mut state);
-                }
-            });
+            ui.label(format!("current_flock_size {}", state.flock.current_flock_size()));
 
-            ui.separator();
-
-            ui.collapsing("bird settings", |ui| {
-                let mut ids: Vec<_> = state.configs.keys().cloned().collect();
-                ids.sort();
-
-                for id in ids {
-                    let mut cfg = match state.configs.remove(&id) {
-                        Some(c) => c,
-                        None => continue,
-                    };
-
-                    let mut should_remove = false;
-
-                    ui.collapsing(id.clone(), |ui| {
-                        ui.add(egui::Slider::new(&mut cfg.probability, 0..=100).text("spawn probability"));
-                        ui.add(egui::Slider::new(&mut cfg.neighbor_distance, 0.0..=250.0).text("neighbor_distance"));
-                        ui.add(egui::Slider::new(&mut cfg.desired_separation, 0.0..=250.0).text("desired_separation"));
-                        ui.add(egui::Slider::new(&mut cfg.separation_multiplier, 0.0..=10.0).text("separation"));
-                        ui.add(egui::Slider::new(&mut cfg.alignment_multiplier, 0.0..=10.0).text("alignment"));
-                        ui.add(egui::Slider::new(&mut cfg.cohesion_multiplier, 0.0..=10.0).text("cohesion"));
-                        ui.add(egui::Slider::new(&mut cfg.max_speed, 0.0..=10.0).text("max_speed"));
-                        ui.add(egui::Slider::new(&mut cfg.max_force, 0.0..=10.0).text("max_force"));
-                        ui.add(egui::Slider::new(&mut cfg.bird_size, 0.0..=25.0).text("bird_size"));
-
-                        let mut color = egui::Color32::from_rgb(
-                            (cfg.color_r * 255.0) as u8,
-                            (cfg.color_g * 255.0) as u8,
-                            (cfg.color_b * 255.0) as u8,
-                        );
-                        if ui.color_edit_button_srgba(&mut color).changed() {
-                            cfg.color_r = color.r() as f32 / 255.0;
-                            cfg.color_g = color.g() as f32 / 255.0;
-                            cfg.color_b = color.b() as f32 / 255.0;
-                        }
-
-                        if !matches!(id.as_str(), "primary" | "secondary" | "tertiary" | "highlight")
-                            && ui.button("remove species").clicked()
-                        {
-                            should_remove = true;
-                        }
-                    });
-
-                    if should_remove {
-                        state.flock.remove_bird_config(id.clone());
-                    } else {
-                        state.flock.insert_bird_config(id.clone(), cfg.clone());
-                        state.configs.insert(id, cfg);
-                    }
-                }
-            });
+            if ui.button("generate random species").clicked() {
+                should_add_species = true;
+            }
         });
+
+        egui_ui.separator();
+
+        egui_ui.collapsing("bird settings", |ui| {
+            let mut ids: Vec<_> = state.configs.keys().cloned().collect();
+            ids.sort();
+
+            for id in ids {
+                let mut cfg = match state.configs.remove(&id) {
+                    Some(c) => c,
+                    None => continue,
+                };
+
+                let mut should_remove = false;
+
+                ui.collapsing(id.clone(), |ui| {
+                    ui.add(egui::Slider::new(&mut cfg.probability, 0..=100).text("spawn probability"));
+                    ui.add(egui::Slider::new(&mut cfg.neighbor_distance, 0.0..=250.0).text("neighbor_distance"));
+                    ui.add(egui::Slider::new(&mut cfg.desired_separation, 0.0..=250.0).text("desired_separation"));
+                    ui.add(egui::Slider::new(&mut cfg.separation_multiplier, 0.0..=10.0).text("separation"));
+                    ui.add(egui::Slider::new(&mut cfg.alignment_multiplier, 0.0..=10.0).text("alignment"));
+                    ui.add(egui::Slider::new(&mut cfg.cohesion_multiplier, 0.0..=10.0).text("cohesion"));
+                    ui.add(egui::Slider::new(&mut cfg.max_speed, 0.0..=10.0).text("max_speed"));
+                    ui.add(egui::Slider::new(&mut cfg.max_force, 0.0..=10.0).text("max_force"));
+                    ui.add(egui::Slider::new(&mut cfg.bird_size, 0.1..=5.0).text("bird_size"));
+
+                    let mut color = egui::Color32::from_rgb(
+                        (cfg.color_r * 255.0) as u8,
+                        (cfg.color_g * 255.0) as u8,
+                        (cfg.color_b * 255.0) as u8,
+                    );
+                    if ui.color_edit_button_srgba(&mut color).changed() {
+                        cfg.color_r = color.r() as f32 / 255.0;
+                        cfg.color_g = color.g() as f32 / 255.0;
+                        cfg.color_b = color.b() as f32 / 255.0;
+                    }
+
+                    if !matches!(id.as_str(), "primary" | "secondary" | "tertiary" | "highlight")
+                        && ui.button("remove species").clicked()
+                    {
+                        should_remove = true;
+                    }
+                });
+
+                if should_remove {
+                    state.flock.remove_bird_config(id.clone());
+                } else {
+                    state.flock.insert_bird_config(id.clone(), cfg.clone());
+                    state.configs.insert(id, cfg);
+                }
+            }
+        });
+    });
+
+    state.ui = ui;
+
+    if should_add_species {
+        add_random_species(&mut state);
+    }
 }
 
 fn add_random_species(state: &mut FlockState) {
@@ -618,8 +668,8 @@ fn add_random_species(state: &mut FlockState) {
     let cohesion = 0.001 + state.rng.rand_float() * 1.199;
     let max_force = 0.001 + state.rng.rand_float() * 0.499;
     let max_speed = 0.001 + state.rng.rand_float() * 9.999;
-    let bird_size = 3.0 + state.rng.rand_float() * 12.0;
-    let r = state.rng.rand_range(0..255) as u8;
+    let bird_size = 0.5 + state.rng.rand_float() * 4.5;
+    let r = state.rng.rand_range(100..255) as u8;
     let g = state.rng.rand_range(0..255) as u8;
     let b = state.rng.rand_range(0..255) as u8;
 

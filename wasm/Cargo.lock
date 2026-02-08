@@ -5099,6 +5099,7 @@ name = "ui-theme"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "egui_plot",
  "serde_json",
 ]
 

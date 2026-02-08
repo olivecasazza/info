@@ -127,7 +127,7 @@ pub struct SpotState {
     pub physics: PhysicsWorld,
     pub controller: SpotController,
     pub target_command: UserCommand,
-    pub ui_visible: bool,
+    pub ui: ui_theme::ProjectUi,
 }
 
 impl Default for SpotState {
@@ -147,7 +147,7 @@ impl Default for SpotState {
             physics,
             controller,
             target_command: UserCommand::new(),
-            ui_visible: true,
+            ui: ui_theme::ProjectUi::new("spot"),
         }
     }
 }

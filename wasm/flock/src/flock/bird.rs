@@ -1,7 +1,5 @@
 use kd_tree::{KdPoint, KdTree2};
-use nalgebra::{Vector2};
-use std::f32::consts::PI;
-
+use nalgebra::Vector2;
 use crate::utils::clamp_magnitude;
 
 use super::bird_config::BirdConfig;
@@ -23,6 +21,9 @@ impl KdPoint for Bird {
 }
 
 impl Bird {
+    /// Update bird forces and physics in a single pass.
+    /// Uses ONE KdTree query (not two) and accumulates all three forces
+    /// in a single loop over neighbors — no intermediate Vec allocations.
     pub fn update_bird(
         &mut self,
         birds: &KdTree2<Bird>,
@@ -31,23 +32,81 @@ impl Bird {
         height: &f32,
         time_step: &f32,
     ) {
-        // update flock forces
-        let birds_to_follow = birds.within_radius(self, bird_config.neighbor_distance);
-        let birds_to_avoid = birds.within_radius(self, bird_config.desired_separation);
-        let sep = self.seperate(birds_to_avoid, bird_config) * bird_config.separation_multiplier;
-        let ali =
-            self.align(birds_to_follow.to_owned(), bird_config) * bird_config.alignment_multiplier;
-        let coh = self.cohesion(birds_to_follow.to_owned(), bird_config)
-            * bird_config.cohesion_multiplier;
-        self.acceleration += sep;
-        self.acceleration += ali;
-        self.acceleration += coh;
-        // physics update
+        // Reset acceleration each frame
+        self.acceleration = Vector2::new(0.0, 0.0);
+
+        // Single neighbor query — cap at 30 to prevent O(n²) in dense clusters
+        let all_neighbors = birds.within_radius(self, bird_config.neighbor_distance);
+        let cap = all_neighbors.len().min(30);
+        let neighbors = &all_neighbors[..cap];
+
+        if !neighbors.is_empty() {
+            let mut sep_steer = Vector2::new(0.0, 0.0);
+            let mut ali_sum = Vector2::new(0.0, 0.0);
+            let mut coh_sum = Vector2::new(0.0, 0.0);
+            let mut sep_count = 0usize;
+            let n = neighbors.len();
+
+            for other in neighbors {
+                let d = self.position.metric_distance(&other.position);
+
+                // Alignment: average velocity of all neighbors
+                ali_sum += other.velocity;
+                // Cohesion: negative sum of positions (matches original behavior)
+                coh_sum -= other.position;
+
+                // Separation: only for birds within desired_separation
+                if d > 0.0 && d <= bird_config.desired_separation {
+                    let mut diff = self.position - other.position;
+                    diff = diff.normalize();
+                    // Inverse-square weighting: much stronger push at very close range
+                    diff /= d * d;
+                    sep_steer += diff;
+                    sep_count += 1;
+                }
+            }
+
+            // Finalize separation
+            if sep_count > 0 {
+                sep_steer /= sep_count as f32;
+            }
+            if sep_steer.magnitude() > 0.0 {
+                sep_steer = sep_steer.normalize();
+                sep_steer *= bird_config.max_speed;
+                sep_steer -= self.velocity;
+                clamp_magnitude(&mut sep_steer, bird_config.max_force);
+            }
+
+            // Finalize alignment
+            ali_sum /= n as f32;
+            if ali_sum.magnitude() > 0.0 {
+                ali_sum = ali_sum.normalize();
+                ali_sum *= bird_config.max_speed;
+                ali_sum -= self.velocity;
+                clamp_magnitude(&mut ali_sum, bird_config.max_force);
+            }
+
+            // Finalize cohesion
+            coh_sum /= n as f32;
+            coh_sum -= self.position;
+            if coh_sum.magnitude() > 0.0 {
+                coh_sum.normalize_mut();
+                coh_sum *= bird_config.max_speed;
+                coh_sum -= self.velocity;
+                clamp_magnitude(&mut coh_sum, bird_config.max_force);
+            }
+
+            self.acceleration += sep_steer * bird_config.separation_multiplier;
+            self.acceleration += ali_sum * bird_config.alignment_multiplier;
+            self.acceleration += coh_sum * bird_config.cohesion_multiplier;
+        }
+
+        // Physics update
         clamp_magnitude(&mut self.acceleration, bird_config.max_force);
         self.velocity += 0.5 * (self.acceleration * (time_step * *time_step));
         clamp_magnitude(&mut self.velocity, bird_config.max_speed);
         self.position += *time_step * self.velocity;
-        // wrap birds around borders
+
         self.borders(bird_config, width, height);
     }
 
@@ -69,87 +128,17 @@ impl Bird {
         }
     }
 
-    fn seperate(&mut self, birds_to_avoid: Vec<&Bird>, bird_config: &BirdConfig) -> Vector2<f32> {
-        let mut steer = Vector2::new(0., 0.);
-        let count = birds_to_avoid.len();
-        birds_to_avoid.iter().for_each(|other_bird| {
-            let d = self.position.metric_distance(&other_bird.position);
-            if d > 0f32 {
-                let mut diff = self.position - other_bird.position;
-                diff = diff.normalize();
-                diff /= d;
-                steer += diff;
-            }
-        });
-        if count > 0 {
-            steer /= count as f32;
-        }
-        if steer.magnitude() > 0f32 {
-            steer = steer.normalize();
-            steer *= bird_config.max_speed;
-            steer -= self.velocity;
-            clamp_magnitude(&mut steer, bird_config.max_force);
-            return steer;
-        }
-        Vector2::new(0f32, 0f32)
-    }
+    /// Returns 3 corner vertices as a fixed-size array (no heap allocation).
+    #[inline]
+    pub fn get_vertices(&self, bird_config: &BirdConfig) -> [Vector2<f32>; 3] {
+        let angle = self.velocity.y.atan2(self.velocity.x);
+        let r = bird_config.bird_size / 3.0_f32.sqrt();
+        let spread = 2.4;
 
-    fn align(&mut self, birds_to_follow: Vec<&Bird>, bird_config: &BirdConfig) -> Vector2<f32> {
-        let mut steer = Vector2::new(0f32, 0f32);
-        let count = birds_to_follow.len();
-        birds_to_follow
-            .iter()
-            .for_each(|other_bird| steer += other_bird.velocity);
-        if count > 0 {
-            steer /= count as f32;
-            steer = steer.normalize();
-            steer *= bird_config.max_speed;
-            steer -= self.velocity;
-            clamp_magnitude(&mut steer, bird_config.max_force);
-        }
-        steer
-    }
-
-    fn cohesion(&mut self, birds_to_follow: Vec<&Bird>, bird_config: &BirdConfig) -> Vector2<f32> {
-        let mut target = Vector2::new(0., 0.);
-        let count = birds_to_follow.len();
-        birds_to_follow
-            .iter()
-            .for_each(|other_bird| target -= other_bird.position);
-        if count > 0 {
-            target /= count as f32;
-            target -= self.position;
-            target.normalize_mut();
-            target *= bird_config.max_speed;
-            target -= self.velocity;
-            clamp_magnitude(&mut target, bird_config.max_force);
-        }
-        target
-    }
-
-    pub fn get_vertices(&self, bird_config: &BirdConfig) -> Vec<Vector2<f32>> {
-        let angle = self.velocity.angle(&Vector2::new(0., 1.));
-        let r = bird_config.bird_size / ((3 as f32).sqrt());    
-        let a = Vector2::new(
-            r * angle.cos(), r * angle.sin()
-        );
-        let b = Vector2::new(
-            r * (angle + ((4. * PI)/3.)).cos(),
-            r * (angle + ((4. * PI)/3.)).sin()
-        );
-        let c = Vector2::new(
-            r * (angle + ((2. * PI)/3.)).cos(),
-            r * (angle + ((2. * PI)/3.)).sin()
-        );
-        // pairs of vertices represent line segments
-        // (start vertex and end vertex of line)
-        // e.g. 3 pairs makes a triangle
         [
-            a, b,
-            b, c,
-            c, a
+            Vector2::new(r * 1.5 * angle.cos(), r * 1.5 * angle.sin()) + self.position,
+            Vector2::new(r * (angle + spread).cos(), r * (angle + spread).sin()) + self.position,
+            Vector2::new(r * (angle - spread).cos(), r * (angle - spread).sin()) + self.position,
         ]
-        .map(|e| e + self.position)
-        .to_vec()
     }
 }

@@ -132,50 +132,33 @@ impl Flock {
 }
 
 impl Flock {
-    /// Step the simulation and return line-segment geometry.
+    /// Step the simulation and return triangle corner geometry.
     ///
     /// Returns two vectors:
-    /// - vertices: [x,y,0, x,y,0, ...] (two vertices per segment)
-    /// - colors:   [r,g,b, r,g,b, ...] (per vertex)
+    /// - vertices: [x,y,0, x,y,0, x,y,0, ...] (3 corner vertices per bird)
+    /// - colors:   [r,g,b, r,g,b, r,g,b, ...] (per vertex)
     pub fn step_collect_geometry(&mut self, width: f32, height: f32, time_step: f32) -> (Vec<f32>, Vec<f32>) {
-        // for collecting vertices and colors
-        let mut vertices: Vec<f32> = Vec::new();
-        let mut colors: Vec<f32> = Vec::new();
+        let num_birds = self.birds.len();
+        let mut vertices: Vec<f32> = Vec::with_capacity(num_birds * 9);
+        let mut colors: Vec<f32> = Vec::with_capacity(num_birds * 9);
+        let mut new_flock: Vec<Bird> = Vec::with_capacity(num_birds);
 
-        // we need to store the current state of the flock
-        // (just position for each bird)
-        let new_flock: Vec<Bird> = self
-            .birds
-            .clone()
-            .to_vec()
-            .iter_mut()
-            .filter_map(|bird| {
-                let bird_config: Option<&BirdConfig> = self.configs.get(&bird.config_id);
-                match bird_config {
-                    Some(bird_config) => {
-                        bird.update_bird(
-                            &self.birds,
-                            bird_config,
-                            &width,
-                            &height,
-                            &time_step,
-                        );
-                        for vertex in bird.get_vertices(bird_config) {
-                            vertices.push(vertex.x);
-                            vertices.push(vertex.y);
-                            vertices.push(0.);
-                            colors.push(bird_config.color_r);
-                            colors.push(bird_config.color_g);
-                            colors.push(bird_config.color_b);
-                        }
-                        Some(bird.to_owned())
-                    }
-                    _ => None,
-                }
-            })
-            .collect();
+        for mut bird in self.birds.to_vec() {
+            if let Some(cfg) = self.configs.get(&bird.config_id) {
+                bird.update_bird(&self.birds, cfg, &width, &height, &time_step);
 
-        // rebuild tree
+                let [v0, v1, v2] = bird.get_vertices(cfg);
+                vertices.extend_from_slice(&[v0.x, v0.y, 0., v1.x, v1.y, 0., v2.x, v2.y, 0.]);
+                colors.extend_from_slice(&[
+                    cfg.color_r, cfg.color_g, cfg.color_b,
+                    cfg.color_r, cfg.color_g, cfg.color_b,
+                    cfg.color_r, cfg.color_g, cfg.color_b,
+                ]);
+
+                new_flock.push(bird);
+            }
+        }
+
         self.birds = kd_tree::KdTree2::build_by_key(new_flock, |bird, k| {
             OrderedFloat(bird.position[k])
         });
