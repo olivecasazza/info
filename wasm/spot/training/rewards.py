@@ -102,6 +102,30 @@ class JointAccelReward(RewardComponent):
         return -float(np.sum(joint_accel ** 2))
 
 
+class LinearVelocityZReward(RewardComponent):
+    """Penalize vertical (z) base velocity: -v_z^2. Prevents launching/bouncing."""
+
+    def compute(self, env_state: dict) -> float:
+        vel_z = env_state["base_velocity"][2]  # PyBullet Z-up
+        return -float(vel_z ** 2)
+
+
+class AngularVelocityXYReward(RewardComponent):
+    """Penalize roll/pitch angular velocity: -(omega_x^2 + omega_y^2).
+    Directly prevents spinning and flipping."""
+
+    def compute(self, env_state: dict) -> float:
+        ang_vel = env_state["base_angular_velocity"]
+        return -float(ang_vel[0] ** 2 + ang_vel[1] ** 2)
+
+
+class BodyCollisionReward(RewardComponent):
+    """Penalize non-foot body parts contacting the ground. -1.0 per contact."""
+
+    def compute(self, env_state: dict) -> float:
+        return -float(env_state.get("body_collision_count", 0))
+
+
 class TerrainTraversalReward(RewardComponent):
     """Reward forward progress on rough terrain without falling.
 
@@ -147,16 +171,20 @@ class CompositeReward:
 
     @classmethod
     def locomotion_default(cls) -> CompositeReward:
-        """Standard locomotion reward preset."""
+        """Standard locomotion reward preset (calibrated to legged_gym defaults)."""
         return cls([
             VelocityTrackingReward("velocity", weight=1.0),
             ActionRateReward("action_rate", weight=0.01),
             JointAccelReward("joint_accel", weight=2.5e-7),
-            TorqueReward("torque", weight=1e-5),
-            OrientationReward("orientation", weight=5.0),
+            TorqueReward("torque", weight=0.0001),
+            OrientationReward("orientation", weight=1.0),
             FootAirTimeReward("foot_air", weight=1.0),
-            HeightReward("height", weight=5.0),
+            HeightReward("height", weight=2.0),
             AliveReward("alive", weight=1.0, bonus=0.5),
+            # Anti-flip terms (critical for preventing back-flipping)
+            LinearVelocityZReward("lin_vel_z", weight=2.0),
+            AngularVelocityXYReward("ang_vel_xy", weight=0.05),
+            BodyCollisionReward("body_collision", weight=1.0),
         ])
 
     @classmethod
@@ -221,6 +249,9 @@ class CompositeReward:
             "joint_accel": JointAccelReward,
             "terrain_traversal": TerrainTraversalReward,
             "alive": AliveReward,
+            "lin_vel_z": LinearVelocityZReward,
+            "ang_vel_xy": AngularVelocityXYReward,
+            "body_collision": BodyCollisionReward,
         }
 
         components = []

@@ -27,8 +27,8 @@ impl SpotConfig {
     pub const PHYSICS_SUBSTEPS: usize = 4;   // ~240Hz effective physics
     pub const SOLVER_ITERATIONS: usize = 10; // Match training numSolverIterations=10
 
-    // Action offset limit (radians) - must match training
-    pub const ACTION_OFFSET_LIMIT: f32 = 0.5;
+    // Action offset limit (radians) - must match training (legged_gym default)
+    pub const ACTION_OFFSET_LIMIT: f32 = 0.25;
 
     // Default Joint Angles (Standing Pose) - MUST MATCH TRAINING
     // Training: [0.0, 0.6, -1.2] for all 4 legs (no hip splay)

@@ -112,8 +112,9 @@ class SpotEnv(gym.Env):
     KD = 0.3
     MAX_FORCE = 200.0
 
-    # Action offset limits (radians)
-    ACTION_OFFSET_LIMIT = 0.5
+    # Action offset limits (radians) -- 0.25 matches legged_gym default
+    # 0.5 was too large and caused violent flipping
+    ACTION_OFFSET_LIMIT = 0.25
 
     # Simulation parameters
     SIM_FREQ = 200    # Hz -- physics timestep
@@ -508,9 +509,26 @@ class SpotEnv(gym.Env):
         dt = self.DECIMATION * self.time_step
         joint_accel = (current_joint_vel - self.prev_joint_vel) / max(dt, 1e-6)
 
+        # Count non-foot body collisions (for body_collision reward)
+        body_collision_count = 0
+        ground_id = self.terrain_body if self.terrain_body is not None else self.plane_id
+        if ground_id is not None:
+            # Check all links except feet for ground contact
+            num_joints = p.getNumJoints(self.robot_id)
+            foot_indices_set = set(self.foot_link_indices)
+            for link_idx in range(-1, num_joints):  # -1 = base link
+                if link_idx in foot_indices_set:
+                    continue
+                contacts = p.getContactPoints(
+                    bodyA=self.robot_id, bodyB=ground_id, linkIndexA=link_idx
+                )
+                if len(contacts) > 0:
+                    body_collision_count += 1
+
         # Build env_state dict consumed by reward components
         env_state = {
             "base_velocity": np.array(base_vel, dtype=np.float32),
+            "base_angular_velocity": np.array(base_ang_vel, dtype=np.float32),
             "command": self.command,
             "action": action,
             "previous_action": self.previous_action,
@@ -521,6 +539,7 @@ class SpotEnv(gym.Env):
             "joint_torques": joint_torques,
             "joint_accel": joint_accel,
             "terrain_difficulty": self.terrain_difficulty,
+            "body_collision_count": body_collision_count,
         }
 
         return self.reward_fn.compute(env_state)
