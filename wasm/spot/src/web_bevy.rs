@@ -20,7 +20,10 @@ use crate::physics::PhysicsWorld;
 use crate::controller::SpotController;
 use crate::ml::UserCommand;
 use crate::{camera, render, scene, input, simulation, ui};
-use crate::hand_drawn::{HandDrawnPlugin, update_hand_drawn_settings};
+// HandDrawnPlugin disabled: custom post-processing render graph nodes are
+// incompatible with WebGL2 in Bevy 0.15 (causes silent render failure).
+// TODO: re-enable once Bevy WebGPU backend is viable for WASM.
+// use crate::hand_drawn::{HandDrawnPlugin, update_hand_drawn_settings};
 
 // Re-export commonly used types
 pub use scene::{VisualOffset, VisualOffsets};
@@ -75,7 +78,6 @@ impl WebHandle {
             )
             .add_plugins(EguiPlugin)
             .add_plugins(BevyCorePlugins)
-            .add_plugins(HandDrawnPlugin)
             .add_plugins(SpotPlugin)
             .run();
 
@@ -114,7 +116,6 @@ impl Plugin for SpotPlugin {
             .add_systems(Update, update_camera_follow.after(render::sync_visuals))
             .add_systems(Update, camera::camera_follow.after(update_camera_follow))
             .add_systems(Update, ui::ui_system.after(camera::camera_follow))
-            .add_systems(Update, update_hand_drawn_settings)
             // Fix GLTF materials for WebGL2 compatibility - runs in PostUpdate to catch late-loaded materials
             // Note: Colors are baked into GLB files via scripts/colorize-glb.mjs
             .add_systems(PostUpdate, render::fix_materials);
