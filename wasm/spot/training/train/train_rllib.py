@@ -83,9 +83,9 @@ def train_rllib(args):
     model_conf = config_data["model"]
     total_timesteps = training_conf["total_timesteps"]
 
-    # Workers per trial -- auto-size based on available CPUs
-    # Single node: ~10 workers, full cluster: 12 per trial
-    workers_per_trial = 10  # default, adjusted after ray.init below
+    # Workers per trial -- keep low to avoid OOM on 16-core nodes
+    # Each PyBullet worker uses ~500MB; 4 workers + driver + Ray = ~4GB
+    workers_per_trial = 4
 
     # Network architecture
     net_arch = model_conf["net_arch"]  # [256, 128, 64]
