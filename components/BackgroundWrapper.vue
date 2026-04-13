@@ -1,5 +1,6 @@
 <template>
   <canvas
+    id="bevy-canvas"
     ref="canvasElement"
     class="absolute w-full h-full touch-none"
     @pointerdown="onPointerDown"

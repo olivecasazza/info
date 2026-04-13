@@ -1,0 +1,14 @@
+/Users/casazza/olivecasazza/info/wasm/spot/tools/asset-gen/target/release/deps/serde-14a9ddd53bcdb37c.d: /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/casazza/olivecasazza/info/wasm/spot/tools/asset-gen/target/release/build/serde-1271ce5b4ecddfd5/out/private.rs
+
+/Users/casazza/olivecasazza/info/wasm/spot/tools/asset-gen/target/release/deps/libserde-14a9ddd53bcdb37c.rlib: /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/casazza/olivecasazza/info/wasm/spot/tools/asset-gen/target/release/build/serde-1271ce5b4ecddfd5/out/private.rs
+
+/Users/casazza/olivecasazza/info/wasm/spot/tools/asset-gen/target/release/deps/libserde-14a9ddd53bcdb37c.rmeta: /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/casazza/olivecasazza/info/wasm/spot/tools/asset-gen/target/release/build/serde-1271ce5b4ecddfd5/out/private.rs
+
+/Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/casazza/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/casazza/olivecasazza/info/wasm/spot/tools/asset-gen/target/release/build/serde-1271ce5b4ecddfd5/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/casazza/olivecasazza/info/wasm/spot/tools/asset-gen/target/release/build/serde-1271ce5b4ecddfd5/out
