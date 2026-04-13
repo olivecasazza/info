@@ -89,3 +89,6 @@ wasm/pkg
 
 # Prevent nested wasm build artifacts
 wasm/*/wasm/
+result*
+dist
+wasm/spot/tools/asset-gen/target

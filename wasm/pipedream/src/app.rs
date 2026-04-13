@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use egui::{pos2, vec2, Color32, Pos2, Rect, Shape, Stroke};
+use bevy_egui::egui::{self, pos2, vec2, Color32, Pos2, Rect, Shape, Stroke};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct IVec3 {
