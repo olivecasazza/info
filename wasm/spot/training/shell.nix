@@ -33,5 +33,6 @@ pkgs.mkShell {
   shellHook = ''
     echo "Run 'spot-training-env' to enter the FHS environment with CUDA support"
     echo "Then: python3 -m venv /opt/spot-training && pip install torch ..."
+    echo "For W&B logging: pip install wandb && wandb login"
   '';
 }

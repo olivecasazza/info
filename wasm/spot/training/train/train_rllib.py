@@ -1,4 +1,5 @@
 import os
+import socket
 # Disable Ray Train V2 to avoid deprecation errors and API mismatches
 os.environ["RAY_TRAIN_V2_ENABLED"] = "0"
 
@@ -10,6 +11,7 @@ import ray
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.tune.schedulers import PopulationBasedTraining
+from ray.air.integrations.wandb import WandbLoggerCallback
 from pathlib import Path
 import sys
 
@@ -149,8 +151,30 @@ def train_rllib(args):
     # Observation normalization via RLlib built-in filter
     config.observation_filter = "MeanStdFilter"
 
+    # Weights & Biases integration
+    wandb_entity = os.environ.get("WANDB_ENTITY", "olivecasazza")
+    wandb_project = os.environ.get("WANDB_PROJECT", "spot-locomotion")
+    hostname = socket.gethostname()
+
+    callbacks = []
+    if not args.no_curriculum:
+        callbacks.append(CurriculumCallback(total_timesteps))
+
+    if not args.no_wandb:
+        wandb_callback = WandbLoggerCallback(
+            project=wandb_project,
+            entity=wandb_entity,
+            group="spot_ppo_locomotion_v1",
+            tags=[f"host:{hostname}", "ppo", "spot", "locomotion"],
+            log_config=True,
+            save_checkpoints=False,
+        )
+        callbacks.append(wandb_callback)
+
     # Run Training via Tuner -- 3 parallel trials (grid search over entropy_coeff)
     print(f"Launching: 3 trials (entropy grid search), {workers_per_trial} workers/trial")
+    if not args.no_wandb:
+        print(f"W&B dashboard: https://wandb.ai/{wandb_entity}/{wandb_project}")
 
     tuner = tune.Tuner(
         "PPO",
@@ -170,9 +194,7 @@ def train_rllib(args):
                 checkpoint_score_order="max",
                 checkpoint_frequency=10,
             ),
-            callbacks=[
-                CurriculumCallback(total_timesteps),
-            ] if not args.no_curriculum else [],
+            callbacks=callbacks,
         ),
     )
 
@@ -188,6 +210,8 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, default="train/config.yaml")
     parser.add_argument("--no-curriculum", action="store_true",
                         help="Disable velocity curriculum (start at full speed)")
+    parser.add_argument("--no-wandb", action="store_true",
+                        help="Disable Weights & Biases logging")
     args = parser.parse_args()
 
     train_rllib(args)
