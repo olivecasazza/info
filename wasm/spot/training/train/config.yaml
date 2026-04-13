@@ -1,55 +1,80 @@
-# Training Configuration for Spot Robot PPO
+# Training Configuration for Spot Robot PPO -- Locomotion v1
+# Tuned for stable quadruped walking, not twitching.
 
 training:
-  total_timesteps: 10000000  # 10M steps total (distributed across GPUs)
-  num_envs: 384  # Total envs (128 per GPU × 3 GPUs)
+  total_timesteps: 10000000  # 10M steps total
   seed: 42
 
-  # PPO Hyperparameters
-  learning_rate: 0.0003
-  n_steps: 2048  # Steps per env before update
-  batch_size: 64
-  n_epochs: 10
-  gamma: 0.99  # Discount factor
-  gae_lambda: 0.95  # GAE parameter
-  clip_range: 0.2  # PPO clip range
-  ent_coef: 0.01  # Entropy coefficient
-  vf_coef: 0.5  # Value function coefficient
-  max_grad_norm: 0.5
+  # PPO hyperparameters
+  learning_rate: 0.0003       # initial; decays linearly to 1e-5
+  gamma: 0.99                 # discount factor
+  gae_lambda: 0.95            # GAE lambda
+  clip_range: 0.2             # PPO clip
+  ent_coef: 0.01              # entropy coeff (grid searched in training script)
+  vf_coef: 0.5                # value function loss weight
+  max_grad_norm: 0.5          # gradient clipping
+
+  # Batch sizing
+  train_batch_size: 32768     # total samples per SGD update
+  sgd_minibatch_size: 4096    # minibatch size for SGD
+  num_sgd_iter: 5             # SGD epochs per update
 
   # Checkpointing
-  save_freq: 50000  # Steps between checkpoints
-  eval_freq: 25000  # Steps between evaluations
+  save_freq: 50000
+  eval_freq: 25000
 
 model:
-  # Network architecture: [input(42)] → [128] → [64] → [output(12)]
+  # Deeper network for locomotion
   net_arch:
+    - 256
     - 128
     - 64
 
-# Observation space (42D)
+# Observation space (45D)
 observation:
-  gravity: 3  # Body-frame gravity vector
-  joint_positions: 12
+  body_angular_velocity: 3    # in body frame
+  projected_gravity: 3        # gravity in body frame
+  joint_positions_offset: 12  # relative to default standing pose
   joint_velocities: 12
   previous_action: 12
-  command: 3  # [vel_x, vel_y, yaw_rate]
+  command: 3                  # [vel_x, vel_y, yaw_rate]
 
 # Action space (12D)
 action:
-  joint_targets: 12  # Target joint angles
+  joint_offsets: 12           # offsets from default pose, +/- 0.5 rad
 
 # Reward shaping
 rewards:
-  alive_bonus: 1.0
-  velocity_tracking: 2.0
-  orientation_penalty: 0.5
-  energy_penalty: 0.01
-  height_bonus: 0.5
+  velocity_tracking: 1.0      # Gaussian: exp(-4 * (v - v_cmd)^2)
+  action_rate_penalty: 0.01   # ||a_t - a_{t-1}||^2
+  joint_accel_penalty: 2.5e-7 # ||q_ddot||^2
+  torque_penalty: 1.0e-5      # ||tau||^2
+  orientation_penalty: 5.0    # pitch^2 + roll^2
+  foot_air_time: 1.0          # +1 per foot with 0.2-0.5s swing
+  alive_bonus: 0.5            # per step
+  height_penalty: 5.0         # deviation from 0.3m nominal
+
+# PD control
+pd_control:
+  kp: 1.5
+  kd: 0.3
+  max_force: 200.0            # Newtons
 
 # Environment settings
 environment:
-  max_episode_steps: 1000
-  time_step: 0.00833  # 1/120 seconds (matches Rapier physics)
-  fall_height_threshold: 0.1  # meters
-  fall_angle_threshold: 1.047  # radians (~60 degrees)
+  max_episode_steps: 2000     # 10s at 50Hz policy rate
+  sim_freq: 200               # physics Hz
+  policy_freq: 50             # policy Hz (decimation = 4)
+  action_offset_limit: 0.5    # radians
+  nominal_height: 0.3         # meters
+  # Early termination thresholds
+  fall_height_threshold: 0.15
+  fall_angle_threshold: 0.8   # radians (~46 degrees)
+
+# Curriculum
+curriculum:
+  enabled: true
+  # Ramp velocity command scale from 0 (standing) to 1.0 over first 30% of training
+  ramp_fraction: 0.3
+  start_cmd_scale: 0.0
+  end_cmd_scale: 1.0
