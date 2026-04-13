@@ -52,7 +52,7 @@ pub struct SceneRenderer {
     pub visual_offsets: HashMap<String, Mat4>,
 
     // Ground plane for visualization
-    pub ground_plane: Option<Gm<Mesh, PhysicalMaterial>>,
+    pub ground_plane: Option<Gm<Mesh, ColorMaterial>>,
 }
 
 // Unsafe impl to allow usage in egui callback (WASM is single threaded)
@@ -119,16 +119,20 @@ impl SceneRenderer {
                     normals.push(vec3(0.0, 1.0, 0.0));
                 }
 
-                // Checkerboard pattern: alternate dark/light
-                let is_dark = (i + j) % 2 == 0;
-                let color = if is_dark {
-                    Srgba::new(40, 40, 45, 255)
-                } else {
-                    Srgba::new(55, 55, 60, 255)
-                };
-                for _ in 0..4 {
-                    colors.push(color);
-                }
+                // Black tiles with dim white edges for grid lines
+                let base = Srgba::new(15, 15, 18, 255); // Near-black base
+                let edge = Srgba::new(60, 60, 65, 255); // Dim white grid line
+
+                // Edge detection: vertices on grid lines get lighter color
+                let edge_width = 0.02;
+                let is_x0_edge = (i == 0) || true; // All tile edges are grid lines
+                let is_z0_edge = (j == 0) || true;
+
+                // Corner vertices: edges get grid line color
+                colors.push(edge); // x0,z0 corner (always on grid line)
+                colors.push(if is_x0_edge { edge } else { base }); // x1,z0
+                colors.push(base);  // x1,z1 (interior)
+                colors.push(if is_z0_edge { edge } else { base }); // x0,z1
 
                 // Two triangles per tile
                 indices.push(base_idx);
@@ -148,12 +152,13 @@ impl SceneRenderer {
             ..Default::default()
         };
 
-        let material = PhysicalMaterial::new_opaque(
+        // Use ColorMaterial which properly reads vertex colors on WebGL2.
+        // PhysicalMaterial ignores vertex colors on some WebGL2 backends,
+        // causing the terrain to render as solid white.
+        let material = ColorMaterial::new_opaque(
             &self.context,
             &CpuMaterial {
-                albedo: Srgba::WHITE, // Colors come from vertex colors
-                metallic: 0.0,
-                roughness: 0.95,
+                albedo: Srgba::WHITE, // Multiplied by vertex colors
                 ..Default::default()
             },
         );
