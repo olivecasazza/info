@@ -154,6 +154,7 @@ impl SpotController {
         base_rotation: &na::UnitQuaternion<f32>,
         base_angvel: &na::Vector3<f32>,
         joint_set: &MultibodyJointSet,
+        rigid_body_set: &RigidBodySet,
     ) -> Observation {
         // 1. Body angular velocity in body frame
         // Rapier Y-up -> PyBullet Z-up coordinate mapping
@@ -173,7 +174,13 @@ impl SpotController {
             body_gravity_rapier.y,
         ];
 
-        // 3. Joint positions relative to default standing pose (offsets)
+        // 3. Joint positions and velocities from ACTUAL physics state
+        // CRITICAL: Must read real joint angles, not motor targets.
+        // Training reads actual positions from PyBullet joint_states[i][0].
+        //
+        // Use MultibodyLink::local_to_parent() which gives the actual joint
+        // transform (including the revolute rotation). For AngX joints, extract
+        // the X-axis rotation angle from the isometry's rotation component.
         let mut joint_positions = [0.0; 12];
         let mut joint_velocities = [0.0; 12];
 
@@ -181,13 +188,28 @@ impl SpotController {
             if let Some(handle) = self.joint_handles.get(name) {
                 if let Some((multibody, link_id)) = joint_set.get(*handle) {
                     if let Some(link) = multibody.link(link_id) {
-                        let motor = &link.joint.data.motor(JointAxis::AngX);
-                        if let Some(motor) = motor {
-                            // Store position as offset from default (matches training)
-                            joint_positions[i] = motor.target_pos - SpotConfig::DEFAULT_JOINT_ANGLES[i];
-                        }
-                        if let Some(state) = self.joint_states.get(name) {
-                            joint_velocities[i] = state.velocity;
+                        // local_to_parent includes the joint frame offsets AND the
+                        // actual joint rotation. For a revolute AngX joint, the
+                        // rotation component encodes the joint angle.
+                        let l2p = link.local_to_parent();
+                        let rot = l2p.rotation;
+                        // Extract angle around X axis from the rotation quaternion
+                        // For small rotations this is approximately 2*qx, but we
+                        // use the full atan2 decomposition for accuracy.
+                        let rot_mat = rot.to_rotation_matrix();
+                        let m = rot_mat.matrix();
+                        let actual_angle = m[(2, 1)].atan2(m[(1, 1)]);
+
+                        // Store as offset from default (matches training)
+                        joint_positions[i] = actual_angle - SpotConfig::DEFAULT_JOINT_ANGLES[i];
+
+                        // Actual velocity: get from the link's rigid body angular velocity
+                        let rb_handle = link.rigid_body_handle();
+                        if let Some(rb) = rigid_body_set.get(rb_handle) {
+                            let angvel = rb.angvel();
+                            // Project world angular velocity onto joint's local X axis
+                            let local_x = rot * na::Vector3::x();
+                            joint_velocities[i] = angvel.dot(&local_x);
                         }
                     }
                 }
@@ -227,7 +249,7 @@ impl SpotController {
         };
 
         // 1. Collect observation (matches training env 45D layout)
-        let obs = self.collect_observation(&base_rotation, &base_angvel, joint_set);
+        let obs = self.collect_observation(&base_rotation, &base_angvel, joint_set, rigid_body_set);
         self.last_observation = obs.to_vec();
 
         // 2. Run policy OR test mode
