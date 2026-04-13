@@ -1,6 +1,41 @@
 """
 Spot Robot Gymnasium Environment
 Locomotion-focused reward shaping with action-offset control
+
+Physics Gap Notes -- PyBullet (training) vs Rapier3D (WASM inference)
+---------------------------------------------------------------------
+The training environment uses PyBullet while the deployed WASM runtime
+uses Rapier3D (see wasm/spot/src/physics/mod.rs). Known divergences:
+
+1. Constraint solver: PyBullet uses a sequential-impulse (Gauss-Seidel)
+   solver with configurable iterations (default 10 here). Rapier3D uses a
+   PGS (Projected Gauss-Seidel) solver with 4 velocity iterations by
+   default. Joint limit enforcement and friction cone approximations
+   differ between the two.
+
+2. Contact model: PyBullet resolves contacts via speculative contact
+   points with restitution and lateral/rolling friction. Rapier3D uses
+   a different contact manifold generation pipeline and friction model.
+   Expect small differences in foot-ground interaction forces.
+
+3. Integration method: PyBullet uses semi-implicit Euler at 200Hz here.
+   Rapier3D uses symplectic Euler at 60Hz (no substeps). The 3x timestep
+   difference is the largest single source of sim-to-sim gap.
+
+4. Gravity axis: PyBullet is Z-up (gravity = [0, 0, -9.81]). Rapier3D
+   is Y-up (gravity = [0, -9.81, 0]). The WASM controller applies a
+   coordinate mapping (swap Y<->Z, negate) so the policy sees a
+   consistent observation frame regardless of backend.
+
+5. Terrain: PyBullet uses a heightfield collision shape regenerated each
+   episode. Rapier3D loads a pre-baked trimesh from terrain.json. The
+   training heightfield is randomised for domain randomisation; the WASM
+   terrain is deterministic Perlin noise.
+
+Plan: Eventually replace PyBullet with Rapier3D via PyO3 bindings to
+eliminate the sim-to-sim gap entirely. Until then, domain randomisation
+(terrain, friction, mass) during training bridges the transfer gap.
+---------------------------------------------------------------------
 """
 
 import numpy as np
@@ -9,6 +44,8 @@ import pybullet_data
 import gymnasium as gym
 from gymnasium import spaces
 from typing import Optional, Tuple
+
+from rewards import CompositeReward
 
 
 class RunningMeanStd:
@@ -94,6 +131,14 @@ class SpotEnv(gym.Env):
         config = config or {}
         self.cmd_vel_scale = config.get("cmd_vel_scale", 1.0)
 
+        # Terrain difficulty (0.0 = flat, 1.0 = max roughness)
+        self.terrain_difficulty = config.get("terrain_difficulty", 0.0)
+        self.terrain_body = None
+
+        # Composable reward function
+        reward_config = config.get("reward_preset", "locomotion")
+        self.reward_fn = CompositeReward.from_config(reward_config)
+
         # === Observation Space (45D) ===
         # [body_ang_vel(3), gravity(3), joint_pos_offset(12), joint_vel(12),
         #  prev_action(12), command(3)]
@@ -156,11 +201,59 @@ class SpotEnv(gym.Env):
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.time_step)
 
-        # Load ground plane
+        # Load flat ground plane (replaced per-episode when terrain_difficulty > 0)
         self.plane_id = p.loadURDF("plane.urdf")
 
         # Increase solver iterations for stability
         p.setPhysicsEngineParameter(numSolverIterations=10, numSubSteps=1)
+
+    def _create_terrain(self):
+        """Generate random terrain heightfield for this episode.
+
+        When terrain_difficulty is 0, the flat plane.urdf is used instead.
+        Otherwise, the flat plane is removed and replaced with a procedural
+        heightfield whose amplitude scales with terrain_difficulty.
+        """
+        from scipy.ndimage import uniform_filter
+
+        # Remove existing terrain body if present
+        if self.terrain_body is not None:
+            p.removeBody(self.terrain_body)
+            self.terrain_body = None
+
+        # Remove flat plane when using heightfield terrain
+        if self.plane_id is not None:
+            p.removeBody(self.plane_id)
+            self.plane_id = None
+
+        rows = cols = 64
+        # height_scale ramps from 0 to 0.05m with difficulty
+        height_scale = 0.05 * self.terrain_difficulty
+
+        terrain_data = self.np_random.uniform(
+            0, height_scale, (rows, cols)
+        ).astype(np.float32)
+
+        # Smooth with simple averaging to avoid spikes
+        terrain_data = uniform_filter(terrain_data, size=3)
+
+        # Flatten center area for spawn safety
+        cx, cz = rows // 2, cols // 2
+        r = 5
+        terrain_data[cx - r:cx + r, cz - r:cz + r] *= 0.1
+
+        terrain_shape = p.createCollisionShape(
+            p.GEOM_HEIGHTFIELD,
+            meshScale=[0.1, 0.1, 1.0],  # 6.4m x 6.4m
+            heightfieldData=terrain_data.flatten(),
+            numHeightfieldRows=rows,
+            numHeightfieldColumns=cols,
+        )
+        self.terrain_body = p.createMultiBody(0, terrain_shape)
+        p.resetBasePositionAndOrientation(
+            self.terrain_body, [0, 0, 0], [0, 0, 0, 1]
+        )
+        p.changeDynamics(self.terrain_body, -1, lateralFriction=1.0)
 
     def _load_robot(self):
         """Load Spot robot URDF."""
@@ -210,6 +303,18 @@ class SpotEnv(gym.Env):
         # Remove old robot
         if self.robot_id is not None:
             p.removeBody(self.robot_id)
+
+        # Regenerate terrain each episode
+        if self.terrain_difficulty > 0.0:
+            self._create_terrain()
+        else:
+            # Ensure flat plane exists when difficulty is 0
+            if self.plane_id is None:
+                self.plane_id = p.loadURDF("plane.urdf")
+            # Clean up any leftover heightfield
+            if self.terrain_body is not None:
+                p.removeBody(self.terrain_body)
+                self.terrain_body = None
 
         # Load fresh robot
         self._load_robot()
@@ -363,75 +468,37 @@ class SpotEnv(gym.Env):
                 self.foot_air_time[i] += dt
 
     def _calculate_reward(self, action: np.ndarray) -> Tuple[float, dict]:
-        """Compute locomotion reward.
+        """Compute locomotion reward via composable reward system.
 
         Returns (total_reward, component_dict).
         """
         base_pos, base_orn = p.getBasePositionAndOrientation(self.robot_id)
         base_vel, base_ang_vel = p.getBaseVelocity(self.robot_id)
         roll, pitch, yaw = p.getEulerFromQuaternion(base_orn)
-        height = base_pos[2]
-        vel_x = base_vel[0]
 
-        # --- Forward velocity tracking (Gaussian kernel) ---
-        v_cmd = self.command[0]
-        r_velocity = 1.0 * np.exp(-4.0 * (vel_x - v_cmd) ** 2)
-
-        # --- Action rate penalty (kills twitching) ---
-        action_diff = action - self.previous_action
-        r_action_rate = -0.01 * np.sum(action_diff ** 2)
-
-        # --- Joint acceleration penalty ---
+        # Joint state for torque and acceleration terms
         joint_states = p.getJointStates(self.robot_id, self.joint_indices[:12])
         current_joint_vel = np.array([s[1] for s in joint_states], dtype=np.float32)
+        joint_torques = np.array([s[3] for s in joint_states], dtype=np.float32)
         dt = self.DECIMATION * self.time_step
         joint_accel = (current_joint_vel - self.prev_joint_vel) / max(dt, 1e-6)
-        r_joint_accel = -2.5e-7 * np.sum(joint_accel ** 2)
 
-        # --- Torque penalty ---
-        joint_torques = np.array([s[3] for s in joint_states], dtype=np.float32)
-        r_torque = -1e-5 * np.sum(joint_torques ** 2)
-
-        # --- Body orientation penalty ---
-        r_orientation = -5.0 * (pitch ** 2 + roll ** 2)
-
-        # --- Foot air-time reward ---
-        # Reward feet that have swing phases between 0.2s and 0.5s
-        r_foot_air = 0.0
-        for t in self.foot_air_time:
-            if 0.2 <= t <= 0.5:
-                r_foot_air += 1.0
-
-        # --- Alive bonus ---
-        r_alive = 0.5
-
-        # --- Base height penalty ---
-        r_height = -5.0 * (height - self.NOMINAL_HEIGHT) ** 2
-
-        # Total
-        total = (
-            r_velocity
-            + r_action_rate
-            + r_joint_accel
-            + r_torque
-            + r_orientation
-            + r_foot_air
-            + r_alive
-            + r_height
-        )
-
-        info = {
-            "r_velocity": r_velocity,
-            "r_action_rate": r_action_rate,
-            "r_joint_accel": r_joint_accel,
-            "r_torque": r_torque,
-            "r_orientation": r_orientation,
-            "r_foot_air": r_foot_air,
-            "r_alive": r_alive,
-            "r_height": r_height,
+        # Build env_state dict consumed by reward components
+        env_state = {
+            "base_velocity": np.array(base_vel, dtype=np.float32),
+            "command": self.command,
+            "action": action,
+            "previous_action": self.previous_action,
+            "roll": roll,
+            "pitch": pitch,
+            "height": base_pos[2],
+            "foot_air_time": self.foot_air_time,
+            "joint_torques": joint_torques,
+            "joint_accel": joint_accel,
+            "terrain_difficulty": self.terrain_difficulty,
         }
 
-        return float(total), info
+        return self.reward_fn.compute(env_state)
 
     def _is_terminated(self) -> bool:
         """Check early termination conditions."""
@@ -453,9 +520,13 @@ class SpotEnv(gym.Env):
             return True
 
         # Body contact with ground (check base link)
-        contacts = p.getContactPoints(bodyA=self.robot_id, bodyB=self.plane_id, linkIndexA=-1)
-        if len(contacts) > 0:
-            return True
+        ground_id = self.terrain_body if self.terrain_body is not None else self.plane_id
+        if ground_id is not None:
+            contacts = p.getContactPoints(
+                bodyA=self.robot_id, bodyB=ground_id, linkIndexA=-1
+            )
+            if len(contacts) > 0:
+                return True
 
         return False
 

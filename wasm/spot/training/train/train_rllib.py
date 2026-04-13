@@ -19,22 +19,44 @@ from envs.spot_env import SpotEnv
 
 
 class CurriculumCallback:
-    """Ramp cmd_vel_scale from 0 to 1.0 over the first 30% of training."""
+    """Ramp cmd_vel_scale and terrain_difficulty from 0 to 1.0 over training.
+
+    Velocity ramps over the first 30%. Terrain difficulty ramps from 20% to
+    60% of training so the agent learns flat-ground walking before rough
+    terrain is introduced.
+    """
 
     def __init__(self, total_timesteps: int):
         self.total_timesteps = total_timesteps
-        self.ramp_end = int(0.3 * total_timesteps)
+        self.vel_ramp_end = int(0.3 * total_timesteps)
+        self.terrain_ramp_start = int(0.2 * total_timesteps)
+        self.terrain_ramp_end = int(0.6 * total_timesteps)
 
     def on_train_result(self, *, algorithm, result, **kwargs):
         ts = result.get("timesteps_total", 0)
-        if ts < self.ramp_end:
-            scale = ts / self.ramp_end
+
+        # Velocity curriculum
+        if ts < self.vel_ramp_end:
+            vel_scale = ts / self.vel_ramp_end
         else:
-            scale = 1.0
+            vel_scale = 1.0
+
+        # Terrain curriculum (starts later, ramps to 1.0)
+        if ts < self.terrain_ramp_start:
+            terrain_diff = 0.0
+        elif ts < self.terrain_ramp_end:
+            terrain_diff = (ts - self.terrain_ramp_start) / (
+                self.terrain_ramp_end - self.terrain_ramp_start
+            )
+        else:
+            terrain_diff = 1.0
+
         # Update env config for new episodes
-        algorithm.env_runner_group.foreach_env(
-            lambda env: setattr(env, "cmd_vel_scale", scale)
-        )
+        def _update(env):
+            env.cmd_vel_scale = vel_scale
+            env.terrain_difficulty = terrain_diff
+
+        algorithm.env_runner_group.foreach_env(_update)
 
 
 def linear_schedule(initial: float, final: float, total_steps: int):
@@ -83,7 +105,11 @@ def train_rllib(args):
         PPOConfig()
         .environment(
             "spot_env",
-            env_config={"cmd_vel_scale": 0.0},  # curriculum starts at standing
+            env_config={
+                "cmd_vel_scale": 0.0,          # curriculum starts at standing
+                "terrain_difficulty": 0.0,      # flat terrain initially
+                "reward_preset": "locomotion",  # composable reward preset
+            },
             disable_env_checking=True,
         )
         .framework("torch")
