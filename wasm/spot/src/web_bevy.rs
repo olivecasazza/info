@@ -19,7 +19,7 @@ use bevy_core::BevyCorePlugins;
 use crate::physics::PhysicsWorld;
 use crate::controller::SpotController;
 use crate::ml::UserCommand;
-use crate::{camera, render, scene, input, simulation, ui};
+use crate::{camera, render, scene, input, simulation, ui, god_hand};
 // HandDrawnPlugin disabled: custom post-processing render graph nodes are
 // incompatible with WebGL2 in Bevy 0.15 (causes silent render failure).
 // TODO: re-enable once Bevy WebGPU backend is viable for WASM.
@@ -107,13 +107,16 @@ impl Plugin for SpotPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ClearColor(Color::BLACK))
             .init_resource::<SpotState>()
+            .insert_resource(god_hand::GodHand::new())
             .add_systems(Startup, scene::setup_scene)
             .add_systems(Update, render::draw_ground_grid)
             .add_systems(Update, camera::camera_input)
             .add_systems(Update, input::keyboard_input.after(camera::camera_input))
-            .add_systems(Update, simulation::physics_step.after(input::keyboard_input))
+            .add_systems(Update, god_hand::god_hand_input.after(input::keyboard_input))
+            .add_systems(Update, simulation::physics_step.after(god_hand::god_hand_input))
             .add_systems(Update, render::sync_visuals.after(simulation::physics_step))
-            .add_systems(Update, update_camera_follow.after(render::sync_visuals))
+            .add_systems(Update, god_hand::god_hand_gizmos.after(render::sync_visuals))
+            .add_systems(Update, update_camera_follow.after(god_hand::god_hand_gizmos))
             .add_systems(Update, camera::camera_follow.after(update_camera_follow))
             .add_systems(Update, ui::ui_system.after(camera::camera_follow))
             // Fix GLTF materials for WebGL2 compatibility - runs in PostUpdate to catch late-loaded materials
