@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spot Locomotion Training Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --orange: #d29922;
+      --red: #f85149;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 24px;
+    }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    .subtitle { color: var(--text-muted); font-size: 13px; margin-bottom: 24px; }
+    .subtitle a { color: var(--accent); text-decoration: none; }
+    .subtitle a:hover { text-decoration: underline; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .grid.full { grid-template-columns: 1fr; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .card h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .chart-container {
+      width: 100%;
+      height: 300px;
+      position: relative;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
+    }
+    .config-item {
+      background: var(--bg);
+      border-radius: 4px;
+      padding: 8px 12px;
+    }
+    .config-item .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .config-item .value {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .run-list { list-style: none; }
+    .run-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .run-item:last-child { border-bottom: none; }
+    .run-name { font-weight: 500; }
+    .run-state {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+    .run-state.running { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+    .run-state.finished { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
+    .run-state.crashed { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    #loading {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-muted);
+    }
+    #error {
+      display: none;
+      background: rgba(248, 81, 73, 0.1);
+      border: 1px solid var(--red);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+      color: var(--red);
+    }
+
+    .setup-notice {
+      background: rgba(210, 153, 34, 0.1);
+      border: 1px solid var(--orange);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+      color: var(--orange);
+      font-size: 13px;
+    }
+    .setup-notice code {
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Spot Locomotion Training</h1>
+  <div class="subtitle">
+    PPO quadruped locomotion |
+    <a id="wandb-link" href="#" target="_blank">Open in W&B</a> |
+    <span id="last-update">--</span>
+  </div>
+
+  <div id="error"></div>
+
+  <div class="setup-notice" id="setup-notice">
+    Configure your W&B project below. Edit the <code>WANDB_CONFIG</code> object at the bottom of this file,
+    or pass <code>?entity=NAME&amp;project=NAME</code> as URL parameters.
+  </div>
+
+  <div id="loading">Loading run data from W&B...</div>
+  <div id="content" style="display:none;">
+    <div class="grid">
+      <div class="card">
+        <h2>Episode Reward (mean)</h2>
+        <div class="chart-container">
+          <canvas id="reward-chart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Reward Components</h2>
+        <div class="chart-container">
+          <canvas id="components-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Training Config</h2>
+        <div class="config-grid" id="config-grid"></div>
+      </div>
+      <div class="card">
+        <h2>Active Runs</h2>
+        <ul class="run-list" id="run-list"></ul>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span id="status-text">Idle</span>
+      <span>Auto-refresh: 60s</span>
+    </div>
+  </div>
+
+  <!-- Chart.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+  <script>
+    // === CONFIGURATION ===
+    // Override via URL params: ?entity=olivecasazza&project=spot-locomotion&api_key=YOUR_KEY
+    const WANDB_CONFIG = {
+      entity: "olivecasazza",
+      project: "spot-locomotion",
+      // Public API key -- set this or pass ?api_key= in URL
+      // Generate at: https://wandb.ai/authorize
+      apiKey: "",
+    };
+
+    // Parse URL params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("entity")) WANDB_CONFIG.entity = params.get("entity");
+    if (params.get("project")) WANDB_CONFIG.project = params.get("project");
+    if (params.get("api_key")) WANDB_CONFIG.apiKey = params.get("api_key");
+
+    const WANDB_URL = `https://wandb.ai/${WANDB_CONFIG.entity}/${WANDB_CONFIG.project}`;
+    document.getElementById("wandb-link").href = WANDB_URL;
+
+    // Chart instances
+    let rewardChart = null;
+    let componentsChart = null;
+
+    const CHART_COLORS = [
+      "#58a6ff", "#3fb950", "#d29922", "#f85149",
+      "#bc8cff", "#39d2c0", "#f778ba", "#79c0ff",
+    ];
+
+    const REWARD_COMPONENT_KEYS = [
+      "r_velocity", "r_action_rate", "r_joint_accel", "r_torque",
+      "r_orientation", "r_foot_air", "r_height", "r_alive",
+    ];
+
+    const CONFIG_DISPLAY_KEYS = [
+      { key: "entropy_coeff", label: "Entropy Coeff" },
+      { key: "lr", label: "Learning Rate" },
+      { key: "train_batch_size", label: "Batch Size" },
+      { key: "minibatch_size", label: "Minibatch" },
+      { key: "gamma", label: "Gamma" },
+      { key: "clip_param", label: "Clip Range" },
+      { key: "num_epochs", label: "SGD Epochs" },
+      { key: "num_env_runners", label: "Workers" },
+    ];
+
+    function showError(msg) {
+      const el = document.getElementById("error");
+      el.textContent = msg;
+      el.style.display = "block";
+    }
+
+    function hideSetupNotice() {
+      document.getElementById("setup-notice").style.display = "none";
+    }
+
+    // W&B GraphQL API via fetch
+    async function wandbQuery(query, variables = {}) {
+      const headers = { "Content-Type": "application/json" };
+      if (WANDB_CONFIG.apiKey) {
+        headers["Authorization"] = `Bearer ${WANDB_CONFIG.apiKey}`;
+      }
+
+      const resp = await fetch("https://api.wandb.ai/graphql", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query, variables }),
+      });
+
+      if (!resp.ok) {
+        throw new Error(`W&B API returned ${resp.status}: ${resp.statusText}`);
+      }
+
+      const data = await resp.json();
+      if (data.errors) {
+        throw new Error(data.errors.map(e => e.message).join("; "));
+      }
+      return data.data;
+    }
+
+    async function fetchRuns() {
+      const query = `
+        query Runs($project: String!, $entity: String!) {
+          project(name: $project, entityName: $entity) {
+            runs(first: 20, order: "-created_at") {
+              edges {
+                node {
+                  id
+                  name
+                  state
+                  tags
+                  config
+                  summaryMetrics
+                  createdAt
+                  heartbeatAt
+                  historyKeys
+                }
+              }
+            }
+          }
+        }
+      `;
+      const data = await wandbQuery(query, {
+        project: WANDB_CONFIG.project,
+        entity: WANDB_CONFIG.entity,
+      });
+      if (!data.project) throw new Error("Project not found. Check entity/project config.");
+      return data.project.runs.edges.map(e => e.node);
+    }
+
+    async function fetchRunHistory(runId, keys) {
+      const query = `
+        query RunHistory($project: String!, $entity: String!, $runName: String!) {
+          project(name: $project, entityName: $entity) {
+            run(name: $runName) {
+              history(samples: 500)
+            }
+          }
+        }
+      `;
+      const data = await wandbQuery(query, {
+        project: WANDB_CONFIG.project,
+        entity: WANDB_CONFIG.entity,
+        runName: runId,
+      });
+      if (!data.project || !data.project.run) return [];
+      return data.project.run.history.map(row =>
+        typeof row === "string" ? JSON.parse(row) : row
+      );
+    }
+
+    function initRewardChart() {
+      const ctx = document.getElementById("reward-chart").getContext("2d");
+      rewardChart = new Chart(ctx, {
+        type: "line",
+        data: { datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "nearest", intersect: false },
+          scales: {
+            x: {
+              type: "linear",
+              title: { display: true, text: "Timesteps", color: "#8b949e" },
+              ticks: { color: "#8b949e" },
+              grid: { color: "#21262d" },
+            },
+            y: {
+              title: { display: true, text: "Reward", color: "#8b949e" },
+              ticks: { color: "#8b949e" },
+              grid: { color: "#21262d" },
+            },
+          },
+          plugins: {
+            legend: { labels: { color: "#c9d1d9", usePointStyle: true, pointStyle: "line" } },
+          },
+        },
+      });
+    }
+
+    function initComponentsChart() {
+      const ctx = document.getElementById("components-chart").getContext("2d");
+      componentsChart = new Chart(ctx, {
+        type: "bar",
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: "y",
+          scales: {
+            x: {
+              ticks: { color: "#8b949e" },
+              grid: { color: "#21262d" },
+            },
+            y: {
+              ticks: { color: "#8b949e", font: { size: 11 } },
+              grid: { color: "#21262d" },
+            },
+          },
+          plugins: {
+            legend: { display: false },
+          },
+        },
+      });
+    }
+
+    function updateRewardChart(runs, histories) {
+      const datasets = [];
+      runs.forEach((run, i) => {
+        const history = histories[i] || [];
+        const points = history
+          .filter(row => row["timesteps_total"] != null && row["env_runners/episode_reward_mean"] != null)
+          .map(row => ({
+            x: row["timesteps_total"],
+            y: row["env_runners/episode_reward_mean"],
+          }));
+        // Fallback: try episode_reward_mean without prefix
+        if (points.length === 0) {
+          history
+            .filter(row => row["timesteps_total"] != null && row["episode_reward_mean"] != null)
+            .forEach(row => points.push({
+              x: row["timesteps_total"],
+              y: row["episode_reward_mean"],
+            }));
+        }
+        if (points.length > 0) {
+          datasets.push({
+            label: run.name || run.id,
+            data: points,
+            borderColor: CHART_COLORS[i % CHART_COLORS.length],
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.3,
+          });
+        }
+      });
+      rewardChart.data.datasets = datasets;
+      rewardChart.update();
+    }
+
+    function updateComponentsChart(runs) {
+      // Use the latest run's summary for component breakdown
+      const latestRun = runs.find(r => r.state === "running") || runs[0];
+      if (!latestRun) return;
+
+      const summary = latestRun.summaryMetrics
+        ? (typeof latestRun.summaryMetrics === "string" ? JSON.parse(latestRun.summaryMetrics) : latestRun.summaryMetrics)
+        : {};
+
+      const labels = [];
+      const values = [];
+      const colors = [];
+
+      REWARD_COMPONENT_KEYS.forEach((key, i) => {
+        // Try with custom_metrics/ prefix and without
+        const val = summary[`custom_metrics/${key}_mean`]
+          || summary[`env_runners/custom_metrics/${key}_mean`]
+          || summary[key]
+          || null;
+        if (val !== null) {
+          labels.push(key.replace("r_", ""));
+          values.push(val);
+          colors.push(CHART_COLORS[i % CHART_COLORS.length]);
+        }
+      });
+
+      componentsChart.data.labels = labels;
+      componentsChart.data.datasets = [{
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 0,
+      }];
+      componentsChart.update();
+    }
+
+    function updateConfigGrid(runs) {
+      const grid = document.getElementById("config-grid");
+      grid.innerHTML = "";
+
+      const run = runs.find(r => r.state === "running") || runs[0];
+      if (!run) return;
+
+      const config = run.config
+        ? (typeof run.config === "string" ? JSON.parse(run.config) : run.config)
+        : {};
+
+      CONFIG_DISPLAY_KEYS.forEach(({ key, label }) => {
+        let val = config[key];
+        if (val === undefined) return;
+
+        const item = document.createElement("div");
+        item.className = "config-item";
+        item.innerHTML = `<div class="label">${label}</div><div class="value">${val}</div>`;
+        grid.appendChild(item);
+      });
+    }
+
+    function updateRunList(runs) {
+      const list = document.getElementById("run-list");
+      list.innerHTML = "";
+
+      runs.slice(0, 10).forEach(run => {
+        const li = document.createElement("li");
+        li.className = "run-item";
+
+        const tags = run.tags || [];
+        const host = tags.find(t => t.startsWith("host:"));
+        const hostStr = host ? ` (${host.replace("host:", "")})` : "";
+
+        const stateClass = run.state === "running" ? "running"
+          : run.state === "finished" ? "finished"
+          : "crashed";
+
+        li.innerHTML = `
+          <span class="run-name">${run.name || run.id}${hostStr}</span>
+          <span class="run-state ${stateClass}">${run.state}</span>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    async function refresh() {
+      const statusEl = document.getElementById("status-text");
+      statusEl.textContent = "Fetching runs...";
+
+      try {
+        const runs = await fetchRuns();
+        hideSetupNotice();
+
+        // Fetch history for up to 5 most recent runs
+        const histories = await Promise.all(
+          runs.slice(0, 5).map(run => fetchRunHistory(run.name || run.id, []).catch(() => []))
+        );
+
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("content").style.display = "block";
+
+        updateRewardChart(runs, histories);
+        updateComponentsChart(runs);
+        updateConfigGrid(runs);
+        updateRunList(runs);
+
+        const now = new Date().toLocaleTimeString();
+        document.getElementById("last-update").textContent = `Updated ${now}`;
+        statusEl.textContent = `${runs.length} runs loaded`;
+      } catch (err) {
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("content").style.display = "block";
+        showError(`Failed to fetch data: ${err.message}`);
+        statusEl.textContent = "Error";
+      }
+    }
+
+    // Init
+    initRewardChart();
+    initComponentsChart();
+    refresh();
+    setInterval(refresh, 60000);
+  </script>
+</body>
+</html>
