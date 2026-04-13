@@ -104,7 +104,7 @@ impl SpotController {
             dt: 1.0 / 60.0,
             test_mode: false,
             action_history: Vec::with_capacity(500),
-            last_observation: vec![0.0; 42],
+            last_observation: vec![0.0; 45],
         }
     }
 
@@ -147,49 +147,45 @@ impl SpotController {
     }
 
     /// Collect current observation from physics state
+    /// Layout must match training env (spot_env.py) exactly:
+    /// [body_ang_vel(3), gravity(3), joint_pos_offset(12), joint_vel(12), prev_action(12), cmd(3)]
     fn collect_observation(
         &self,
         base_rotation: &na::UnitQuaternion<f32>,
+        base_angvel: &na::Vector3<f32>,
         joint_set: &MultibodyJointSet,
     ) -> Observation {
-        // 1. Gravity vector in body frame
-        // Rapier (Y-up): world gravity = [0, -1, 0]
-        // PyBullet (Z-up): world gravity = [0, 0, -1]
-        //
-        // Coordinate system mapping from Rapier to PyBullet:
-        //   Rapier X -> PyBullet X (left/right)
-        //   Rapier Y -> PyBullet Z (up/down)
-        //   Rapier Z -> PyBullet Y (forward/back, but negated for handedness)
-        //
-        // When upright: Rapier gravity body frame = [0,-1,0]
-        // Should become PyBullet = [0, 0, -1]
-        let world_gravity_rapier = na::Vector3::new(0.0, -1.0, 0.0);
-        let body_gravity_rapier = base_rotation.inverse() * world_gravity_rapier;
-        // Convert to PyBullet coordinates:
-        // PyBullet X = Rapier X
-        // PyBullet Y = -Rapier Z (handedness flip)
-        // PyBullet Z = Rapier Y
-        let gravity_vector = [
-            body_gravity_rapier.x,
-            -body_gravity_rapier.z,  // PyBullet Y = -Rapier Z
-            body_gravity_rapier.y,   // PyBullet Z = Rapier Y (so [0,-1,0] -> [0,0,-1])
+        // 1. Body angular velocity in body frame
+        // Rapier Y-up -> PyBullet Z-up coordinate mapping
+        let body_angvel_rapier = base_rotation.inverse() * base_angvel;
+        let body_angular_velocity = [
+            body_angvel_rapier.x,
+            -body_angvel_rapier.z,
+            body_angvel_rapier.y,
         ];
 
-        // 2. Joint positions and velocities (from ACTUAL physics state)
+        // 2. Projected gravity in body frame
+        let world_gravity_rapier = na::Vector3::new(0.0, -1.0, 0.0);
+        let body_gravity_rapier = base_rotation.inverse() * world_gravity_rapier;
+        let gravity_vector = [
+            body_gravity_rapier.x,
+            -body_gravity_rapier.z,
+            body_gravity_rapier.y,
+        ];
+
+        // 3. Joint positions relative to default standing pose (offsets)
         let mut joint_positions = [0.0; 12];
         let mut joint_velocities = [0.0; 12];
 
         for (i, name) in self.joint_names.iter().enumerate().take(12) {
             if let Some(handle) = self.joint_handles.get(name) {
-                // Read ACTUAL position from physics
                 if let Some((multibody, link_id)) = joint_set.get(*handle) {
                     if let Some(link) = multibody.link(link_id) {
-                        // Get actual joint angle from physics motor state
                         let motor = &link.joint.data.motor(JointAxis::AngX);
                         if let Some(motor) = motor {
-                            joint_positions[i] = motor.target_pos;
+                            // Store position as offset from default (matches training)
+                            joint_positions[i] = motor.target_pos - SpotConfig::DEFAULT_JOINT_ANGLES[i];
                         }
-                        // Also try to get velocity from joint state tracking
                         if let Some(state) = self.joint_states.get(name) {
                             joint_velocities[i] = state.velocity;
                         }
@@ -199,6 +195,7 @@ impl SpotController {
         }
 
         Observation {
+            body_angular_velocity,
             gravity_vector,
             joint_positions,
             joint_velocities,
@@ -218,75 +215,57 @@ impl SpotController {
         self.total_time += dt;
         self.dt = dt;
 
-        // Get base link rotation for gravity observation
-        let base_rotation = if let Some(handle) = base_body_handle {
+        // Get base link rotation and angular velocity
+        let (base_rotation, base_angvel) = if let Some(handle) = base_body_handle {
             if let Some(body) = rigid_body_set.get(handle) {
-                *body.rotation()
+                (*body.rotation(), *body.angvel())
             } else {
-                na::UnitQuaternion::identity()
+                (na::UnitQuaternion::identity(), na::Vector3::zeros())
             }
         } else {
-            na::UnitQuaternion::identity()
+            (na::UnitQuaternion::identity(), na::Vector3::zeros())
         };
 
-        // 1. Collect observation (now reads actual joint positions from physics)
-        let obs = self.collect_observation(&base_rotation, joint_set);
-        self.last_observation = obs.to_vec(); // Store for UI debugging
+        // 1. Collect observation (matches training env 45D layout)
+        let obs = self.collect_observation(&base_rotation, &base_angvel, joint_set);
+        self.last_observation = obs.to_vec();
 
         // 2. Run policy OR test mode
-        // TEST MODE: Checkbox toggles between policy and simple sinusoidal motion
         let use_test_mode = self.test_mode && (self.command.vel_x.abs() > 0.1 || self.command.vel_y.abs() > 0.1);
 
-        let action = if use_test_mode {
-            // Simple walking test: oscillate front legs
-            let phase = self.total_time * 4.0; // 4 rad/s = ~0.6 Hz
-            let amplitude = 0.3; // radians
+        // Policy outputs ACTION OFFSETS from default pose (matching training)
+        let action_offsets = if use_test_mode {
+            // Simple walking test: offsets from default
+            let phase = self.total_time * 4.0;
+            let amplitude = 0.3;
 
-            let mut targets = [0.0f32; 12];
-            // Front left leg (indices 0,1,2): hip, upper, lower
-            targets[1] = 0.7 + amplitude * phase.sin(); // upper leg oscillates
-            targets[2] = -1.8 + amplitude * 0.5 * phase.cos(); // lower leg follows
+            let mut offsets = [0.0f32; 12];
+            offsets[1] = amplitude * phase.sin();
+            offsets[2] = amplitude * 0.5 * phase.cos();
+            offsets[4] = amplitude * (phase + std::f32::consts::PI).sin();
+            offsets[5] = amplitude * 0.5 * (phase + std::f32::consts::PI).cos();
 
-            // Front right leg (indices 3,4,5): opposite phase
-            targets[4] = 0.7 + amplitude * (phase + std::f32::consts::PI).sin();
-            targets[5] = -1.8 + amplitude * 0.5 * (phase + std::f32::consts::PI).cos();
-
-            // Back legs static at standing pose
-            targets[7] = 0.7; targets[8] = -1.8;
-            targets[10] = 0.7; targets[11] = -1.8;
-
-            // Test mode logging removed - was causing performance issues
-
-            Action { joint_targets: targets }
+            Action { joint_targets: offsets }
         } else if let Ok(output) = self.policy.forward(&obs.to_vec()) {
-            // Normal policy mode
-            // Policy logging removed - was causing performance issues
             Action::from_vec(&output)
         } else {
-            // Fallback to standing
             log::warn!("Policy inference failed, using standing");
             Action::zero()
         };
 
-        // 3. Apply action targets to joints via PD controller
-        // Soft start ramp
+        // 3. Apply action as OFFSETS from default standing pose (matching training)
         let t = (self.total_time / SpotConfig::RAMP_DURATION).min(1.0);
-
-        // Base standing pose - policy outputs are ADDED to these
-        // Joint order: FL_hip, FL_upper, FL_lower, FR_hip, FR_upper, FR_lower, BL_hip, BL_upper, BL_lower, BR_hip, BR_upper, BR_lower
-        let base_pose: [f32; 12] = [
-            0.5, 0.7, -1.8,   // FL: hip, upper, lower
-            -0.5, 0.7, -1.8,  // FR: hip, upper, lower
-            0.5, 0.7, -1.8,   // BL: hip, upper, lower
-            -0.5, 0.7, -1.8,  // BR: hip, upper, lower
-        ];
 
         for (i, name) in self.joint_names.iter().enumerate().take(12) {
             if let Some(handle) = self.joint_handles.get(name) {
                 if let Some((multibody, link_id)) = joint_set.get_mut(*handle) {
                     if let Some(link) = multibody.link_mut(link_id) {
-                        // Policy outputs absolute joint targets (match training)
-                        let target = action.joint_targets[i];
+                        // Clamp offset to match training bounds
+                        let offset = action_offsets.joint_targets[i]
+                            .clamp(-SpotConfig::ACTION_OFFSET_LIMIT, SpotConfig::ACTION_OFFSET_LIMIT);
+
+                        // Target = default pose + policy offset (matches training exactly)
+                        let target = SpotConfig::DEFAULT_JOINT_ANGLES[i] + offset;
 
                         // Update joint state tracking
                         if let Some(state) = self.joint_states.get_mut(name) {
@@ -295,20 +274,13 @@ impl SpotController {
                             state.target = target;
                         }
 
-                        // Custom stiffness per joint type
-                        let (target_stiffness, target_damping) = if name.contains("hip") {
-                            (SpotConfig::STIFFNESS_HIP, SpotConfig::DAMPING_SPRINGY)
-                        } else if name.contains("lower") {
-                            (SpotConfig::STIFFNESS_KNEE, SpotConfig::DAMPING_SPRINGY)
-                        } else {
-                            (SpotConfig::STIFFNESS_END, SpotConfig::DAMPING)
-                        };
+                        // Uniform stiffness/damping matching training PD gains
+                        let target_stiffness = SpotConfig::STIFFNESS_END;
+                        let target_damping = SpotConfig::DAMPING;
 
-                        // Blend stiffness during soft start
                         let current_stiffness = SpotConfig::STIFFNESS_START
                             + (target_stiffness - SpotConfig::STIFFNESS_START) * t;
 
-                        // Apply motor command
                         link.joint.data.set_motor_position(
                             JointAxis::AngX,
                             target,
@@ -316,19 +288,16 @@ impl SpotController {
                             target_damping,
                         );
                         link.joint.data.set_motor_max_force(JointAxis::AngX, SpotConfig::MAX_FORCE);
-
-                        // Debug: Log targets sparingly (once per ~60 frames at 60fps)
-                        // Removed per-frame logging to avoid freezing browser
                     }
                 }
             }
         }
 
-        // 4. Store action for next observation
-        self.previous_action = action.clone();
+        // 4. Store action offsets for next observation (prev_action in obs)
+        self.previous_action = action_offsets.clone();
 
-        // 5. Store in history for plotting (keep last 500 samples)
-        self.action_history.push((self.total_time, action.joint_targets));
+        // 5. Store in history for plotting
+        self.action_history.push((self.total_time, action_offsets.joint_targets));
         if self.action_history.len() > 500 {
             self.action_history.remove(0);
         }

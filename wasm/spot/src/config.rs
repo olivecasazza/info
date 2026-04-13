@@ -4,40 +4,46 @@ pub struct SpotConfig;
 
 impl SpotConfig {
     // Physical Properties
-    pub const DENSITY: f32 = 2000.0; // Uniform density for stability
+    pub const DENSITY: f32 = 2000.0;
 
-    // Motor Parameters - MUST MATCH TRAINING (PyBullet)
-    // Training uses: positionGain=0.3, velocityGain=0.1, force=100
-    // Rapier uses stiffness/damping differently, so we scale appropriately
+    // Motor Parameters - MUST MATCH TRAINING (spot_env.py)
+    // Training: KP=1.5, KD=0.3, MAX_FORCE=200
+    // Rapier stiffness/damping map differently, scale for equivalent behavior
     pub const STIFFNESS_START: f32 = 100.0;  // Soft start
-    pub const STIFFNESS_END: f32 = 300.0;    // Match training P-gain (~0.3 * 1000)
+    pub const STIFFNESS_END: f32 = 1500.0;   // Match training KP=1.5 (scaled)
 
-    // Per-joint stiffness - softer to allow policy control
-    pub const STIFFNESS_HIP: f32 = 300.0;    // Matching training
-    pub const STIFFNESS_KNEE: f32 = 300.0;   // Matching training
-    pub const DAMPING_SPRINGY: f32 = 100.0;  // Match training D-gain (~0.1 * 1000)
+    pub const STIFFNESS_HIP: f32 = 1500.0;
+    pub const STIFFNESS_KNEE: f32 = 1500.0;
+    pub const DAMPING_SPRINGY: f32 = 300.0;  // Match training KD=0.3 (scaled)
 
-    pub const DAMPING: f32 = 100.0;
-    pub const MAX_FORCE: f32 = 100.0;         // Match training force=100
-    pub const RAMP_DURATION: f32 = 1.0;       // Faster ramp to see policy effect
+    pub const DAMPING: f32 = 300.0;
+    pub const MAX_FORCE: f32 = 200.0;        // Match training MAX_FORCE=200
+    pub const RAMP_DURATION: f32 = 1.0;
 
     // Simulation Parameters
-    pub const DT: f32 = 1.0 / 120.0;
-    pub const SOLVER_ITERATIONS: usize = 60;
+    // Training runs at 200Hz physics / 50Hz policy (decimation=4)
+    // WASM runs at 60fps; we substep to approximate 200Hz
+    pub const DT: f32 = 1.0 / 60.0;
+    pub const PHYSICS_SUBSTEPS: usize = 4;   // ~240Hz effective physics
+    pub const SOLVER_ITERATIONS: usize = 10; // Match training numSolverIterations=10
 
-    // Default Joint Angles (Standing Pose)
+    // Action offset limit (radians) - must match training
+    pub const ACTION_OFFSET_LIMIT: f32 = 0.5;
+
+    // Default Joint Angles (Standing Pose) - MUST MATCH TRAINING
+    // Training: [0.0, 0.6, -1.2] for all 4 legs (no hip splay)
     pub fn default_angles() -> HashMap<String, f32> {
         let mut angles = HashMap::new();
 
-        let hip_angle = 0.5;   // Wide stance for stability
-        let leg_upper = 0.7;
-        let leg_lower = -1.8;  // Deep crouch
+        let hip_angle = 0.0;   // No splay - matches training
+        let leg_upper = 0.6;   // Matches training
+        let leg_lower = -1.2;  // Matches training
 
         let joints = [
             ("motor_front_left_hip", hip_angle),
             ("motor_back_left_hip", hip_angle),
-            ("motor_front_right_hip", -hip_angle),
-            ("motor_back_right_hip", -hip_angle),
+            ("motor_front_right_hip", hip_angle),
+            ("motor_back_right_hip", hip_angle),
 
             ("motor_front_left_upper_leg", leg_upper),
             ("motor_back_left_upper_leg", leg_upper),
@@ -56,4 +62,13 @@ impl SpotConfig {
 
         angles
     }
+
+    // Default angles as flat array matching training joint order:
+    // FL(hip,upper,lower), FR(hip,upper,lower), BL(hip,upper,lower), BR(hip,upper,lower)
+    pub const DEFAULT_JOINT_ANGLES: [f32; 12] = [
+        0.0, 0.6, -1.2,   // front left
+        0.0, 0.6, -1.2,   // front right
+        0.0, 0.6, -1.2,   // back left
+        0.0, 0.6, -1.2,   // back right
+    ];
 }
