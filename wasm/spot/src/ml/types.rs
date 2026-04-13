@@ -1,33 +1,32 @@
 // Observation and Action types for ML policy
 
 /// Observation space for the Spot robot policy
-/// This is what the neural network "sees" about the current state
+/// Must match training env (spot_env.py) EXACTLY
 #[derive(Clone, Debug)]
 pub struct Observation {
+    /// Body angular velocity in body frame (3D)
+    pub body_angular_velocity: [f32; 3],
+
     /// Gravity direction in body frame (3D unit vector)
-    /// Tells the robot which way is "down" relative to its orientation
     pub gravity_vector: [f32; 3],
 
-    /// Current joint positions (12 joints: 3 per leg × 4 legs)
-    /// Relative to default/neutral position
+    /// Current joint positions relative to default standing pose (12 joints)
     pub joint_positions: [f32; 12],
 
     /// Current joint velocities (12 joints)
     pub joint_velocities: [f32; 12],
 
-    /// Previous action (what we commanded last frame)
-    /// Helps with temporal coherence
+    /// Previous action offsets (what we commanded last frame)
     pub previous_action: [f32; 12],
 
     /// User command: [target_vel_x, target_vel_y, target_yaw_rate]
-    /// From keyboard input (WASD controls)
     pub command: [f32; 3],
 }
 
 impl Observation {
-    /// Create a new observation with all zeros
     pub fn zero() -> Self {
         Self {
+            body_angular_velocity: [0.0; 3],
             gravity_vector: [0.0, 0.0, -1.0],
             joint_positions: [0.0; 12],
             joint_velocities: [0.0; 12],
@@ -37,9 +36,11 @@ impl Observation {
     }
 
     /// Convert to flat vector for neural network input
-    /// Total size: 3 + 12 + 12 + 12 + 3 = 42 floats
+    /// Layout must match spot_env.py _get_observation():
+    /// [ang_vel(3), gravity(3), joint_pos_offset(12), joint_vel(12), prev_action(12), cmd(3)] = 45
     pub fn to_vec(&self) -> Vec<f32> {
-        let mut vec = Vec::with_capacity(42);
+        let mut vec = Vec::with_capacity(45);
+        vec.extend_from_slice(&self.body_angular_velocity);
         vec.extend_from_slice(&self.gravity_vector);
         vec.extend_from_slice(&self.joint_positions);
         vec.extend_from_slice(&self.joint_velocities);
@@ -48,8 +49,8 @@ impl Observation {
         vec
     }
 
-    /// Size of observation vector
-    pub const SIZE: usize = 42;
+    /// Size of observation vector (must match training)
+    pub const SIZE: usize = 45;
 }
 
 /// Action space for the Spot robot
