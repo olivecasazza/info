@@ -108,13 +108,15 @@ pub fn ui_system(
             .default_open(false)
             .show(egui_ui, |ui| {
                 let obs = &state.controller.last_observation;
-                if obs.len() >= 42 {
-                    ui.label(format!("Gravity: [{:+.2}, {:+.2}, {:+.2}]", obs[0], obs[1], obs[2]));
-                    ui.label(format!("Joint[0-2]: [{:+.2}, {:+.2}, {:+.2}]", obs[3], obs[4], obs[5]));
-                    ui.label(format!("Command (obs[39-41]): [{:+.2}, {:+.2}, {:+.2}]", obs[39], obs[40], obs[41]));
+                // Observation layout (45): [ang_vel(3), gravity(3), jpos(12), jvel(12), prev_act(12), cmd(3)]
+                if obs.len() >= 45 {
+                    ui.label(format!("AngVel: [{:+.2}, {:+.2}, {:+.2}]", obs[0], obs[1], obs[2]));
+                    ui.label(format!("Gravity: [{:+.2}, {:+.2}, {:+.2}]", obs[3], obs[4], obs[5]));
+                    ui.label(format!("Joint[0-2]: [{:+.2}, {:+.2}, {:+.2}]", obs[6], obs[7], obs[8]));
+                    ui.label(format!("Command (obs[42-44]): [{:+.2}, {:+.2}, {:+.2}]", obs[42], obs[43], obs[44]));
                     ui.colored_label(
-                        if obs[39].abs() > 0.1 || obs[40].abs() > 0.1 { egui::Color32::GREEN } else { egui::Color32::RED },
-                        format!("Command active: {}", obs[39].abs() > 0.1 || obs[40].abs() > 0.1)
+                        if obs[42].abs() > 0.1 || obs[43].abs() > 0.1 { egui::Color32::GREEN } else { egui::Color32::RED },
+                        format!("Command active: {}", obs[42].abs() > 0.1 || obs[43].abs() > 0.1)
                     );
                 }
             });

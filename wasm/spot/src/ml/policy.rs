@@ -29,9 +29,9 @@ impl Policy {
             .into_runnable()?;
 
         // RLlib models have dynamic batch dimensions, so we hardcode the expected sizes
-        // Observation: 42 floats (3 gravity + 12 joint pos + 12 joint vel + 12 prev action + 3 command)
+        // Observation: 45 floats (3 ang_vel + 3 gravity + 12 joint pos + 12 joint vel + 12 prev action + 3 command)
         // Action: 12 floats (joint targets)
-        let input_size = 42;
+        let input_size = 45;
         let output_size = 12;
 
         log::info!("ONNX model loaded: input_size={}, output_size={}", input_size, output_size);
