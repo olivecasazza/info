@@ -38,6 +38,7 @@ eliminate the sim-to-sim gap entirely. Until then, domain randomisation
 ---------------------------------------------------------------------
 """
 
+import os
 import numpy as np
 import pybullet as p
 import pybullet_data
@@ -260,9 +261,12 @@ class SpotEnv(gym.Env):
         start_pos = [0, 0, self.NOMINAL_HEIGHT + 0.05]  # slightly above ground
         start_orientation = p.getQuaternionFromEuler([0, 0, 0])
 
+        # URDF_IGNORE_VISUAL_SHAPES: skip mesh loading (meshes use package:// ROS
+        # paths that PyBullet can't resolve). We only need collision geometry + joints.
+        urdf_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "spot.urdf")
         self.robot_id = p.loadURDF(
-            "assets/spot.urdf", start_pos, start_orientation,
-            flags=p.URDF_USE_SELF_COLLISION,
+            urdf_path, start_pos, start_orientation,
+            flags=p.URDF_USE_SELF_COLLISION | p.URDF_IGNORE_VISUAL_SHAPES,
         )
 
         # Map joint names to indices
