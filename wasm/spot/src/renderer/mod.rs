@@ -59,6 +59,14 @@ pub struct SceneRenderer {
 unsafe impl Send for SceneRenderer {}
 unsafe impl Sync for SceneRenderer {}
 
+/// Multi-octave sine noise for natural-looking terrain elevation
+fn terrain_height(x: f32, z: f32) -> f32 {
+    let h1 = (x * 0.3).sin() * (z * 0.3).cos() * 0.5;
+    let h2 = (x * 0.7 + 1.3).sin() * (z * 0.5 + 2.1).cos() * 0.25;
+    let h3 = (x * 1.5 + 0.7).sin() * (z * 1.3 + 0.4).cos() * 0.1;
+    h1 + h2 + h3
+}
+
 impl SceneRenderer {
     pub fn new(context: Context) -> Self {
         let camera = Camera::new_perspective(
@@ -89,9 +97,9 @@ impl SceneRenderer {
 
     /// Create ground plane with grid pattern for visualization
     pub fn create_ground_plane(&mut self) {
-        // Create a grid of tiles for checkerboard effect
-        let grid_size = 10; // 10x10 grid
-        let tile_size = 1.0f32; // 1 meter tiles
+        // Create a grid of tiles with procedural elevation
+        let grid_size = 20; // 20x20 grid
+        let tile_size = 0.5f32; // 0.5 meter tiles for finer detail
         let half_size = (grid_size as f32 * tile_size) / 2.0;
 
         let mut positions = Vec::new();
@@ -108,31 +116,43 @@ impl SceneRenderer {
 
                 let base_idx = positions.len() as u32;
 
-                // 4 vertices per tile
-                positions.push(vec3(x0, 0.0, z0));
-                positions.push(vec3(x1, 0.0, z0));
-                positions.push(vec3(x1, 0.0, z1));
-                positions.push(vec3(x0, 0.0, z1));
+                // 4 vertices per tile with procedural elevation
+                let p0 = vec3(x0, terrain_height(x0, z0), z0);
+                let p1 = vec3(x1, terrain_height(x1, z0), z0);
+                let p2 = vec3(x1, terrain_height(x1, z1), z1);
+                let p3 = vec3(x0, terrain_height(x0, z1), z1);
+                positions.push(p0);
+                positions.push(p1);
+                positions.push(p2);
+                positions.push(p3);
 
-                // All normals point up
-                for _ in 0..4 {
-                    normals.push(vec3(0.0, 1.0, 0.0));
-                }
+                // Compute normals from cross product of edge vectors
+                // Triangle 1: p0, p1, p2
+                let edge1_a = p1 - p0;
+                let edge1_b = p2 - p0;
+                let n1 = edge1_a.cross(edge1_b).normalize();
+
+                // Triangle 2: p0, p2, p3
+                let edge2_a = p2 - p0;
+                let edge2_b = p3 - p0;
+                let n2 = edge2_a.cross(edge2_b).normalize();
+
+                // Average normal for shared vertices
+                let avg_n = ((n1 + n2) * 0.5).normalize();
+                normals.push(n1);  // p0 - shared, but use n1 for tri1 vertex
+                normals.push(n1);  // p1 - belongs to tri1
+                normals.push(avg_n); // p2 - shared between both triangles
+                normals.push(n2);  // p3 - belongs to tri2
 
                 // Black tiles with dim white edges for grid lines
                 let base = Srgba::new(15, 15, 18, 255); // Near-black base
                 let edge = Srgba::new(60, 60, 65, 255); // Dim white grid line
 
-                // Edge detection: vertices on grid lines get lighter color
-                let edge_width = 0.02;
-                let is_x0_edge = (i == 0) || true; // All tile edges are grid lines
-                let is_z0_edge = (j == 0) || true;
-
                 // Corner vertices: edges get grid line color
                 colors.push(edge); // x0,z0 corner (always on grid line)
-                colors.push(if is_x0_edge { edge } else { base }); // x1,z0
-                colors.push(base);  // x1,z1 (interior)
-                colors.push(if is_z0_edge { edge } else { base }); // x0,z1
+                colors.push(edge); // x1,z0
+                colors.push(base); // x1,z1 (interior)
+                colors.push(edge); // x0,z1
 
                 // Two triangles per tile
                 indices.push(base_idx);
