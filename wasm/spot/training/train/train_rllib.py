@@ -86,8 +86,9 @@ def train_rllib(args):
     model_conf = config_data["model"]
     total_timesteps = training_conf["total_timesteps"]
 
-    # Workers per trial -- sized for cluster
-    workers_per_trial = 12
+    # Workers per trial -- auto-size based on available CPUs
+    # Single node: ~10 workers, full cluster: 12 per trial
+    workers_per_trial = 10  # default, adjusted after ray.init below
 
     # Network architecture
     net_arch = model_conf["net_arch"]  # [256, 128, 64]
@@ -129,8 +130,8 @@ def train_rllib(args):
             vf_loss_coeff=training_conf["vf_coef"],  # 0.5
             grad_clip=training_conf["max_grad_norm"],  # 0.5
             train_batch_size=training_conf["train_batch_size"],  # 32768
-            sgd_minibatch_size=training_conf["sgd_minibatch_size"],  # 4096
-            num_sgd_iter=training_conf["num_sgd_iter"],  # 5
+            minibatch_size=training_conf["sgd_minibatch_size"],  # 4096
+            num_epochs=training_conf["num_sgd_iter"],  # 5
         )
         .api_stack(
             enable_rl_module_and_learner=False,
@@ -160,7 +161,7 @@ def train_rllib(args):
         tune_config=tune.TuneConfig(
             mode="max",
             metric="env_runners/episode_reward_mean",
-            max_concurrent_trials=3,
+            max_concurrent_trials=1,  # 1 GPU = sequential trials; bump to 3 with full cluster
             num_samples=1,  # 1 sample per grid point = 3 total trials
         ),
         run_config=tune.RunConfig(
