@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from envs.spot_env import SpotEnv
 
 
-class CurriculumCallback:
+class CurriculumCallback(tune.Callback):
     """Ramp cmd_vel_scale and terrain_difficulty from 0 to 1.0 over training.
 
     Velocity ramps over the first 30%. Terrain difficulty ramps from 20% to
@@ -32,7 +32,7 @@ class CurriculumCallback:
         self.terrain_ramp_start = int(0.2 * total_timesteps)
         self.terrain_ramp_end = int(0.6 * total_timesteps)
 
-    def on_train_result(self, *, algorithm, result, **kwargs):
+    def on_trial_result(self, iteration, trials, trial, result, **info):
         ts = result.get("timesteps_total", 0)
 
         # Velocity curriculum
@@ -51,12 +51,9 @@ class CurriculumCallback:
         else:
             terrain_diff = 1.0
 
-        # Update env config for new episodes
-        def _update(env):
-            env.cmd_vel_scale = vel_scale
-            env.terrain_difficulty = terrain_diff
-
-        algorithm.env_runner_group.foreach_env(_update)
+        # Update env config so new episodes use the ramped values
+        trial.config["env_config"]["cmd_vel_scale"] = vel_scale
+        trial.config["env_config"]["terrain_difficulty"] = terrain_diff
 
 
 def linear_schedule(initial: float, final: float, total_steps: int):
