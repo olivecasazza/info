@@ -1,4 +1,5 @@
-mod app;
-mod web;
+//! Pipedream WASM library - Bevy-based pipe animation.
 
-pub use web::WebHandle;
+mod web_bevy;
+
+pub use web_bevy::WebHandle;

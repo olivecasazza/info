@@ -25,17 +25,28 @@ pkgs.mkShell {
     # Editor tooling
     pkgs.rust-analyzer
     pkgs.claude-code
+
+    # Shell caching (lorri-equivalent for flakes)
+    pkgs.nix-direnv
+    pkgs.direnv
   ];
 
   shellHook = ''
     export RUST_BACKTRACE=1
+    export CARGO_INCREMENTAL=1  # Faster Rust rebuilds
 
     # Keep npm cache local to the repo to avoid permission issues with ~/.npm
     export npm_config_cache="$PWD/.npm-cache"
 
-    echo "Entered dev shell"
-    echo "  node:  $(node -v)"
-    echo "  rustc: $(rustc -V)"
-    echo "  wasm-pack: $(wasm-pack --version)"
+    echo ""
+    echo "🦀 Dev shell ready"
+    echo "   node:      $(node -v)"
+    echo "   rustc:     $(rustc -V | cut -d' ' -f2)"
+    echo "   wasm-pack: $(wasm-pack --version)"
+    echo ""
+    echo "Commands:"
+    echo "   nix run .#dev       - Start dev server with HMR + WASM auto-rebuild"
+    echo "   nix run .#sync-wasm - Sync WASM from Nix store"
+    echo ""
   '';
 }

@@ -34,6 +34,7 @@ let
   mkWasmPkg = { name, subdir }:
     craneLib.mkCargoDerivation (wasmCommonArgs // {
       pname = "${name}-wasm-pkg";
+      version = "0.1.1";  # Bumped to invalidate cache (tar.zst fix)
       cargoArtifacts = wasmWorkspaceDeps;
       cargoExtraArgs = "--locked --target wasm32-unknown-unknown -p ${name}";
       doCheck = false;
@@ -52,7 +53,9 @@ let
         runHook preInstall
         mkdir -p $out
         cp -r pkg/* $out/
-        rm -f $out/target.tar.zst
+        # Remove crane cache artifacts and any symlinks
+        rm -f $out/target.tar.zst $out/target.tar.zst.prev
+        find $out -type l -delete
         runHook postInstall
       '';
     });

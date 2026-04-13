@@ -1,11 +1,7 @@
+//! Flock WASM library - Bevy-based boid simulation.
+
 mod utils;
 mod flock;
+mod web_bevy;
 
-// `mod app;` uses `src/app/mod.rs`.
-mod app;
-mod web;
-
-pub use web::WebHandle;
-
-// NOTE: wee_alloc support removed during egui migration to avoid a dangling
-// feature flag warning. Re-add when needed.
+pub use web_bevy::WebHandle;

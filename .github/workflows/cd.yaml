@@ -1,37 +1,187 @@
-# # https://github.com/actions/deploy-pages#usage
-# name: Deploy to GitHub Pages
-# on:
-#   workflow_dispatch:
-#   push:
-#     branches:
-#       - main
-# jobs:
-#   cd:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v3
-#       - run: corepack enable
-#       - uses: actions/setup-node@v3
-#         with:
-#           node-version: "20.14"
-#       # install node deps
-#       - run: npm install
-#       # build wasm deps
-#       - uses: Swatinem/rust-cache@v2
-#       - uses: jetli/wasm-pack-action@v0.4.0
-#         with:
-#           version: 'latest'
-#       # build nuxt app
-#       - run: npm run build:wasm
-#       - run: npm run build:pages
-#       # upload artifacts
-#       - name: Upload artifact
-#         uses: actions/upload-pages-artifact@v1
-#         with:
-#           path: ./.output/public
-#       # deploy to pages
-#       - name: Deploy
-#         uses: peaceiris/actions-gh-pages@v3
-#         with:
-#           github_token: ${{ secrets.GITHUB_TOKEN }}
-#           publish_dir: ./.output/public
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  R2_BUCKET: info-assets
+  R2_PUBLIC_URL: https://info-assets.casazza.info
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: cloudflare
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Cache Nix store with Cachix
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: info
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      # Build WASM packages separately first
+      - name: Build WASM packages
+        run: |
+          echo "Building WASM packages..."
+          nix build .#flock-wasm-pkg .#pipedream-wasm-pkg .#spot-wasm-pkg --no-link
+          echo "WASM packages built successfully"
+
+      # Sync WASM to wasm/*/pkg directories
+      - name: Sync WASM packages
+        run: nix run .#sync-wasm
+
+      # Verify WASM files exist
+      - name: Verify WASM sync
+        run: |
+          echo "=== Checking WASM pkg directories ==="
+          ls -la wasm/flock/pkg/ || echo "flock/pkg missing!"
+          ls -la wasm/pipedream/pkg/ || echo "pipedream/pkg missing!"
+          ls -la wasm/spot/pkg/ || echo "spot/pkg missing!"
+
+      # Install npm dependencies
+      - name: Install npm dependencies
+        run: |
+          export npm_config_cache="$PWD/.npm-cache"
+          npm ci
+
+      # Pre-copy WASM packages to node_modules (prevents vite-plugin-wasm-pack copy failures)
+      - name: Pre-copy WASM to node_modules
+        run: |
+          for pkg in flock pipedream spot; do
+            echo "=== Pre-copying wasm/$pkg/pkg to node_modules/$pkg ==="
+            rm -rf "node_modules/$pkg"
+            mkdir -p "node_modules/$pkg"
+            # Copy with -L to follow symlinks and convert to regular files
+            cp -rL "wasm/$pkg/pkg/"* "node_modules/$pkg/"
+            chmod -R u+rwX "node_modules/$pkg"
+            echo "Files in node_modules/$pkg:"
+            ls -la "node_modules/$pkg/"
+          done
+
+      # Verify the pre-copy worked
+      - name: Verify pre-copy
+        run: |
+          echo "=== Verifying node_modules WASM packages ==="
+          for pkg in flock pipedream spot; do
+            echo "--- $pkg ---"
+            ls -la "node_modules/$pkg/" || echo "MISSING!"
+            file "node_modules/$pkg"/*.js 2>/dev/null | head -2 || true
+            file "node_modules/$pkg"/*.wasm 2>/dev/null | head -2 || true
+          done
+
+      # Generate static site
+      - name: Generate static site
+        run: |
+          export npm_config_cache="$PWD/.npm-cache"
+          echo "=== Starting nuxt generate ==="
+          npx nuxt generate
+          touch .output/public/.nojekyll
+
+      - name: Show WASM sizes
+        run: |
+          echo "=== WASM file sizes ==="
+          ls -lh .output/public/_nuxt/*.wasm 2>/dev/null || echo "No WASM files found"
+
+      - name: Install wrangler
+        if: github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          command: whoami
+
+      # NOTE: Configure R2 CORS via Cloudflare Dashboard:
+      # Bucket > Settings > CORS Policy
+      # AllowedOrigins: https://olive.casazza.info, https://casazza.info
+      # AllowedMethods: GET, HEAD
+      # AllowedHeaders: *
+
+      - name: Upload WASM to R2
+        if: github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          shopt -s nullglob
+          for wasm in .output/public/_nuxt/*_bg*.wasm; do
+            fname=$(basename "$wasm")
+            echo "Uploading $fname to R2..."
+            npx wrangler r2 object put "${{ env.R2_BUCKET }}/_nuxt/$fname" --file "$wasm" --content-type application/wasm
+          done
+
+      - name: Upload Spot GLB assets to R2
+        if: github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          shopt -s nullglob
+          echo "Uploading Spot GLB assets to R2..."
+          for glb in wasm/spot/assets/glb/*.glb; do
+            fname=$(basename "$glb")
+            echo "  - $fname"
+            npx wrangler r2 object put "${{ env.R2_BUCKET }}/spot/glb/$fname" --file "$glb" --content-type model/gltf-binary
+          done
+          echo "GLB upload complete"
+
+      - name: Create _redirects for WASM
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "# Redirect WASM to R2 CDN" >> .output/public/_redirects
+          echo "/_nuxt/*.wasm https://info-assets.casazza.info/_nuxt/:splat.wasm 302" >> .output/public/_redirects
+          echo "# Redirect spot assets to R2 CDN" >> .output/public/_redirects
+          echo "/spot-assets/* https://info-assets.casazza.info/spot/:splat 302" >> .output/public/_redirects
+          echo "Created _redirects:"
+          cat .output/public/_redirects
+
+      - name: Remove WASM from Pages bundle
+        if: github.ref == 'refs/heads/main'
+        run: |
+          rm -f .output/public/_nuxt/*.wasm
+          echo "WASM removed from Pages (served from R2)"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-build
+          path: .output/public
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: cloudflare
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site-build
+          path: .output/public
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          command: pages deploy .output/public --project-name=info
