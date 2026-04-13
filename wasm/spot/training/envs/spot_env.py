@@ -261,12 +261,33 @@ class SpotEnv(gym.Env):
         start_pos = [0, 0, self.NOMINAL_HEIGHT + 0.05]  # slightly above ground
         start_orientation = p.getQuaternionFromEuler([0, 0, 0])
 
-        # URDF_IGNORE_VISUAL_SHAPES: skip mesh loading (meshes use package:// ROS
-        # paths that PyBullet can't resolve). We only need collision geometry + joints.
+        # Strip package:// mesh references from URDF at load time.
+        # PyBullet can't resolve ROS package:// URIs; we only need collision
+        # primitives (boxes/cylinders) and joints for training.
         urdf_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "spot.urdf")
+
+        # Read URDF and remove visual mesh elements that reference missing files
+        import re
+        import tempfile
+        with open(urdf_path, "r") as f:
+            urdf_content = f.read()
+
+        # Replace ALL mesh geometry with tiny boxes (training only needs
+        # collision primitives + joint structure, not visual meshes)
+        urdf_content = re.sub(
+            r'<mesh\b[^>]*/?>',
+            '<box size="0.01 0.01 0.01"/>',
+            urdf_content,
+        )
+
+        # Write patched URDF to temp file
+        self._urdf_tmp = tempfile.NamedTemporaryFile(suffix=".urdf", mode="w", delete=False)
+        self._urdf_tmp.write(urdf_content)
+        self._urdf_tmp.flush()
+
         self.robot_id = p.loadURDF(
-            urdf_path, start_pos, start_orientation,
-            flags=p.URDF_USE_SELF_COLLISION | p.URDF_IGNORE_VISUAL_SHAPES,
+            self._urdf_tmp.name, start_pos, start_orientation,
+            flags=p.URDF_USE_SELF_COLLISION,
         )
 
         # Map joint names to indices
