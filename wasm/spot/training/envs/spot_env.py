@@ -1,6 +1,6 @@
 """
 Spot Robot Gymnasium Environment
-Matches the Rust/WASM observation and action spaces exactly
+Locomotion-focused reward shaping with action-offset control
 """
 
 import numpy as np
@@ -11,46 +11,105 @@ from gymnasium import spaces
 from typing import Optional, Tuple
 
 
+class RunningMeanStd:
+    """Welford online running mean/variance for observation normalization."""
+
+    def __init__(self, shape: tuple, epsilon: float = 1e-4):
+        self.mean = np.zeros(shape, dtype=np.float64)
+        self.var = np.ones(shape, dtype=np.float64)
+        self.count = epsilon
+
+    def update(self, batch: np.ndarray):
+        batch = np.atleast_2d(batch)
+        batch_mean = np.mean(batch, axis=0)
+        batch_var = np.var(batch, axis=0)
+        batch_count = batch.shape[0]
+        self._update_from_moments(batch_mean, batch_var, batch_count)
+
+    def _update_from_moments(self, batch_mean, batch_var, batch_count):
+        delta = batch_mean - self.mean
+        total_count = self.count + batch_count
+        new_mean = self.mean + delta * batch_count / total_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        m2 = m_a + m_b + np.square(delta) * self.count * batch_count / total_count
+        new_var = m2 / total_count
+        self.mean = new_mean
+        self.var = new_var
+        self.count = total_count
+
+    def normalize(self, x: np.ndarray) -> np.ndarray:
+        return ((x - self.mean) / np.sqrt(self.var + 1e-8)).astype(np.float32)
+
+
 class SpotEnv(gym.Env):
-    """Spot quadruped robot environment for RL training"""
+    """Spot quadruped robot environment for RL training.
 
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
+    Key design choices for stable locomotion:
+    - Actions are offsets from a default standing pose (+/- 0.5 rad)
+    - Reward tracks forward velocity via Gaussian kernel
+    - Action rate penalty kills twitching
+    - Strong PD gains (P=1.5, D=0.3) for servo-like response
+    - Decimation=4: policy runs at 50Hz, physics at 200Hz
+    - Running mean/std observation normalization
+    """
 
-    def __init__(self, render_mode: Optional[str] = None, time_step: float = 1/120):
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 50}
+
+    # Default standing joint angles (radians) -- neutral quadruped pose
+    # Order: FL(hip, upper, lower), FR(hip, upper, lower),
+    #        BL(hip, upper, lower), BR(hip, upper, lower)
+    DEFAULT_JOINT_ANGLES = np.array([
+        0.0, 0.6, -1.2,   # front left
+        0.0, 0.6, -1.2,   # front right
+        0.0, 0.6, -1.2,   # back left
+        0.0, 0.6, -1.2,   # back right
+    ], dtype=np.float32)
+
+    # Nominal base height when standing (meters)
+    NOMINAL_HEIGHT = 0.3
+
+    # PD control gains
+    KP = 1.5
+    KD = 0.3
+    MAX_FORCE = 200.0
+
+    # Action offset limits (radians)
+    ACTION_OFFSET_LIMIT = 0.5
+
+    # Simulation parameters
+    SIM_FREQ = 200    # Hz -- physics timestep
+    POLICY_FREQ = 50  # Hz -- policy rate
+    DECIMATION = SIM_FREQ // POLICY_FREQ  # = 4
+
+    def __init__(self, render_mode: Optional[str] = None, config: Optional[dict] = None):
         super().__init__()
 
         self.render_mode = render_mode
-        self.time_step = time_step
-        self.max_episode_steps = 1000
+        self.time_step = 1.0 / self.SIM_FREQ
+        self.max_episode_steps = 2000  # 10s at 50Hz policy rate
         self.current_step = 0
 
-        # === Observation Space (42D) ===
-        # [gravity(3), joint_pos(12), joint_vel(12), prev_action(12), command(3)]
-        obs_low = np.array([
-            -1, -1, -1,  # gravity (normalized)
-            *[-np.pi] * 12,  # joint positions
-            *[-50] * 12,  # joint velocities
-            *[-np.pi] * 12,  # previous actions
-            -1, -1, -1,  # command (normalized)
-        ], dtype=np.float32)
+        # Curriculum: velocity command scale (0..1), set externally or via config
+        config = config or {}
+        self.cmd_vel_scale = config.get("cmd_vel_scale", 1.0)
 
-        obs_high = np.array([
-            1, 1, 1,  # gravity
-            *[np.pi] * 12,  # joint positions
-            *[50] * 12,  # joint velocities
-            *[np.pi] * 12,  # previous actions
-            1, 1, 1,  # command
-        ], dtype=np.float32)
+        # === Observation Space (45D) ===
+        # [body_ang_vel(3), gravity(3), joint_pos_offset(12), joint_vel(12),
+        #  prev_action(12), command(3)]
+        obs_dim = 3 + 3 + 12 + 12 + 12 + 3  # = 45
+        # Use wide bounds; actual normalization handled by RunningMeanStd
+        obs_bound = 100.0
+        self.observation_space = spaces.Box(
+            low=-obs_bound, high=obs_bound, shape=(obs_dim,), dtype=np.float32
+        )
 
-        self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
-
-        # === Action Space (12D) ===
-        # Target joint angles (will be clamped to reasonable ranges)
+        # === Action Space (12D) -- offsets from default pose ===
         self.action_space = spaces.Box(
-            low=-np.pi,
-            high=np.pi,
+            low=-self.ACTION_OFFSET_LIMIT,
+            high=self.ACTION_OFFSET_LIMIT,
             shape=(12,),
-            dtype=np.float32
+            dtype=np.float32,
         )
 
         # Joint names matching URDF
@@ -66,7 +125,22 @@ class SpotEnv(gym.Env):
         self.plane_id = None
         self.joint_indices = []
         self.previous_action = np.zeros(12, dtype=np.float32)
-        self.command = np.array([0.0, 0.0, 0.0], dtype=np.float32)  # [vx, vy, yaw]
+        self.prev_joint_vel = np.zeros(12, dtype=np.float32)
+        self.command = np.zeros(3, dtype=np.float32)  # [vx, vy, yaw_rate]
+
+        # Foot air-time tracking (4 feet)
+        self.foot_air_time = np.zeros(4, dtype=np.float32)
+        self.foot_link_names = [
+            "front_left_lower_leg",   # FL foot link
+            "front_right_lower_leg",  # FR foot link
+            "back_left_lower_leg",    # BL foot link
+            "back_right_lower_leg",   # BR foot link
+        ]
+        self.foot_link_indices = []
+
+        # Observation normalization
+        self.obs_rms = RunningMeanStd(shape=(obs_dim,))
+        self._normalize_obs = True
 
         # Connect to PyBullet
         if render_mode == "human":
@@ -77,7 +151,7 @@ class SpotEnv(gym.Env):
         self._setup_simulation()
 
     def _setup_simulation(self):
-        """Initialize PyBullet simulation"""
+        """Initialize PyBullet simulation."""
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.81)
         p.setTimeStep(self.time_step)
@@ -85,34 +159,52 @@ class SpotEnv(gym.Env):
         # Load ground plane
         self.plane_id = p.loadURDF("plane.urdf")
 
+        # Increase solver iterations for stability
+        p.setPhysicsEngineParameter(numSolverIterations=10, numSubSteps=1)
+
     def _load_robot(self):
-        """Load Spot robot URDF"""
-        start_pos = [0, 0, 0.3]
+        """Load Spot robot URDF."""
+        start_pos = [0, 0, self.NOMINAL_HEIGHT + 0.05]  # slightly above ground
         start_orientation = p.getQuaternionFromEuler([0, 0, 0])
 
-        # Load Spot URDF (relative to working directory)
-        # We assume 'assets' folder is available in working dir
-        self.robot_id = p.loadURDF("assets/spot.urdf", start_pos, start_orientation,
-                                 flags=p.URDF_USE_SELF_COLLISION)
+        self.robot_id = p.loadURDF(
+            "assets/spot.urdf", start_pos, start_orientation,
+            flags=p.URDF_USE_SELF_COLLISION,
+        )
 
         # Map joint names to indices
         num_joints = p.getNumJoints(self.robot_id)
         joint_name_to_idx = {}
+        link_name_to_idx = {}
         for i in range(num_joints):
             info = p.getJointInfo(self.robot_id, i)
-            name = info[1].decode('utf-8')
+            name = info[1].decode("utf-8")
+            link_name = info[12].decode("utf-8")
             joint_name_to_idx[name] = i
+            link_name_to_idx[link_name] = i
 
-        # Build ordered list of indices matched to self.joint_names
+        # Build ordered list of motor joint indices
         self.joint_indices = []
         for name in self.joint_names:
             if name in joint_name_to_idx:
                 self.joint_indices.append(joint_name_to_idx[name])
             else:
-                print(f"⚠️ Warning: Joint {name} not found in URDF!")
+                print(f"Warning: Joint {name} not found in URDF!")
+
+        # Build foot link indices for contact detection
+        self.foot_link_indices = []
+        for name in self.foot_link_names:
+            if name in link_name_to_idx:
+                self.foot_link_indices.append(link_name_to_idx[name])
+            elif name in joint_name_to_idx:
+                self.foot_link_indices.append(joint_name_to_idx[name])
+
+        # Set initial joint positions to default standing pose
+        for i, joint_idx in enumerate(self.joint_indices[:12]):
+            p.resetJointState(self.robot_id, joint_idx, self.DEFAULT_JOINT_ANGLES[i])
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
-        """Reset environment to initial state"""
+        """Reset environment to initial state."""
         super().reset(seed=seed)
 
         # Remove old robot
@@ -125,205 +217,272 @@ class SpotEnv(gym.Env):
         # Reset state
         self.current_step = 0
         self.previous_action = np.zeros(12, dtype=np.float32)
+        self.prev_joint_vel = np.zeros(12, dtype=np.float32)
+        self.foot_air_time = np.zeros(4, dtype=np.float32)
 
-        # Random command for curriculum learning
+        # Velocity command (scaled by curriculum)
         if options and "command" in options:
             self.command = np.array(options["command"], dtype=np.float32)
         else:
+            scale = self.cmd_vel_scale
             self.command = np.array([
-                np.random.uniform(-1, 1),  # vel_x
-                np.random.uniform(-0.5, 0.5),  # vel_y
-                np.random.uniform(-0.5, 0.5),  # yaw_rate
+                self.np_random.uniform(-1.0, 1.0) * scale,   # vx (m/s)
+                self.np_random.uniform(-0.5, 0.5) * scale,   # vy (m/s)
+                self.np_random.uniform(-0.5, 0.5) * scale,   # yaw_rate (rad/s)
             ], dtype=np.float32)
 
-        # Get initial observation
-        obs = self._get_observation()
-        info = {}
+        # Let robot settle for a few physics steps
+        for _ in range(10):
+            p.stepSimulation()
 
-        return obs, info
+        obs = self._get_observation()
+        return obs, {}
 
     def _get_observation(self) -> np.ndarray:
-        """Collect 42D observation matching Rust controller"""
-        # Get base link state
+        """Collect observation vector.
+
+        Layout (45D):
+            body_angular_velocity  (3)
+            projected_gravity      (3)
+            joint_pos - default    (12)
+            joint_velocities       (12)
+            previous_actions       (12)
+            velocity_commands      (3)
+        """
         base_pos, base_orn = p.getBasePositionAndOrientation(self.robot_id)
         base_vel, base_ang_vel = p.getBaseVelocity(self.robot_id)
 
-        # 1. Gravity vector in body frame (3D)
-        # Transform world gravity [0, 0, -1] to body frame
-        inv_orn = p.invertTransform([0, 0, 0], base_orn)[1]
-        gravity_body = p.multiplyTransforms(
+        # Body angular velocity in body frame
+        inv_pos, inv_orn = p.invertTransform([0, 0, 0], base_orn)
+        ang_vel_body, _ = p.multiplyTransforms(
             [0, 0, 0], inv_orn,
-            [0, 0, -1], [0, 0, 0, 1]
-        )[0]
+            list(base_ang_vel), [0, 0, 0, 1],
+        )
 
-        # 2. Joint positions and velocities
-        joint_states = p.getJointStates(self.robot_id, self.joint_indices)
+        # Projected gravity in body frame
+        gravity_body, _ = p.multiplyTransforms(
+            [0, 0, 0], inv_orn,
+            [0, 0, -1], [0, 0, 0, 1],
+        )
+
+        # Joint states
+        joint_states = p.getJointStates(self.robot_id, self.joint_indices[:12])
         joint_positions = np.array([s[0] for s in joint_states], dtype=np.float32)
         joint_velocities = np.array([s[1] for s in joint_states], dtype=np.float32)
 
-        # Pad if we have fewer than 12 joints
+        # Pad if fewer than 12 joints found
         if len(joint_positions) < 12:
             joint_positions = np.pad(joint_positions, (0, 12 - len(joint_positions)))
             joint_velocities = np.pad(joint_velocities, (0, 12 - len(joint_velocities)))
 
-        # 3. Construct observation
+        # Joint positions relative to default standing pose
+        joint_pos_offset = joint_positions - self.DEFAULT_JOINT_ANGLES
+
         obs = np.concatenate([
-            gravity_body,           # 3
-            joint_positions[:12],   # 12
-            joint_velocities[:12],  # 12
-            self.previous_action,   # 12
-            self.command,           # 3
-        ]).astype(np.float32)
+            np.array(ang_vel_body, dtype=np.float32),    # 3
+            np.array(gravity_body, dtype=np.float32),    # 3
+            joint_pos_offset,                             # 12
+            joint_velocities,                             # 12
+            self.previous_action,                         # 12
+            self.command,                                 # 3
+        ])
 
-        # Sanitize observation to prevent crashes
+        # Sanitize
         if not np.isfinite(obs).all():
-            print("⚠️ Warning: NaN/Inf detected in observation! Replacing with zeros.")
-            obs = np.nan_to_num(obs)
+            obs = np.nan_to_num(obs, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # Clip to observation space bounds to ensure validity
-        # We assume standard bounds logic: gravity [-1,1], others wider
-        # Just clamping to reasonable limits helps avoid strict checker warnings
-        obs = np.clip(obs, self.observation_space.low, self.observation_space.high)
+        # Running normalization
+        self.obs_rms.update(obs)
+        if self._normalize_obs:
+            obs = self.obs_rms.normalize(obs)
 
-        return obs
+        return obs.astype(np.float32)
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, dict]:
-        """Execute one timestep"""
+        """Execute one policy step (decimated: 4 physics steps per action)."""
         self.current_step += 1
 
-        # Clamp action to valid range
-        action = np.clip(action, -np.pi, np.pi)
+        # Clamp offsets to limit
+        action = np.clip(action, -self.ACTION_OFFSET_LIMIT, self.ACTION_OFFSET_LIMIT).astype(np.float32)
 
-        # Apply actions to joints (PD control)
-        for i, joint_idx in enumerate(self.joint_indices[:12]):
-            if i < len(action):
-                target_pos = action[i]
+        # Compute target joint positions = default pose + offset
+        target_positions = self.DEFAULT_JOINT_ANGLES + action
+
+        # Apply PD control and step physics (decimation)
+        for _ in range(self.DECIMATION):
+            for i, joint_idx in enumerate(self.joint_indices[:12]):
                 p.setJointMotorControl2(
                     self.robot_id,
                     joint_idx,
                     p.POSITION_CONTROL,
-                    targetPosition=target_pos,
-                    force=100,  # Max force
-                    positionGain=0.3,  # P gain
-                    velocityGain=0.1,  # D gain
+                    targetPosition=float(target_positions[i]),
+                    force=self.MAX_FORCE,
+                    positionGain=self.KP,
+                    velocityGain=self.KD,
                 )
+            p.stepSimulation()
 
-        # Step simulation
-        p.stepSimulation()
+        # Update foot air-time tracking
+        self._update_foot_contacts()
 
-        # Store action for next observation
-        self.previous_action = action.copy()
-
-        # Get new state
+        # Get new observation (before storing action, so prev_action is from last step)
         obs = self._get_observation()
 
         # Calculate reward
-        reward = self._calculate_reward()
+        reward, reward_info = self._calculate_reward(action)
 
-        # Check termination
+        # Store for next step
+        self.previous_action = action.copy()
+
+        # Joint velocities for acceleration penalty next step
+        joint_states = p.getJointStates(self.robot_id, self.joint_indices[:12])
+        self.prev_joint_vel = np.array([s[1] for s in joint_states], dtype=np.float32)
+
+        # Termination
         terminated = self._is_terminated()
         truncated = self.current_step >= self.max_episode_steps
 
         info = {
-            "is_success": not terminated and self.current_step > 500,
+            **reward_info,
             "episode_length": self.current_step,
         }
 
         return obs, reward, terminated, truncated, info
 
-    def _calculate_reward(self) -> float:
-        """Compute reward for current state"""
+    def _update_foot_contacts(self):
+        """Track per-foot air time for swing phase reward."""
+        dt = self.DECIMATION * self.time_step  # time elapsed this policy step
+
+        for i, link_idx in enumerate(self.foot_link_indices):
+            contacts = p.getContactPoints(bodyA=self.robot_id, linkIndexA=link_idx)
+            if len(contacts) > 0:
+                # Foot is on ground -- reset air timer
+                self.foot_air_time[i] = 0.0
+            else:
+                # Foot is in the air
+                self.foot_air_time[i] += dt
+
+    def _calculate_reward(self, action: np.ndarray) -> Tuple[float, dict]:
+        """Compute locomotion reward.
+
+        Returns (total_reward, component_dict).
+        """
         base_pos, base_orn = p.getBasePositionAndOrientation(self.robot_id)
         base_vel, base_ang_vel = p.getBaseVelocity(self.robot_id)
-
-        # Get base height and orientation
-        height = base_pos[2]
         roll, pitch, yaw = p.getEulerFromQuaternion(base_orn)
+        height = base_pos[2]
+        vel_x = base_vel[0]
 
-        # Velocity in body frame
-        vel_world = np.array(base_vel)
+        # --- Forward velocity tracking (Gaussian kernel) ---
+        v_cmd = self.command[0]
+        r_velocity = 1.0 * np.exp(-4.0 * (vel_x - v_cmd) ** 2)
 
-        # === Reward Components ===
+        # --- Action rate penalty (kills twitching) ---
+        action_diff = action - self.previous_action
+        r_action_rate = -0.01 * np.sum(action_diff ** 2)
 
-        # 1. Alive bonus (stay upright)
-        alive_reward = 1.0 if height > 0.15 else 0.0
+        # --- Joint acceleration penalty ---
+        joint_states = p.getJointStates(self.robot_id, self.joint_indices[:12])
+        current_joint_vel = np.array([s[1] for s in joint_states], dtype=np.float32)
+        dt = self.DECIMATION * self.time_step
+        joint_accel = (current_joint_vel - self.prev_joint_vel) / max(dt, 1e-6)
+        r_joint_accel = -2.5e-7 * np.sum(joint_accel ** 2)
 
-        # 2. Forward velocity tracking
-        # Command[0] is target vel_x (-1 to 1)
-        target_vel_x = self.command[0] * 0.5  # Scale to m/s
-        vel_reward = -abs(vel_world[0] - target_vel_x)
+        # --- Torque penalty ---
+        joint_torques = np.array([s[3] for s in joint_states], dtype=np.float32)
+        r_torque = -1e-5 * np.sum(joint_torques ** 2)
 
-        # 3. Orientation penalty (stay level)
-        orientation_penalty = -(abs(roll) + abs(pitch))
+        # --- Body orientation penalty ---
+        r_orientation = -5.0 * (pitch ** 2 + roll ** 2)
 
-        # 4. Energy penalty (smooth actions)
-        action_diff = np.sum(np.square(self.previous_action))
-        energy_penalty = -0.01 * action_diff
+        # --- Foot air-time reward ---
+        # Reward feet that have swing phases between 0.2s and 0.5s
+        r_foot_air = 0.0
+        for t in self.foot_air_time:
+            if 0.2 <= t <= 0.5:
+                r_foot_air += 1.0
 
-        # 5. Height bonus
-        height_reward = 0.5 if 0.2 < height < 0.5 else -1.0
+        # --- Alive bonus ---
+        r_alive = 0.5
 
-        # Total reward
-        reward = (
-            alive_reward * 1.0
-            + vel_reward * 2.0
-            + orientation_penalty * 0.5
-            + energy_penalty
-            + height_reward * 0.5
+        # --- Base height penalty ---
+        r_height = -5.0 * (height - self.NOMINAL_HEIGHT) ** 2
+
+        # Total
+        total = (
+            r_velocity
+            + r_action_rate
+            + r_joint_accel
+            + r_torque
+            + r_orientation
+            + r_foot_air
+            + r_alive
+            + r_height
         )
 
-        return float(reward)
+        info = {
+            "r_velocity": r_velocity,
+            "r_action_rate": r_action_rate,
+            "r_joint_accel": r_joint_accel,
+            "r_torque": r_torque,
+            "r_orientation": r_orientation,
+            "r_foot_air": r_foot_air,
+            "r_alive": r_alive,
+            "r_height": r_height,
+        }
+
+        return float(total), info
 
     def _is_terminated(self) -> bool:
-        """Check if episode should terminate"""
+        """Check early termination conditions."""
         base_pos, base_orn = p.getBasePositionAndOrientation(self.robot_id)
 
-        # Check for physics explosion (NaNs)
+        # Physics explosion
         if not np.isfinite(base_pos).all() or not np.isfinite(base_orn).all():
-            print("⚠️ Warning: Physics exploded (NaN/Inf)! Terminating episode.")
             return True
 
         height = base_pos[2]
         roll, pitch, _ = p.getEulerFromQuaternion(base_orn)
 
-        # Terminate if fallen over
-        if height < 0.1:
+        # Fell too low
+        if height < 0.15:
             return True
 
-        # Terminate if tipped over
-        if abs(roll) > np.pi/3 or abs(pitch) > np.pi/3:
+        # Tipped over (0.8 rad ~ 46 degrees)
+        if abs(roll) > 0.8 or abs(pitch) > 0.8:
+            return True
+
+        # Body contact with ground (check base link)
+        contacts = p.getContactPoints(bodyA=self.robot_id, bodyB=self.plane_id, linkIndexA=-1)
+        if len(contacts) > 0:
             return True
 
         return False
 
     def render(self):
-        """Render environment (handled by PyBullet GUI)"""
+        """Render environment (handled by PyBullet GUI)."""
         if self.render_mode == "rgb_array":
-            # Get camera image
+            base_pos = [0, 0, 0.3]
+            if self.robot_id is not None:
+                base_pos, _ = p.getBasePositionAndOrientation(self.robot_id)
             width, height = 640, 480
             view_matrix = p.computeViewMatrixFromYawPitchRoll(
-                cameraTargetPosition=[0, 0, 0.3],
-                distance=2.0,
-                yaw=45,
-                pitch=-30,
-                roll=0,
-                upAxisIndex=2
+                cameraTargetPosition=list(base_pos),
+                distance=2.0, yaw=45, pitch=-30, roll=0, upAxisIndex=2,
             )
             proj_matrix = p.computeProjectionMatrixFOV(
-                fov=60, aspect=width/height, nearVal=0.1, farVal=100.0
+                fov=60, aspect=width / height, nearVal=0.1, farVal=100.0,
             )
-            _, _, rgba, _, _ = p.getCameraImage(
-                width, height, view_matrix, proj_matrix
-            )
-            return rgba[:, :, :3]  # Return RGB only
+            _, _, rgba, _, _ = p.getCameraImage(width, height, view_matrix, proj_matrix)
+            return rgba[:, :, :3]
 
     def close(self):
-        """Clean up PyBullet connection"""
+        """Clean up PyBullet connection."""
         if self.client >= 0:
             p.disconnect(self.client)
 
 
-# Test the environment
+# Standalone test
 if __name__ == "__main__":
     env = SpotEnv(render_mode="human")
     obs, info = env.reset()
@@ -332,9 +491,12 @@ if __name__ == "__main__":
     print(f"Action space: {env.action_space.shape}")
     print(f"Initial observation: {obs.shape}")
 
-    for _ in range(1000):
-        action = env.action_space.sample()
+    for step in range(2000):
+        action = env.action_space.sample() * 0.1  # small random offsets
         obs, reward, terminated, truncated, info = env.step(action)
+
+        if step % 100 == 0:
+            print(f"Step {step}: reward={reward:.3f} vel={info.get('r_velocity', 0):.3f}")
 
         if terminated or truncated:
             obs, info = env.reset()
