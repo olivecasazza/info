@@ -15,8 +15,8 @@ training:
   max_grad_norm: 0.5          # gradient clipping
 
   # Batch sizing
-  train_batch_size: 32768     # total samples per SGD update
-  sgd_minibatch_size: 4096    # minibatch size for SGD
+  train_batch_size: 4096      # total samples per SGD update (reduced for 4 workers)
+  sgd_minibatch_size: 1024    # minibatch size for SGD
   num_sgd_iter: 5             # SGD epochs per update
 
   # Checkpointing
