@@ -1,3 +1,5 @@
+pub use spot_physics::physics::PhysicsWorld;
+
 use rapier3d::prelude::*;
 
 // Perlin noise implementation for terrain generation
@@ -102,154 +104,47 @@ fn get_terrain_height(x: f32, z: f32, max_height: f32) -> f32 {
     (h * 0.5 + 0.5) * max_height
 }
 
-/// Public accessor for terrain height at any world position
-/// Used by grid rendering to follow terrain
+/// Public accessor for terrain height at any world position.
+/// Used by grid rendering to follow terrain.
 pub fn get_terrain_height_at(x: f32, z: f32) -> f32 {
     get_terrain_height(x, z, TERRAIN_MAX_HEIGHT)
 }
 
-pub struct PhysicsWorld {
-    pub rigid_body_set: RigidBodySet,
-    pub collider_set: ColliderSet,
-    pub impulse_joint_set: ImpulseJointSet,
-    pub multibody_joint_set: MultibodyJointSet,
-    pub gravity: Vector<f32>,
-    pub integration_parameters: IntegrationParameters,
-    pub physics_pipeline: PhysicsPipeline,
-    pub island_manager: IslandManager,
-    pub broad_phase: DefaultBroadPhase,
-    pub narrow_phase: NarrowPhase,
-    pub ccd_solver: CCDSolver,
-    pub query_pipeline: QueryPipeline,
+/// Create trimesh terrain collider from embedded terrain.json.
+/// Uses exact same data as visual terrain for perfect physics alignment.
+pub fn create_terrain_collider(world: &mut PhysicsWorld) {
+    use serde::Deserialize;
 
-    // Map link names to RigidBodyHandles for rendering sync
-    pub link_map: std::collections::HashMap<String, RigidBodyHandle>,
-    // Map joint names to MultibodyJointHandles for control
-    pub joint_map: std::collections::HashMap<String, MultibodyJointHandle>,
+    #[derive(Deserialize)]
+    struct TerrainData {
+        size: f32,
+        resolution: usize,
+        #[serde(rename = "maxHeight")]
+        _max_height: f32,
+        heights: Vec<f32>,
+    }
+
+    let json = include_str!("../../assets/terrain.json");
+    let terrain: TerrainData = serde_json::from_str(json)
+        .expect("Failed to parse terrain.json");
+
+    const TERRAIN_Y_OFFSET: f32 = -3.0; // Match scene.rs for max_height=6.0
+
+    let handle = spot_physics::terrain::create_heightfield_from_heights(
+        &mut world.collider_set,
+        &terrain.heights,
+        terrain.resolution,
+        terrain.size,
+        TERRAIN_Y_OFFSET,
+    );
+    world.ground_collider_handle = Some(handle);
 }
 
-impl PhysicsWorld {
-    pub fn new() -> Self {
-        let mut integration_parameters = IntegrationParameters::default();
-        // Substep dt: 4 substeps per 60fps frame = 240Hz physics
-        // Training uses 200Hz (PyBullet) with decimation=4 → 50Hz policy
-        integration_parameters.dt = 1.0 / 240.0;
-
-        Self {
-            rigid_body_set: RigidBodySet::new(),
-            collider_set: ColliderSet::new(),
-            impulse_joint_set: ImpulseJointSet::new(),
-            multibody_joint_set: MultibodyJointSet::new(),
-            gravity: vector![0.0, -9.81, 0.0],
-            integration_parameters,
-            physics_pipeline: PhysicsPipeline::new(),
-            island_manager: IslandManager::new(),
-            broad_phase: DefaultBroadPhase::new(),
-            narrow_phase: NarrowPhase::new(),
-            ccd_solver: CCDSolver::new(),
-            query_pipeline: QueryPipeline::new(),
-            link_map: std::collections::HashMap::new(),
-            joint_map: std::collections::HashMap::new(),
-        }
+/// Get the body pose from a rigid body handle.
+/// Works for both standalone rigid bodies and multibody links.
+pub fn get_body_pose(world: &PhysicsWorld, handle: RigidBodyHandle) -> Option<Isometry<f32>> {
+    if let Some(body) = world.rigid_body_set.get(handle) {
+        return Some(*body.position());
     }
-
-    pub fn step(&mut self) {
-        self.physics_pipeline.step(
-            &self.gravity,
-            &self.integration_parameters,
-            &mut self.island_manager,
-            &mut self.broad_phase,
-            &mut self.narrow_phase,
-            &mut self.rigid_body_set,
-            &mut self.collider_set,
-            &mut self.impulse_joint_set,
-            &mut self.multibody_joint_set,
-            &mut self.ccd_solver,
-            Some(&mut self.query_pipeline),
-            &(),
-            &(),
-        );
-    }
-
-    pub fn build_robot(&mut self, urdf_content: &str) {
-        // 1. Create Terrain Heightfield
-        self.create_terrain_collider();
-
-        // 2. Load Robot
-        crate::urdf::UrdfLoader::load_robot(self, urdf_content);
-    }
-
-    /// Create trimesh terrain collider from embedded terrain.json
-    /// Uses exact same data as visual terrain for perfect physics alignment
-    fn create_terrain_collider(&mut self) {
-        use serde::Deserialize;
-        use rapier3d::geometry::SharedShape;
-        use rapier3d::na::Point3;
-
-        #[derive(Deserialize)]
-        struct TerrainData {
-            size: f32,
-            resolution: usize,
-            #[serde(rename = "maxHeight")]
-            _max_height: f32,
-            heights: Vec<f32>,
-        }
-
-        let json = include_str!("../../assets/terrain.json");
-        let terrain: TerrainData = serde_json::from_str(json)
-            .expect("Failed to parse terrain.json");
-
-        const TERRAIN_Y_OFFSET: f32 = -3.0; // Match scene.rs for max_height=6.0
-
-        let res = terrain.resolution;
-        let half_size = terrain.size / 2.0;
-        let step = terrain.size / (res as f32 - 1.0);
-
-        // Build vertices from heightmap
-        let mut vertices: Vec<Point3<f32>> = Vec::with_capacity(res * res);
-        for z in 0..res {
-            for x in 0..res {
-                let world_x = (x as f32) * step - half_size;
-                let world_z = (z as f32) * step - half_size;
-                let y = terrain.heights[z * res + x] + TERRAIN_Y_OFFSET;
-                vertices.push(Point3::new(world_x, y, world_z));
-            }
-        }
-
-        // Build triangle indices (matching generate-terrain.mjs)
-        let mut indices: Vec<[u32; 3]> = Vec::new();
-        for z in 0..(res - 1) {
-            for x in 0..(res - 1) {
-                let tl = (z * res + x) as u32;
-                let tr = tl + 1;
-                let bl = ((z + 1) * res + x) as u32;
-                let br = bl + 1;
-
-                // Two triangles per quad
-                indices.push([tl, bl, tr]);
-                indices.push([tr, bl, br]);
-            }
-        }
-
-        let trimesh = SharedShape::trimesh(vertices, indices);
-
-        let ground_collider = ColliderBuilder::new(trimesh)
-            .friction(1.0)
-            .restitution(0.0)
-            .collision_groups(InteractionGroups::new(Group::GROUP_1, Group::GROUP_2))
-            .build();
-
-        self.collider_set.insert(ground_collider);
-    }
-    pub fn get_body_pose(&self, handle: RigidBodyHandle) -> Option<Isometry<f32>> {
-        if let Some(body) = self.rigid_body_set.get(handle) {
-            return Some(*body.position());
-        }
-        if let Some(_id) = self.multibody_joint_set.rigid_body_link(handle) {
-            // TODO: Implement proper Multibody Pose retrieval
-            // We need to access self.multibody_joint_set.get(_id.multibody) -> link(_id.id)
-            // But we need to verify the field names for rapier3d 0.22
-        }
-        None
-    }
+    None
 }

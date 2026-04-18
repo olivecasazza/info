@@ -105,7 +105,7 @@ pub fn sync_visuals(
 ) {
     for (mut transform, link, visual_offset) in query.iter_mut() {
         if let Some(&handle) = state.physics.link_map.get(&link.link_name) {
-            if let Some(pose) = state.physics.get_body_pose(handle) {
+            if let Some(pose) = crate::physics::get_body_pose(&state.physics, handle) {
                 let t = pose.translation;
                 let r = pose.rotation;
 

@@ -3,82 +3,33 @@ use std::collections::HashMap;
 pub struct SpotConfig;
 
 impl SpotConfig {
-    // Physical Properties
-    pub const DENSITY: f32 = 2000.0;
+    // Physical Properties (from spot-physics)
+    pub const DENSITY: f32 = spot_physics::config::DENSITY;
 
-    // Motor Parameters
-    // Rapier stiffness/damping are spring constants (N·m/rad and N·m·s/rad).
-    // At 60Hz, high stiffness causes numerical oscillation (vibrating joints).
-    // Rule of thumb: stiffness < 1/(4*dt^2*mass) for stability.
-    // With dt=1/60 and leg mass ~0.5kg, max stable stiffness ~1800.
-    // But for smooth motion, use much lower values with adequate damping.
-    //
-    // These values are tuned for Rapier at 60Hz, NOT a direct mapping from
-    // PyBullet's dimensionless PD gains (KP=1.5, KD=0.3).
-    // Motor PD gains — exact equivalent of PyBullet POSITION_CONTROL.
-    // PyBullet: vel_desired = KP * pos_error; torque = KD * (vel_desired - vel)
-    // Effective: torque = (KP*KD) * pos_error - KD * vel
-    // With KP=1.5, KD=0.3: stiffness = 0.45, damping = 0.3
-    //
-    // Rapier spring-damper: torque = stiffness * pos_error - damping * vel
-    // Direct equivalent values:
+    // Motor Parameters (from spot-physics)
+    pub const STIFFNESS_END: f32 = spot_physics::config::STIFFNESS; // KP * KD = 0.45
+    pub const DAMPING: f32 = spot_physics::config::DAMPING; // KD = 0.3
+    pub const MAX_FORCE: f32 = spot_physics::config::MAX_FORCE;
+
+    // WASM-specific motor ramp parameters
     pub const STIFFNESS_START: f32 = 0.2;
-    pub const STIFFNESS_END: f32 = 0.45;     // KP * KD = 1.5 * 0.3
-
     pub const STIFFNESS_HIP: f32 = 0.45;
     pub const STIFFNESS_KNEE: f32 = 0.45;
     pub const DAMPING_SPRINGY: f32 = 0.3;
-
-    pub const DAMPING: f32 = 0.3;            // KD = 0.3
-    pub const MAX_FORCE: f32 = 200.0;        // Match training
     pub const RAMP_DURATION: f32 = 1.0;
 
-    // Simulation Parameters
+    // WASM simulation parameters
     pub const DT: f32 = 1.0 / 60.0;
-    pub const PHYSICS_SUBSTEPS: usize = 4;   // 4 substeps = 240Hz physics, close to training's 200Hz
+    pub const PHYSICS_SUBSTEPS: usize = 4;
     pub const SOLVER_ITERATIONS: usize = 10;
 
-    // Action offset limit (radians) - must match training (legged_gym default)
-    pub const ACTION_OFFSET_LIMIT: f32 = 0.25;
+    // Action offset limit (radians) - must match training
+    pub const ACTION_OFFSET_LIMIT: f32 = spot_physics::config::ACTION_LIMIT;
 
-    // Default Joint Angles (Standing Pose) - MUST MATCH TRAINING
-    // Training: [0.0, 0.6, -1.2] for all 4 legs (no hip splay)
+    // Default Joint Angles (from spot-physics)
+    pub const DEFAULT_JOINT_ANGLES: [f32; 12] = spot_physics::config::DEFAULT_JOINT_ANGLES;
+
     pub fn default_angles() -> HashMap<String, f32> {
-        let mut angles = HashMap::new();
-
-        let hip_angle = 0.0;
-        let leg_upper = 0.6;
-        let leg_lower = -1.2;
-
-        let joints = [
-            ("motor_front_left_hip", hip_angle),
-            ("motor_back_left_hip", hip_angle),
-            ("motor_front_right_hip", hip_angle),
-            ("motor_back_right_hip", hip_angle),
-
-            ("motor_front_left_upper_leg", leg_upper),
-            ("motor_back_left_upper_leg", leg_upper),
-            ("motor_front_right_upper_leg", leg_upper),
-            ("motor_back_right_upper_leg", leg_upper),
-
-            ("motor_front_left_lower_leg", leg_lower),
-            ("motor_back_left_lower_leg", leg_lower),
-            ("motor_front_right_lower_leg", leg_lower),
-            ("motor_back_right_lower_leg", leg_lower),
-        ];
-
-        for (name, angle) in joints.iter() {
-            angles.insert(name.to_string(), *angle);
-        }
-
-        angles
+        spot_physics::config::default_angles_map()
     }
-
-    // Default angles as flat array matching training joint order
-    pub const DEFAULT_JOINT_ANGLES: [f32; 12] = [
-        0.0, 0.6, -1.2,   // front left
-        0.0, 0.6, -1.2,   // front right
-        0.0, 0.6, -1.2,   // back left
-        0.0, 0.6, -1.2,   // back right
-    ];
 }
