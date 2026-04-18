@@ -162,23 +162,14 @@ impl SpotController {
         joint_set: &MultibodyJointSet,
         rigid_body_set: &RigidBodySet,
     ) -> Observation {
-        // 1. Body angular velocity in body frame
-        // Rapier Y-up -> PyBullet Z-up coordinate mapping
-        let body_angvel_rapier = base_rotation.inverse() * base_angvel;
-        let body_angular_velocity = [
-            body_angvel_rapier.x,
-            -body_angvel_rapier.z,
-            body_angvel_rapier.y,
-        ];
+        // 1. Body angular velocity in body frame (Y-up, matching Rapier training)
+        let body_angvel = base_rotation.inverse() * base_angvel;
+        let body_angular_velocity = [body_angvel.x, body_angvel.y, body_angvel.z];
 
-        // 2. Projected gravity in body frame
-        let world_gravity_rapier = na::Vector3::new(0.0, -1.0, 0.0);
-        let body_gravity_rapier = base_rotation.inverse() * world_gravity_rapier;
-        let gravity_vector = [
-            body_gravity_rapier.x,
-            -body_gravity_rapier.z,
-            body_gravity_rapier.y,
-        ];
+        // 2. Projected gravity in body frame (Y-up, matching Rapier training)
+        let world_gravity = na::Vector3::new(0.0, -1.0, 0.0);
+        let body_gravity = base_rotation.inverse() * world_gravity;
+        let gravity_vector = [body_gravity.x, body_gravity.y, body_gravity.z];
 
         // 3. Joint positions and velocities from ACTUAL physics state
         // CRITICAL: Must read real joint angles, not motor targets.
@@ -374,9 +365,9 @@ impl SpotController {
     }
 }
 
-// MeanStdFilter normalization stats from training (hp01, entropy=0.005, ~49M steps, reward ~2800)
-const OBS_MEAN: [f32; 45] = [0.09006468, 0.03371983, -0.10829499, -0.08697820, -0.06859386, -0.29379088, -0.16344893, 0.24526481, -0.27965876, -0.17873497, -0.24460216, 0.47146994, 0.20907307, 0.22034371, 0.31521577, -0.17483112, -0.25600368, 0.50500846, -0.00419696, -0.08685949, 0.16314979, -0.01027451, -0.10150900, 0.13434120, 0.01519287, -0.10107616, 0.17491503, -0.01330356, -0.12471904, 0.19150208, -0.18649717, 0.23474216, -0.22981121, -0.18709546, -0.23056240, 0.42388114, 0.20529777, 0.22892898, 0.27991357, -0.24115296, -0.23259698, 0.48090014, 0.00000000, 0.00000000, 0.00000000];
-const OBS_STD: [f32; 45] = [0.48409012, 0.46822602, 0.59885615, 0.75488830, 0.45977539, 0.49188292, 0.25534448, 0.31533900, 0.39225656, 0.36814147, 0.35606515, 0.71584940, 0.37850210, 0.30283219, 0.35462439, 0.30446616, 0.31753558, 0.54907721, 0.22348304, 0.39808938, 0.42989609, 0.32598636, 0.53117043, 0.74091494, 0.41538668, 0.34469599, 0.36342978, 0.34855974, 0.38647884, 0.36994293, 0.25413319, 0.31573433, 0.33016309, 0.36344802, 0.32400140, 0.77971441, 0.26929131, 0.27821717, 0.35268861, 0.27800566, 0.32587242, 0.52202100, 0.00010000, 0.00010000, 0.00010000];
+// MeanStdFilter normalization stats from Rapier training (hp03, ~1.3M steps, reward ~-4100)
+const OBS_MEAN: [f32; 50] = [-0.00122687, 0.01206819, 0.00343865, 0.05052303, -0.02296292, -0.99628419, -0.03519306, -0.60000002, 1.20000005, -0.02828979, -0.60000002, 1.20000005, 0.04544214, -0.60000002, 1.20000005, -0.00842379, -0.60000002, 1.20000005, 0.00860411, -0.01288207, -0.01014746, 0.00108362, -0.01037931, -0.00877273, -0.00007247, 0.00344392, 0.00795244, 0.00141692, -0.01264635, 0.00113792, -0.09498250, 0.07547002, 0.09351572, -0.01935229, 0.10182279, 0.08039961, 0.03764607, -0.06667597, -0.03109486, 0.03471187, 0.13643384, 0.11765657, 0.00000000, 0.00000000, 0.00000000, 1.00000000, 0.00000000, 0.00000000, 0.00000000, 0.00000000];
+const OBS_STD: [f32; 50] = [0.20910293, 0.18637781, 0.11425681, 0.06265386, 0.02629636, 0.00688535, 0.06861417, 0.00010000, 0.00010000, 0.02877088, 0.00010000, 0.00010000, 0.06840432, 0.00010000, 0.00010000, 0.04084975, 0.00010000, 0.00010000, 0.16241217, 0.18401857, 0.11371924, 0.21347494, 0.23384748, 0.18750963, 0.28918448, 0.27228507, 0.18614058, 0.25765038, 0.25259879, 0.21900095, 0.17558892, 0.18385382, 0.18157148, 0.19286402, 0.18136862, 0.18266676, 0.18534420, 0.18156382, 0.19264990, 0.18521243, 0.17224023, 0.18039432, 0.00010000, 0.00010000, 0.00010000, 0.00010000, 0.00010000, 0.00010000, 0.00010000, 0.00010000];
 
 fn normalize_obs(obs: &[f32]) -> Vec<f32> {
     obs.iter()
