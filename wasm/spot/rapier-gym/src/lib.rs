@@ -1,6 +1,4 @@
 mod sim;
-mod urdf;
-mod terrain;
 
 use pyo3::prelude::*;
 use sim::RapierSim;
