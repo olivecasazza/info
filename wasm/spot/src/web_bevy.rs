@@ -16,7 +16,7 @@ use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 use bevy_core::BevyCorePlugins;
 
-use crate::physics::PhysicsWorld;
+use crate::physics::{self, PhysicsWorld};
 use crate::controller::SpotController;
 use crate::ml::UserCommand;
 use crate::{camera, render, scene, input, simulation, ui, god_hand};
@@ -138,8 +138,11 @@ impl Default for SpotState {
     fn default() -> Self {
         let urdf_content = include_str!("../assets/spot.urdf");
 
-        let mut physics = PhysicsWorld::new();
-        physics.build_robot(urdf_content);
+        // 240Hz physics (4 substeps per 60fps frame), close to training's 200Hz
+        let mut physics = PhysicsWorld::with_dt(1.0 / 240.0);
+        physics::create_terrain_collider(&mut physics);
+        spot_physics::urdf::load_robot(&mut physics, urdf_content);
+        physics.cache_foot_handles();
 
         let mut controller = SpotController::new();
         for (name, handle) in &physics.joint_map {
@@ -163,7 +166,7 @@ fn update_camera_follow(
 ) {
     if orbit.following {
         if let Some(&handle) = state.physics.link_map.get("base_link") {
-            if let Some(pose) = state.physics.get_body_pose(handle) {
+            if let Some(pose) = physics::get_body_pose(&state.physics, handle) {
                 let t = pose.translation;
                 orbit.target = Vec3::new(t.x, t.y, t.z);
             }

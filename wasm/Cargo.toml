@@ -5,6 +5,7 @@ members = [
     "flock",
     "pipedream",
     "spot",
+    "spot/spot-physics",
     "ui-theme",
 ]
 exclude = [

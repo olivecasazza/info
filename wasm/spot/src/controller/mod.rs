@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::config::SpotConfig;
 use crate::ml::{Policy, Observation, Action, UserCommand};
 use nalgebra as na;
-use wasm_bindgen::prelude::*;
 
 macro_rules! console_log {
     ($($arg:tt)*) => {

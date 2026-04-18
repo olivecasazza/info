@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2021"
 description = "Shared Rapier3D physics for Spot quadruped robot"
 
-[workspace]
-
 [dependencies]
 rapier3d = "0.22"
 nalgebra = "0.33"
