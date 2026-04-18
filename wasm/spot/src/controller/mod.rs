@@ -3,6 +3,13 @@ use std::collections::HashMap;
 use crate::config::SpotConfig;
 use crate::ml::{Policy, Observation, Action, UserCommand};
 use nalgebra as na;
+use wasm_bindgen::prelude::*;
+
+macro_rules! console_log {
+    ($($arg:tt)*) => {
+        web_sys::console::log_1(&format!($($arg)*).into());
+    }
+}
 
 pub struct PID {
     pub k_p: f32,
@@ -256,6 +263,9 @@ impl SpotController {
         let use_test_mode = self.test_mode && (self.command.vel_x.abs() > 0.1 || self.command.vel_y.abs() > 0.1);
 
         // Policy outputs ACTION OFFSETS from default pose (matching training)
+        let frame_num = (self.total_time * 60.0) as u64;
+        let debug_frame = frame_num % 120 == 0; // log every ~2s
+        let first_frame = frame_num < 5;
         let action_offsets = if use_test_mode {
             // Simple walking test: offsets from default
             let phase = self.total_time * 4.0;
@@ -267,12 +277,40 @@ impl SpotController {
             offsets[4] = amplitude * (phase + std::f32::consts::PI).sin();
             offsets[5] = amplitude * 0.5 * (phase + std::f32::consts::PI).cos();
 
+            if debug_frame { console_log!("[SPOT] test_mode active"); }
             Action { joint_targets: offsets }
-        } else if let Ok(output) = self.policy.forward(&obs.to_vec()) {
-            Action::from_vec(&output)
         } else {
-            log::warn!("Policy inference failed, using standing");
-            Action::zero()
+            let raw_obs = obs.to_vec();
+            let normed = normalize_obs(&raw_obs);
+            if debug_frame || first_frame {
+                console_log!("[SPOT] t={:.2} frame={}", self.total_time, frame_num);
+                console_log!("[SPOT] ang_vel=({:.3},{:.3},{:.3}) gravity=({:.3},{:.3},{:.3})",
+                    raw_obs[0], raw_obs[1], raw_obs[2], raw_obs[3], raw_obs[4], raw_obs[5]);
+                console_log!("[SPOT] joint_pos={:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3}",
+                    raw_obs[6], raw_obs[7], raw_obs[8], raw_obs[9], raw_obs[10], raw_obs[11],
+                    raw_obs[12], raw_obs[13], raw_obs[14], raw_obs[15], raw_obs[16], raw_obs[17]);
+                console_log!("[SPOT] joint_vel={:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3}",
+                    raw_obs[18], raw_obs[19], raw_obs[20], raw_obs[21], raw_obs[22], raw_obs[23],
+                    raw_obs[24], raw_obs[25], raw_obs[26], raw_obs[27], raw_obs[28], raw_obs[29]);
+                console_log!("[SPOT] prev_act={:.3},{:.3},{:.3},{:.3}... cmd=({:.2},{:.2},{:.2})",
+                    raw_obs[30], raw_obs[31], raw_obs[32], raw_obs[33],
+                    raw_obs[42], raw_obs[43], raw_obs[44]);
+            }
+            match self.policy.forward(&normed) {
+                Ok(output) => {
+                    let actions = if output.len() >= 12 { &output[..12] } else { &output };
+                    if debug_frame || first_frame {
+                        console_log!("[SPOT] actions={:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3}",
+                            actions[0], actions[1], actions[2], actions[3], actions[4], actions[5],
+                            actions[6], actions[7], actions[8], actions[9], actions[10], actions[11]);
+                    }
+                    Action::from_vec(actions)
+                }
+                Err(e) => {
+                    console_log!("[SPOT] inference FAILED: {}", e);
+                    Action::zero()
+                }
+            }
         };
 
         // 3. Apply action as OFFSETS from default standing pose (matching training)
@@ -335,4 +373,15 @@ impl SpotController {
         self.command.lerp(&target, alpha);
         self.command.clamp();
     }
+}
+
+// MeanStdFilter normalization stats from training (hp01, entropy=0.005, ~49M steps, reward ~2800)
+const OBS_MEAN: [f32; 45] = [0.09006468, 0.03371983, -0.10829499, -0.08697820, -0.06859386, -0.29379088, -0.16344893, 0.24526481, -0.27965876, -0.17873497, -0.24460216, 0.47146994, 0.20907307, 0.22034371, 0.31521577, -0.17483112, -0.25600368, 0.50500846, -0.00419696, -0.08685949, 0.16314979, -0.01027451, -0.10150900, 0.13434120, 0.01519287, -0.10107616, 0.17491503, -0.01330356, -0.12471904, 0.19150208, -0.18649717, 0.23474216, -0.22981121, -0.18709546, -0.23056240, 0.42388114, 0.20529777, 0.22892898, 0.27991357, -0.24115296, -0.23259698, 0.48090014, 0.00000000, 0.00000000, 0.00000000];
+const OBS_STD: [f32; 45] = [0.48409012, 0.46822602, 0.59885615, 0.75488830, 0.45977539, 0.49188292, 0.25534448, 0.31533900, 0.39225656, 0.36814147, 0.35606515, 0.71584940, 0.37850210, 0.30283219, 0.35462439, 0.30446616, 0.31753558, 0.54907721, 0.22348304, 0.39808938, 0.42989609, 0.32598636, 0.53117043, 0.74091494, 0.41538668, 0.34469599, 0.36342978, 0.34855974, 0.38647884, 0.36994293, 0.25413319, 0.31573433, 0.33016309, 0.36344802, 0.32400140, 0.77971441, 0.26929131, 0.27821717, 0.35268861, 0.27800566, 0.32587242, 0.52202100, 0.00010000, 0.00010000, 0.00010000];
+
+fn normalize_obs(obs: &[f32]) -> Vec<f32> {
+    obs.iter()
+        .enumerate()
+        .map(|(i, &v)| (v - OBS_MEAN[i]) / OBS_STD[i])
+        .collect()
 }

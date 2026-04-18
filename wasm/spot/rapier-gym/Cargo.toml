@@ -1,0 +1,22 @@
+[package]
+name = "spot-rapier-gym"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+name = "spot_rapier"
+crate-type = ["cdylib"]
+
+[dependencies]
+rapier3d = "0.22"
+nalgebra = "0.33"
+roxmltree = "0.20"
+pyo3 = { version = "0.22", features = ["extension-module"] }
+rand = "0.8"
+noise = "0.9"
+
+[profile.release]
+opt-level = 3
+lto = true

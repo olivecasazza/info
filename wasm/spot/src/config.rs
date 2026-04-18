@@ -15,19 +15,27 @@ impl SpotConfig {
     //
     // These values are tuned for Rapier at 60Hz, NOT a direct mapping from
     // PyBullet's dimensionless PD gains (KP=1.5, KD=0.3).
-    pub const STIFFNESS_START: f32 = 20.0;   // Soft start
-    pub const STIFFNESS_END: f32 = 80.0;     // Target stiffness (smooth, no vibration)
+    // Motor PD gains — exact equivalent of PyBullet POSITION_CONTROL.
+    // PyBullet: vel_desired = KP * pos_error; torque = KD * (vel_desired - vel)
+    // Effective: torque = (KP*KD) * pos_error - KD * vel
+    // With KP=1.5, KD=0.3: stiffness = 0.45, damping = 0.3
+    //
+    // Rapier spring-damper: torque = stiffness * pos_error - damping * vel
+    // Direct equivalent values:
+    pub const STIFFNESS_START: f32 = 0.2;
+    pub const STIFFNESS_END: f32 = 0.45;     // KP * KD = 1.5 * 0.3
 
-    pub const STIFFNESS_HIP: f32 = 80.0;
-    pub const STIFFNESS_KNEE: f32 = 80.0;
-    pub const DAMPING_SPRINGY: f32 = 8.0;    // Near critical damping for these inertias
+    pub const STIFFNESS_HIP: f32 = 0.45;
+    pub const STIFFNESS_KNEE: f32 = 0.45;
+    pub const DAMPING_SPRINGY: f32 = 0.3;
 
-    pub const DAMPING: f32 = 8.0;
-    pub const MAX_FORCE: f32 = 50.0;         // Reduced to prevent violent snapping
-    pub const RAMP_DURATION: f32 = 2.0;      // Slower ramp for stability
+    pub const DAMPING: f32 = 0.3;            // KD = 0.3
+    pub const MAX_FORCE: f32 = 200.0;        // Match training
+    pub const RAMP_DURATION: f32 = 1.0;
 
     // Simulation Parameters
     pub const DT: f32 = 1.0 / 60.0;
+    pub const PHYSICS_SUBSTEPS: usize = 4;   // 4 substeps = 240Hz physics, close to training's 200Hz
     pub const SOLVER_ITERATIONS: usize = 10;
 
     // Action offset limit (radians) - must match training (legged_gym default)

@@ -20,7 +20,7 @@ pub fn physics_step(mut state: ResMut<SpotState>) {
     // Destructure state to allow split borrowing
     let SpotState { physics, controller, .. } = &mut *state;
 
-    // Run ML controller
+    // Run ML controller once per frame (60Hz policy, similar to training's 50Hz)
     controller.update(
         &mut physics.multibody_joint_set,
         &physics.rigid_body_set,
@@ -28,5 +28,8 @@ pub fn physics_step(mut state: ResMut<SpotState>) {
         dt,
     );
 
-    physics.step();
+    // 4 physics substeps per frame (240Hz physics, close to training's 200Hz)
+    for _ in 0..4 {
+        physics.step();
+    }
 }
