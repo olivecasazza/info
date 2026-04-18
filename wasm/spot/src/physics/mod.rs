@@ -131,9 +131,9 @@ pub struct PhysicsWorld {
 impl PhysicsWorld {
     pub fn new() -> Self {
         let mut integration_parameters = IntegrationParameters::default();
-        // 60Hz physics (Bevy Update runs at ~60fps, no substeps needed)
-        integration_parameters.dt = 1.0 / 60.0;
-        // 4 iterations is typical for real-time (60 was causing severe performance issues)
+        // Substep dt: 4 substeps per 60fps frame = 240Hz physics
+        // Training uses 200Hz (PyBullet) with decimation=4 → 50Hz policy
+        integration_parameters.dt = 1.0 / 240.0;
 
         Self {
             rigid_body_set: RigidBodySet::new(),

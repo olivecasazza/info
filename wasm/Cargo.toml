@@ -7,6 +7,9 @@ members = [
     "spot",
     "ui-theme",
 ]
+exclude = [
+    "spot/rapier-gym",
+]
 
 [workspace.package]
 version = "0.1.0"
