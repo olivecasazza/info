@@ -81,7 +81,7 @@ def export_onnx(checkpoint_path: str, output_path: str) -> dict:
     _ensure_env_registered()
 
     if not ray.is_initialized():
-        ray.init(ignore_reinit_error=True)
+        ray.init(ignore_reinit_error=True, num_gpus=0)
 
     algo = PPO.from_checkpoint(checkpoint_path)
     policy = algo.get_policy()

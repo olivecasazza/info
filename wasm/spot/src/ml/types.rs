@@ -27,7 +27,7 @@ impl Observation {
     pub fn zero() -> Self {
         Self {
             body_angular_velocity: [0.0; 3],
-            gravity_vector: [0.0, 0.0, -1.0],
+            gravity_vector: [0.0, -1.0, 0.0],
             joint_positions: [0.0; 12],
             joint_velocities: [0.0; 12],
             previous_action: [0.0; 12],
@@ -36,21 +36,22 @@ impl Observation {
     }
 
     /// Convert to flat vector for neural network input
-    /// Layout must match spot_env.py _get_observation():
-    /// [ang_vel(3), gravity(3), joint_pos_offset(12), joint_vel(12), prev_action(12), cmd(3)] = 45
+    /// Layout: [ang_vel(3), gravity(3), joint_pos(12), joint_vel(12), prev_action(12), cmd(3), behavior(5)] = 50
     pub fn to_vec(&self) -> Vec<f32> {
-        let mut vec = Vec::with_capacity(45);
+        let mut vec = Vec::with_capacity(50);
         vec.extend_from_slice(&self.body_angular_velocity);
         vec.extend_from_slice(&self.gravity_vector);
         vec.extend_from_slice(&self.joint_positions);
         vec.extend_from_slice(&self.joint_velocities);
         vec.extend_from_slice(&self.previous_action);
         vec.extend_from_slice(&self.command);
+        // Behavior one-hot: "walk" = [1, 0, 0, 0, 0]
+        vec.extend_from_slice(&[1.0, 0.0, 0.0, 0.0, 0.0]);
         vec
     }
 
-    /// Size of observation vector (must match training)
-    pub const SIZE: usize = 45;
+    /// Size of observation vector (must match training: 45 physics + 5 behavior)
+    pub const SIZE: usize = 50;
 }
 
 /// Action space for the Spot robot
