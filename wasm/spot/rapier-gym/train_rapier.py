@@ -19,6 +19,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 import ray
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
+from ray.rllib.callbacks.callbacks import RLlibCallback
 from ray.air.integrations.wandb import WandbLoggerCallback
 import socket
 import numpy as np
@@ -26,26 +27,59 @@ import numpy as np
 from spot_rapier import SpotEnvRapier
 
 
-class CheckpointCallback(tune.Callback):
-    """Force checkpoint saving every N iterations.
+class AutoCheckpointCallback(RLlibCallback):
+    """Save checkpoints directly via Algorithm.save() inside the training loop.
 
-    Workaround: CheckpointConfig doesn't work with old RLlib API stack.
-    This uses Tune's trial.should_checkpoint mechanism instead.
+    Runs inside the algorithm actor, bypassing Tune's broken CheckpointConfig
+    on the old RLlib API stack (RAY_TRAIN_V2_ENABLED=0).
+
+    Saves on:
+    - Every `frequency` iterations
+    - New best reward
     """
-    def __init__(self, frequency: int = 100):
+
+    def __init__(self, checkpoint_dir: str = "/tmp/spot_checkpoints", frequency: int = 100):
+        super().__init__()
+        self.checkpoint_dir = checkpoint_dir
         self.frequency = frequency
         self.best_reward = float("-inf")
+        import sys
+        print(f"[CKPT] AutoCheckpointCallback initialized, dir={checkpoint_dir}", file=sys.stderr, flush=True)
 
-    def on_trial_result(self, iteration, trials, trial, result, **info):
-        ts = result.get("training_iteration", 0)
-        reward = result.get("env_runners/episode_reward_mean",
-                           result.get("episode_reward_mean", float("-inf")))
+    def on_train_result(self, *, algorithm, result, **kwargs):
+        import sys, math
+        iteration = result.get("training_iteration", 0)
+        reward = result.get(
+            "env_runners/episode_reward_mean",
+            result.get("episode_reward_mean", float("-inf")),
+        )
 
-        if ts % self.frequency == 0 and ts > 0:
-            result["should_checkpoint"] = True
-        if reward > self.best_reward:
+        should_save = False
+        reason = ""
+
+        # Periodic save
+        if iteration % self.frequency == 0 and iteration > 0:
+            should_save = True
+            reason = "periodic"
+
+        # Best reward save (handle NaN)
+        if not math.isnan(reward) and reward > self.best_reward:
             self.best_reward = reward
-            result["should_checkpoint"] = True
+            should_save = True
+            reason = "best_reward"
+
+        # Always save first iteration
+        if iteration == 1:
+            should_save = True
+            reason = "first"
+
+        if should_save:
+            try:
+                path = algorithm.save(self.checkpoint_dir)
+                print(f"[CKPT] iter={iteration} reward={reward} reason={reason} -> {path}",
+                      file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"[CKPT] save failed at iter={iteration}: {e}", file=sys.stderr, flush=True)
 
 
 class CurriculumCallback(tune.Callback):
@@ -127,6 +161,7 @@ def train(args):
             enable_env_runner_and_connector_v2=False,
         )
         .resources(num_gpus=1 if args.gpu else 0)
+        .callbacks(AutoCheckpointCallback)
     )
 
     config.model = {
@@ -139,7 +174,6 @@ def train(args):
     hostname = socket.gethostname()
     callbacks = [
         CurriculumCallback(total_timesteps),
-        CheckpointCallback(frequency=100),
     ]
 
     if not args.no_wandb:
@@ -182,57 +216,10 @@ def train(args):
 
     # Export best model to ONNX
     if best.checkpoint:
-        export_onnx(best.checkpoint.path)
+        from export_pipeline import export_onnx
 
-
-def export_onnx(checkpoint_path: str):
-    """Export checkpoint to ONNX for WASM deployment."""
-    import torch
-
-    from ray.rllib.algorithms.ppo import PPO
-    tune.register_env("spot_rapier", lambda c: SpotEnvRapier(config=c))
-
-    algo = PPO.from_checkpoint(checkpoint_path)
-    policy = algo.get_policy()
-    model = policy.model.cpu()
-    model.eval()
-
-    class CleanPolicy(torch.nn.Module):
-        def __init__(self, m):
-            super().__init__()
-            self.h0 = m._hidden_layers[0]._model
-            self.h1 = m._hidden_layers[1]._model
-            self.h2 = m._hidden_layers[2]._model
-            self.logits = m._logits._model
-
-        def forward(self, obs):
-            x = self.h0(obs)
-            x = self.h1(x)
-            x = self.h2(x)
-            return self.logits(x)
-
-    clean = CleanPolicy(model)
-    clean.eval()
-
-    # Input is 50D (45 physics + 5 behavior one-hot)
-    dummy = torch.zeros(1, 50)
-    torch.onnx.export(clean, dummy, "/tmp/spot_rapier_policy.onnx",
-                       input_names=["obs"], output_names=["actions"],
-                       dynamic_axes={"obs": {0: "batch"}, "actions": {0: "batch"}},
-                       opset_version=11)
-
-    # Save normalization stats
-    local_worker = algo.env_runner
-    filters = local_worker.filters
-    if "default_policy" in filters:
-        f = filters["default_policy"]
-        if hasattr(f, "running_stats"):
-            rs = f.running_stats
-            np.save("/tmp/obs_mean.npy", np.array(rs.mean, dtype=np.float32))
-            np.save("/tmp/obs_std.npy", np.sqrt(np.array(rs.var, dtype=np.float32) + 1e-8))
-
-    print(f"ONNX exported to /tmp/spot_rapier_policy.onnx")
-    algo.stop()
+        result = export_onnx(best.checkpoint.path, "/tmp/spot_rapier_policy.onnx")
+        print(f"ONNX: {result['onnx_path']}")
 
 
 if __name__ == "__main__":

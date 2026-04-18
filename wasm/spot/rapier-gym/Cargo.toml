@@ -10,12 +10,10 @@ name = "spot_rapier"
 crate-type = ["cdylib"]
 
 [dependencies]
+spot-physics = { path = "../spot-physics" }
 rapier3d = "0.22"
 nalgebra = "0.33"
-roxmltree = "0.20"
 pyo3 = { version = "0.22", features = ["extension-module"] }
-rand = "0.8"
-noise = "0.9"
 
 [profile.release]
 opt-level = 3
