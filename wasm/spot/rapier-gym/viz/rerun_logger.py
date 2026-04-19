@@ -158,7 +158,7 @@ class RerunLoggerCallback(DefaultCallbacks):
             return
 
         rr.set_time("step", sequence=self._step_counter)
-        rr.set_time("wall_clock", seconds=time.time())
+        rr.set_time("wall_clock", timestamp=time.time())
 
         # Try to get env reference for detailed state
         try:
@@ -284,7 +284,7 @@ class RerunLoggerCallback(DefaultCallbacks):
 
         self._episode_counter += 1
         rr.set_time("episode", sequence=self._episode_counter)
-        rr.set_time("wall_clock", seconds=time.time())
+        rr.set_time("wall_clock", timestamp=time.time())
 
         # Episode reward and length
         total_reward = episode.total_reward
@@ -321,7 +321,7 @@ class RerunLoggerCallback(DefaultCallbacks):
 
         iteration = result.get("training_iteration", 0)
         rr.set_time("iteration", sequence=iteration)
-        rr.set_time("wall_clock", seconds=time.time())
+        rr.set_time("wall_clock", timestamp=time.time())
 
         # Standard RLlib metrics
         metric_paths = {

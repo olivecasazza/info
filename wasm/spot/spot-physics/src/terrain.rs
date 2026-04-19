@@ -2,6 +2,8 @@ use rapier3d::prelude::*;
 use rapier3d::na::Point3;
 use noise::{NoiseFn, Perlin};
 
+use crate::physics::{BatteryItem, PhysicsWorld};
+
 // ---------------------------------------------------------------------------
 // Deterministic PRNG (SplitMix64) — wasm-safe, no external crate needed
 // ---------------------------------------------------------------------------
@@ -63,6 +65,7 @@ pub enum TerrainType {
     DynamicObstacles,
     Slopes,
     Mixed,
+    Foraging,
 }
 
 impl TerrainType {
@@ -77,6 +80,7 @@ impl TerrainType {
             "dynamic_obstacles" => Self::DynamicObstacles,
             "slopes" => Self::Slopes,
             "mixed" => Self::Mixed,
+            "foraging" => Self::Foraging,
             _ => Self::Flat,
         }
     }
@@ -120,6 +124,11 @@ pub fn create_terrain(
         }
         TerrainType::Mixed => {
             create_mixed_terrain(rigid_body_set, collider_set, seed, d)
+        }
+        TerrainType::Foraging => {
+            // Foraging terrain only creates the flat ground here.
+            // Battery spawning requires PhysicsWorld — use create_foraging_terrain() instead.
+            vec![create_flat_ground(collider_set)]
         }
     }
 }
@@ -682,6 +691,71 @@ pub fn create_mixed_terrain(
             .build();
         let ch = collider_set.insert_with_parent(col, rb_handle, rigid_body_set);
         handles.push(ch);
+    }
+
+    handles
+}
+
+// ---------------------------------------------------------------------------
+// 10. Foraging terrain
+// ---------------------------------------------------------------------------
+
+const BATTERY_GROUPS: fn() -> InteractionGroups =
+    || InteractionGroups::new(Group::GROUP_3, Group::ALL);
+
+/// Create foraging terrain: flat ground + 10-25 battery spheres as sensors.
+/// Populates `world.batteries` with the spawned items.
+pub fn create_foraging_terrain(world: &mut PhysicsWorld, seed: u64) -> Vec<ColliderHandle> {
+    let mut handles = Vec::new();
+
+    // Flat ground
+    let ground = create_flat_ground(&mut world.collider_set);
+    world.ground_collider_handle = Some(ground);
+    handles.push(ground);
+
+    // Seed the world RNG
+    world.rng_state = seed;
+
+    // Determine battery count: 10-25
+    let count = {
+        world.rng_state = world.rng_state.wrapping_add(0x9e3779b97f4a7c15);
+        let mut z = world.rng_state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+        z = z ^ (z >> 31);
+        10 + (z % 16) as usize // 10..25
+    };
+
+    let arena = 4.0f32;
+
+    for _ in 0..count {
+        let radius = world.rng_range(0.03, 0.08);
+        let charge = world.rng_range(0.1, 0.5);
+
+        let (x, z_pos) = loop {
+            let x = world.rng_range(-arena, arena);
+            let z = world.rng_range(-arena, arena);
+            if x * x + z * z >= 1.0 {
+                break (x, z);
+            }
+        };
+        let y = radius; // sit on ground
+
+        let col = ColliderBuilder::ball(radius)
+            .sensor(true)
+            .collision_groups(BATTERY_GROUPS())
+            .translation(vector![x, y, z_pos])
+            .build();
+        let handle = world.collider_set.insert(col);
+
+        world.batteries.push(BatteryItem {
+            collider_handle: handle,
+            position: [x, y, z_pos],
+            charge,
+            radius,
+        });
+
+        handles.push(handle);
     }
 
     handles

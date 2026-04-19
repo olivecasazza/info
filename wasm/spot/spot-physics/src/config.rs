@@ -55,6 +55,22 @@ pub const DENSITY: f32 = 2000.0;
 /// Robot spawn height (Y coordinate).
 pub const SPAWN_HEIGHT: f32 = 0.45;
 
+// ---------------------------------------------------------------------------
+// Energy system
+// ---------------------------------------------------------------------------
+
+pub const ENERGY_MAX: f32 = 1.0;
+pub const ENERGY_START: f32 = 0.8;
+pub const ENERGY_THRESHOLD: f32 = 0.2;
+pub const ENERGY_REGEN: f32 = 0.0005;
+pub const ENERGY_DECAY_ACTIVE: f32 = 0.002;
+pub const ENERGY_DECAY_IDLE: f32 = 0.0005;
+pub const BATTERY_COLLECT_RADIUS: f32 = 0.2;
+pub const SIGHT_CONE_HALF_ANGLE: f32 = 1.047; // 60 degrees in radians
+pub const SIGHT_CONE_RANGE: f32 = 3.0;
+pub const NUM_SIGHT_RAYS: usize = 8;
+pub const FORAGING_OBS_SIZE: usize = 12;
+
 /// Build a HashMap of joint name -> default angle from the canonical arrays.
 pub fn default_angles_map() -> HashMap<String, f32> {
     JOINT_NAMES

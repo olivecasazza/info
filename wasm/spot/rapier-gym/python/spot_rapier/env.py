@@ -9,6 +9,7 @@ Supports multi-behavior training via behavior conditioning:
     - "climb": stair climbing
     - "balance": two-leg balancing
     - "sprint": high-speed locomotion
+    - "forage": battery energy foraging
 """
 
 import gymnasium as gym
@@ -23,6 +24,7 @@ BEHAVIORS = {
     "climb":   2,
     "balance": 3,
     "sprint":  4,
+    "forage":  5,
 }
 NUM_BEHAVIORS = len(BEHAVIORS)
 
@@ -58,6 +60,15 @@ REWARD_PRESETS = {
         "lin_vel_z": 3.0, "ang_vel_xy": 0.1, "body_collision": 2.0,
         "torque": 0.001, "joint_accel": 5e-7,
     },
+    "forage": {
+        "velocity": 0.0, "action_rate": 0.01, "orientation": 1.5,
+        "foot_air": 0.5, "height": 2.0, "alive": 0.5,
+        "lin_vel_z": 1.0, "ang_vel_xy": 0.05, "body_collision": 0.5,
+        "torque": 0.0001, "joint_accel": 2.5e-7,
+        "battery_collect": 10.0, "sight_reward": 0.5,
+        "approach_reward": 2.0, "energy_level": 1.0,
+        "energy_low_penalty": 5.0,
+    },
 }
 
 DEFAULT_JOINT_ANGLES = np.array([
@@ -69,14 +80,15 @@ DEFAULT_JOINT_ANGLES = np.array([
 class SpotEnvRapier(gym.Env):
     """Spot robot env with Rapier3D physics and multi-behavior support.
 
-    Observation (45 + NUM_BEHAVIORS = 50):
+    Observation (45 + NUM_BEHAVIORS + 12 foraging = 63):
         [3]  body angular velocity (body frame)
         [3]  projected gravity (body frame)
         [12] joint position offsets from default
         [12] joint velocities
         [12] previous action
         [3]  velocity command (vx, vy, yaw_rate)
-        [5]  behavior one-hot encoding
+        [6]  behavior one-hot encoding
+        [12] foraging dims (battery positions, energy, nearest dist; zeros for non-forage)
 
     Action (12): joint angle offsets from default pose, clipped to [-0.25, 0.25]
     """
@@ -93,14 +105,22 @@ class SpotEnvRapier(gym.Env):
         self.cmd_vel_scale = config.get("cmd_vel_scale", 1.0)
         self.max_episode_steps = config.get("max_episode_steps", 2000)
 
-        # Multi-behavior: observation includes behavior one-hot
-        obs_dim = 45 + NUM_BEHAVIORS
+        # 45 physics + 6 behavior one-hot + 12 foraging = 63
+        forage_obs_dim = 12
+        obs_dim = 45 + NUM_BEHAVIORS + forage_obs_dim
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(obs_dim,), dtype=np.float32,
         )
         self.action_space = gym.spaces.Box(
             low=-0.25, high=0.25, shape=(12,), dtype=np.float32,
         )
+
+        # Foraging energy state
+        self.energy = 0.8
+        self.prev_energy = 0.8
+        self.prev_nearest_dist = float('inf')
+        self.batteries_collected = 0
+        self.collected_charge = 0.0
 
         # Load URDF — check config path, then common locations
         urdf_path = config.get("urdf_path", None)
@@ -142,6 +162,13 @@ class SpotEnvRapier(gym.Env):
         self.foot_air_time = np.zeros(4, dtype=np.float32)
         self.prev_joint_vel = np.zeros(12, dtype=np.float32)
 
+        # Reset foraging state
+        self.energy = 0.8
+        self.prev_energy = 0.8
+        self.prev_nearest_dist = float('inf')
+        self.batteries_collected = 0
+        self.collected_charge = 0.0
+
         # Random command
         self._sample_command()
 
@@ -153,6 +180,24 @@ class SpotEnvRapier(gym.Env):
 
         self.sim.step(action.tolist())
         self.current_step += 1
+
+        # Forage energy system
+        self.collected_charge = 0.0
+        if self.behavior == "forage":
+            self.collected_charge = self.sim.collect_batteries()
+            if self.collected_charge > 0:
+                self.batteries_collected += 1
+
+            # Apply collection, decay, regen (in that order)
+            self.prev_energy = self.energy
+            self.energy = min(1.0, self.energy + self.collected_charge)
+            action_mag = float(np.sqrt(np.sum(action ** 2)))
+            if action_mag > 0.05:
+                self.energy -= 0.002
+            else:
+                self.energy -= 0.0005
+            self.energy += 0.0005  # passive regen
+            self.energy = np.clip(self.energy, 0.0, 1.0)
 
         obs = self._get_observation()
         reward, reward_info = self._compute_reward(action)
@@ -171,6 +216,9 @@ class SpotEnvRapier(gym.Env):
             self._sample_command()
 
         info = {**reward_info, "episode_length": self.current_step}
+        if self.behavior == "forage":
+            info["energy"] = self.energy
+            info["batteries_collected"] = self.batteries_collected
         return obs, reward, terminated, truncated, info
 
     def _get_observation(self):
@@ -183,12 +231,21 @@ class SpotEnvRapier(gym.Env):
         behavior_onehot = np.zeros(NUM_BEHAVIORS, dtype=np.float32)
         behavior_onehot[behavior_id] = 1.0
 
-        return np.concatenate([raw_obs, behavior_onehot])
+        # Append foraging observation (12D)
+        if self.behavior == "forage":
+            forage_obs = np.array(
+                self.sim.get_foraging_observation(), dtype=np.float32,
+            )
+        else:
+            forage_obs = np.zeros(12, dtype=np.float32)
+
+        return np.concatenate([raw_obs, behavior_onehot, forage_obs])
 
     # Valid terrain type strings accepted by the Rust backend
     TERRAIN_TYPES = [
         "flat", "heightfield", "stairs", "platforms",
         "obstacles", "dynamic_obstacles", "slopes", "mixed",
+        "foraging",
     ]
 
     def _resolve_terrain_type(self) -> str:
@@ -199,6 +256,8 @@ class SpotEnvRapier(gym.Env):
         """
         if self.terrain_type is not None:
             return self.terrain_type
+        if self.behavior == "forage":
+            return "foraging"
         if self.terrain_difficulty <= 0:
             return "flat"
         # Sensible defaults per behavior
@@ -208,11 +267,12 @@ class SpotEnvRapier(gym.Env):
             "climb": "stairs",
             "balance": "dynamic_obstacles",
             "sprint": "obstacles",
+            "forage": "foraging",
         }
         return defaults.get(self.behavior, "heightfield")
 
     def _sample_command(self):
-        if self.behavior == "balance":
+        if self.behavior in ("balance", "forage"):
             self.command = np.zeros(3, dtype=np.float32)
         elif self.behavior == "sprint":
             self.command = np.array([
@@ -318,6 +378,53 @@ class SpotEnvRapier(gym.Env):
             + w["torque"] * r_torque
             + w["joint_accel"] * r_joint_accel
         )
+
+        # Foraging reward components
+        if self.behavior == "forage":
+            # Battery collection spike (raw = charge amount, weight scales it)
+            r_battery = self.collected_charge
+            info["r_battery_collect"] = r_battery
+
+            # Sight reward from Rust (how well the robot is looking at batteries)
+            r_sight = self.sim.compute_sight_reward()
+            info["r_sight_reward"] = r_sight
+
+            # Approach reward (getting closer to nearest battery)
+            base_pos = np.array(self.sim.get_base_position(), dtype=np.float32)
+            battery_positions = self.sim.get_battery_positions()
+            if battery_positions:
+                current_nearest_dist = float('inf')
+                for bp in battery_positions:
+                    dx = bp[0] - base_pos[0]
+                    dz = bp[2] - base_pos[2]
+                    dist = float(np.sqrt(dx * dx + dz * dz))
+                    if dist < current_nearest_dist:
+                        current_nearest_dist = dist
+            else:
+                current_nearest_dist = self.prev_nearest_dist
+
+            if self.prev_nearest_dist == float('inf'):
+                r_approach = 0.0
+            else:
+                r_approach = max(0.0, self.prev_nearest_dist - current_nearest_dist)
+            self.prev_nearest_dist = current_nearest_dist
+            info["r_approach_reward"] = r_approach
+
+            # Energy level (proportional reward for staying charged)
+            r_energy = self.energy
+            info["r_energy_level"] = r_energy
+
+            # Low energy penalty
+            r_energy_penalty = -1.0 if self.energy < 0.2 else 0.0
+            info["r_energy_low_penalty"] = r_energy_penalty
+
+            total += (
+                w.get("battery_collect", 0.0) * r_battery
+                + w.get("sight_reward", 0.0) * r_sight
+                + w.get("approach_reward", 0.0) * r_approach
+                + w.get("energy_level", 0.0) * r_energy
+                + w.get("energy_low_penalty", 0.0) * r_energy_penalty
+            )
 
         info["reward_total"] = total
         return float(total), info

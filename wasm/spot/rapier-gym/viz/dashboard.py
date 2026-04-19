@@ -173,7 +173,7 @@ def log_metrics_for_node(
         rr.set_time("timesteps", sequence=timesteps)
 
         wall_time = _safe_float(row.get("timestamp", str(time.time())))
-        rr.set_time("wall_clock", seconds=wall_time)
+        rr.set_time("wall_clock", timestamp=wall_time)
 
         # Reward curves
         for col_name, log_name in [
@@ -305,6 +305,8 @@ def _safe_int(val: Optional[str]) -> int:
 
 
 def main():
+    global EXPERIMENT_NAME
+
     parser = argparse.ArgumentParser(
         description="Spot training dashboard via Rerun"
     )
@@ -343,7 +345,6 @@ def main():
     )
     args = parser.parse_args()
 
-    global EXPERIMENT_NAME
     EXPERIMENT_NAME = args.experiment
 
     # Build node list
@@ -358,10 +359,12 @@ def main():
     # Start Rerun
     rr.init("spot_dashboard")
     server_uri = rr.serve_grpc(grpc_port=args.grpc_port)
+    # Override URI to use the machine's actual IP so remote browsers can connect
+    public_uri = f"rerun+http://192.168.1.35:{args.grpc_port}/proxy"
     rr.serve_web_viewer(
         web_port=args.web_port,
         open_browser=False,
-        connect_to=server_uri,
+        connect_to=public_uri,
     )
 
     print(f"Spot Training Dashboard")
