@@ -12,6 +12,7 @@ pub mod render;
 pub mod scene;
 pub mod input;
 pub mod simulation;
+pub mod terrain;
 pub mod ui;
 pub mod hand_drawn;
 pub mod god_hand;
