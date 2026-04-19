@@ -343,8 +343,13 @@ impl SpotController {
             }
         }
 
-        // 4. Store action offsets for next observation (prev_action in obs)
-        self.previous_action = action_offsets.clone();
+        // 4. Store CLAMPED action offsets for next observation (must match training)
+        let mut clamped_action = action_offsets.clone();
+        for j in 0..12 {
+            clamped_action.joint_targets[j] = clamped_action.joint_targets[j]
+                .clamp(-SpotConfig::ACTION_OFFSET_LIMIT, SpotConfig::ACTION_OFFSET_LIMIT);
+        }
+        self.previous_action = clamped_action;
 
         // 5. Store in history for plotting
         self.action_history.push((self.total_time, action_offsets.joint_targets));
