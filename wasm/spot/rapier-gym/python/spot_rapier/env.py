@@ -89,6 +89,7 @@ class SpotEnvRapier(gym.Env):
 
         self.behavior = config.get("behavior", "walk")
         self.terrain_difficulty = config.get("terrain_difficulty", 0.0)
+        self.terrain_type = config.get("terrain_type", None)  # auto-select if None
         self.cmd_vel_scale = config.get("cmd_vel_scale", 1.0)
         self.max_episode_steps = config.get("max_episode_steps", 2000)
 
@@ -129,7 +130,7 @@ class SpotEnvRapier(gym.Env):
         super().reset(seed=seed)
         self._episode_seed = self.np_random.integers(0, 2**31)
 
-        terrain_type = "heightfield" if self.terrain_difficulty > 0 else "flat"
+        terrain_type = self._resolve_terrain_type()
         self.sim = SpotSim(
             self.urdf_content,
             terrain_type,
@@ -183,6 +184,32 @@ class SpotEnvRapier(gym.Env):
         behavior_onehot[behavior_id] = 1.0
 
         return np.concatenate([raw_obs, behavior_onehot])
+
+    # Valid terrain type strings accepted by the Rust backend
+    TERRAIN_TYPES = [
+        "flat", "heightfield", "stairs", "platforms",
+        "obstacles", "dynamic_obstacles", "slopes", "mixed",
+    ]
+
+    def _resolve_terrain_type(self) -> str:
+        """Pick terrain type for this episode.
+
+        If terrain_type was explicitly set in config, use it.
+        Otherwise auto-select based on behavior and difficulty.
+        """
+        if self.terrain_type is not None:
+            return self.terrain_type
+        if self.terrain_difficulty <= 0:
+            return "flat"
+        # Sensible defaults per behavior
+        defaults = {
+            "walk": "heightfield",
+            "terrain": "mixed",
+            "climb": "stairs",
+            "balance": "dynamic_obstacles",
+            "sprint": "obstacles",
+        }
+        return defaults.get(self.behavior, "heightfield")
 
     def _sample_command(self):
         if self.behavior == "balance":
