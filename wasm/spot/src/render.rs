@@ -64,11 +64,40 @@ mod heightmap {
 /// Terrain Y offset for max_height=6.0
 const TERRAIN_Y_OFFSET: f32 = -3.0;
 
-/// Draw sharp grid lines that follow terrain height
-/// Major lines every 5 meters, minor lines every 1 meter
-pub fn draw_ground_grid(_gizmos: Gizmos) {
-    // Grid is now rendered via terrain texture for perfect alignment
-    // No gizmo rendering needed
+/// Draw sharp grid lines that follow terrain height.
+/// Major lines every 5 meters, minor lines every 1 meter.
+pub fn draw_ground_grid(mut gizmos: Gizmos) {
+    let extent = 25.0_f32; // half-extent of grid
+    let y = 0.001; // slight offset above ground to avoid z-fighting
+
+    let minor_color = Color::srgba(0.15, 0.15, 0.15, 0.6);
+    let major_color = Color::srgba(0.25, 0.25, 0.25, 0.8);
+
+    let step_minor = 1.0_f32;
+    let step_major = 5.0_f32;
+
+    // Minor grid lines (every 1m)
+    let mut v = -extent;
+    while v <= extent {
+        let color = if (v % step_major).abs() < 0.01 {
+            major_color
+        } else {
+            minor_color
+        };
+        // Lines along X
+        gizmos.line(
+            Vec3::new(-extent, y, v),
+            Vec3::new(extent, y, v),
+            color,
+        );
+        // Lines along Z
+        gizmos.line(
+            Vec3::new(v, y, -extent),
+            Vec3::new(v, y, extent),
+            color,
+        );
+        v += step_minor;
+    }
 }
 
 /// Fix GLTF materials for WebGL2 compatibility.
