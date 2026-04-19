@@ -17,16 +17,16 @@ impl RapierSim {
     pub fn new(urdf_content: &str, terrain_type: &str, terrain_seed: u64, terrain_difficulty: f32) -> Self {
         let mut world = PhysicsWorld::new();
 
-        // Create terrain
-        let ground_handle = match terrain_type {
-            "heightfield" => spot_physics::terrain::create_heightfield_random(
-                &mut world.collider_set,
-                terrain_seed,
-                terrain_difficulty,
-            ),
-            _ => spot_physics::terrain::create_flat_ground(&mut world.collider_set),
-        };
-        world.ground_collider_handle = Some(ground_handle);
+        // Create terrain via the unified registry
+        let tt = spot_physics::terrain::TerrainType::from_str(terrain_type);
+        let terrain_handles = spot_physics::terrain::create_terrain(
+            tt,
+            &mut world.rigid_body_set,
+            &mut world.collider_set,
+            terrain_seed,
+            terrain_difficulty,
+        );
+        world.ground_collider_handle = terrain_handles.first().copied();
 
         // Load robot
         spot_physics::urdf::load_robot(&mut world, urdf_content);
