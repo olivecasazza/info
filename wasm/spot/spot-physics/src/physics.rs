@@ -3,9 +3,17 @@ use nalgebra as na;
 use std::collections::HashMap;
 
 use crate::config::{
-    ACTION_LIMIT, DAMPING, DEFAULT_JOINT_ANGLES, FOOT_LINKS, JOINT_NAMES, MAX_FORCE, PHYSICS_DT,
-    STIFFNESS,
+    ACTION_LIMIT, BATTERY_COLLECT_RADIUS, DAMPING, DEFAULT_JOINT_ANGLES, FOOT_LINKS, JOINT_NAMES,
+    MAX_FORCE, NUM_SIGHT_RAYS, PHYSICS_DT, SIGHT_CONE_HALF_ANGLE, SIGHT_CONE_RANGE, STIFFNESS,
 };
+
+/// A battery pickup item in the foraging environment.
+pub struct BatteryItem {
+    pub collider_handle: ColliderHandle,
+    pub position: [f32; 3],
+    pub charge: f32,
+    pub radius: f32,
+}
 
 /// Core physics world containing all Rapier state for the Spot robot.
 ///
@@ -35,6 +43,11 @@ pub struct PhysicsWorld {
     pub foot_link_handles: Vec<RigidBodyHandle>,
     /// Ground collider handle (populated after terrain creation).
     pub ground_collider_handle: Option<ColliderHandle>,
+
+    /// Battery items for foraging terrain.
+    pub batteries: Vec<BatteryItem>,
+    /// PRNG state for battery respawn (SplitMix64).
+    pub rng_state: u64,
 }
 
 impl PhysicsWorld {
@@ -60,6 +73,8 @@ impl PhysicsWorld {
             joint_map: HashMap::new(),
             foot_link_handles: Vec::new(),
             ground_collider_handle: None,
+            batteries: Vec::new(),
+            rng_state: 0x1234_5678_9abc_def0,
         }
     }
 
@@ -290,6 +305,151 @@ impl PhysicsWorld {
             }
         }
         count
+    }
+
+    // -----------------------------------------------------------------------
+    // Battery / foraging helpers
+    // -----------------------------------------------------------------------
+
+    /// Inline SplitMix64 step (matches terrain.rs Rng).
+    pub(crate) fn rng_next(&mut self) -> u64 {
+        self.rng_state = self.rng_state.wrapping_add(0x9e3779b97f4a7c15);
+        let mut z = self.rng_state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+        z ^ (z >> 31)
+    }
+
+    /// Uniform f32 in [lo, hi).
+    pub(crate) fn rng_range(&mut self, lo: f32, hi: f32) -> f32 {
+        let u = (self.rng_next() >> 40) as f32 / (1u64 << 24) as f32;
+        lo + u * (hi - lo)
+    }
+
+    /// Collect batteries within BATTERY_COLLECT_RADIUS of base_pos.
+    /// Returns total charge collected. Collected batteries are respawned.
+    pub fn collect_nearby_batteries(&mut self, base_pos: [f32; 3]) -> f32 {
+        let mut total_charge = 0.0f32;
+        let r2 = BATTERY_COLLECT_RADIUS * BATTERY_COLLECT_RADIUS;
+
+        let indices_to_respawn: Vec<usize> = self
+            .batteries
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| {
+                let dx = b.position[0] - base_pos[0];
+                let dy = b.position[1] - base_pos[1];
+                let dz = b.position[2] - base_pos[2];
+                dx * dx + dy * dy + dz * dz < r2
+            })
+            .map(|(i, _)| i)
+            .collect();
+
+        for &i in &indices_to_respawn {
+            total_charge += self.batteries[i].charge;
+        }
+
+        for &i in &indices_to_respawn {
+            self.respawn_battery(i);
+        }
+
+        total_charge
+    }
+
+    /// Get battery positions and charges: [(x, y, z, charge), ...].
+    pub fn get_battery_positions(&self) -> Vec<[f32; 4]> {
+        self.batteries
+            .iter()
+            .map(|b| [b.position[0], b.position[1], b.position[2], b.charge])
+            .collect()
+    }
+
+    /// Respawn a battery at a new random position on the foraging arena.
+    pub fn respawn_battery(&mut self, index: usize) {
+        let arena = 4.0f32;
+        let (x, z) = loop {
+            let x = self.rng_range(-arena, arena);
+            let z = self.rng_range(-arena, arena);
+            // Keep out of spawn zone (radius ~1m)
+            if x * x + z * z >= 1.0 {
+                break (x, z);
+            }
+        };
+        let radius = self.batteries[index].radius;
+        let charge = self.rng_range(0.1, 0.5);
+        let y = radius; // sit on ground
+
+        self.batteries[index].position = [x, y, z];
+        self.batteries[index].charge = charge;
+
+        // Update collider position
+        if let Some(col) = self.collider_set.get_mut(self.batteries[index].collider_handle) {
+            col.set_translation(vector![x, y, z]);
+        }
+    }
+
+    /// Cast NUM_SIGHT_RAYS rays in a forward cone and return
+    /// (total_visible_charge, avg_distance) of batteries hit.
+    pub fn cast_sight_cone(
+        &self,
+        base_pos: [f32; 3],
+        base_forward: [f32; 3],
+    ) -> (f32, f32) {
+        let origin = point![base_pos[0], base_pos[1], base_pos[2]];
+        let fwd = na::Vector3::new(base_forward[0], base_forward[1], base_forward[2]);
+        let fwd_norm = if fwd.norm() > 1e-6 { fwd.normalize() } else { na::Vector3::x() };
+
+        // Build a perpendicular vector for rotating rays in the horizontal plane
+        let up = na::Vector3::y();
+        let right = fwd_norm.cross(&up);
+        let right_norm = if right.norm() > 1e-6 { right.normalize() } else { na::Vector3::z() };
+
+        let mut total_charge = 0.0f32;
+        let mut total_dist = 0.0f32;
+        let mut hit_count = 0u32;
+
+        for i in 0..NUM_SIGHT_RAYS {
+            // Spread rays from -HALF_ANGLE to +HALF_ANGLE
+            let t = if NUM_SIGHT_RAYS > 1 {
+                i as f32 / (NUM_SIGHT_RAYS - 1) as f32
+            } else {
+                0.5
+            };
+            let angle = -SIGHT_CONE_HALF_ANGLE + 2.0 * SIGHT_CONE_HALF_ANGLE * t;
+
+            // Rotate forward direction around Y axis by angle
+            let dir = fwd_norm * angle.cos() + right_norm * angle.sin();
+            let ray = Ray::new(origin, vector![dir.x, dir.y, dir.z]);
+
+            let filter = QueryFilter::default().groups(InteractionGroups::new(
+                Group::ALL,
+                Group::GROUP_3,
+            ));
+
+            if let Some((handle, toi)) = self.query_pipeline.cast_ray(
+                &self.rigid_body_set,
+                &self.collider_set,
+                &ray,
+                SIGHT_CONE_RANGE,
+                true,
+                filter,
+            ) {
+                // Find which battery this hit
+                if let Some(bat) = self.batteries.iter().find(|b| b.collider_handle == handle) {
+                    total_charge += bat.charge;
+                    total_dist += toi;
+                    hit_count += 1;
+                }
+            }
+        }
+
+        let avg_dist = if hit_count > 0 {
+            total_dist / hit_count as f32
+        } else {
+            SIGHT_CONE_RANGE
+        };
+
+        (total_charge, avg_dist)
     }
 
     /// Check if the robot has fallen over.

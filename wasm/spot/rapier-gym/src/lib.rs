@@ -20,8 +20,12 @@ impl SpotSim {
 
     fn step(&mut self, actions: Vec<f32>) {
         self.inner.apply_actions(&actions);
+        self.inner.apply_energy_scaling();
         for _ in 0..self.inner.decimation {
             self.inner.physics_step();
+        }
+        if self.inner.is_foraging {
+            self.inner.collect_batteries();
         }
         self.inner.post_step();
     }
@@ -80,6 +84,40 @@ impl SpotSim {
 
     fn reset(&mut self, urdf_content: &str, terrain_type: &str, terrain_seed: u64, terrain_difficulty: f32) {
         self.inner = RapierSim::new(urdf_content, terrain_type, terrain_seed, terrain_difficulty);
+    }
+
+    // Foraging / energy API
+
+    fn get_energy(&self) -> f32 {
+        self.inner.get_energy()
+    }
+
+    fn collect_batteries(&mut self) -> f32 {
+        self.inner.collect_batteries()
+    }
+
+    fn get_battery_positions(&self) -> Vec<Vec<f32>> {
+        self.inner
+            .world
+            .get_battery_positions()
+            .into_iter()
+            .map(|arr| arr.to_vec())
+            .collect()
+    }
+
+    fn get_foraging_observation(&self) -> Vec<f32> {
+        self.inner.get_foraging_observation()
+    }
+
+    fn get_base_position(&self) -> Vec<f32> {
+        self.inner.get_base_pos().to_vec()
+    }
+
+    fn compute_sight_reward(&self) -> f32 {
+        let pos = self.inner.get_base_pos();
+        let fwd = self.inner.get_base_forward();
+        let (total_charge, avg_dist) = self.inner.world.cast_sight_cone(pos, fwd);
+        if avg_dist > 0.0 { total_charge / avg_dist } else { 0.0 }
     }
 }
 

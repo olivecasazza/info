@@ -51,3 +51,72 @@ pub fn collect_observation(
         command: *command,
     }
 }
+
+/// Collect a 12D foraging observation:
+/// [energy, energy_change, nearest_dx, nearest_dy, nearest_dz, nearest_charge,
+///  2nd_dx, 2nd_dy, 2nd_dz, 2nd_charge, sight_total_charge, sight_avg_dist]
+pub fn collect_foraging_observation(
+    world: &PhysicsWorld,
+    base_pos: [f32; 3],
+    base_forward: [f32; 3],
+    energy: f32,
+    prev_energy: f32,
+) -> [f32; 12] {
+    let energy_change = energy - prev_energy;
+
+    // Find the two nearest batteries by distance
+    let mut dists: Vec<(usize, f32)> = world
+        .batteries
+        .iter()
+        .enumerate()
+        .map(|(i, b)| {
+            let dx = b.position[0] - base_pos[0];
+            let dy = b.position[1] - base_pos[1];
+            let dz = b.position[2] - base_pos[2];
+            (i, (dx * dx + dy * dy + dz * dz).sqrt())
+        })
+        .collect();
+    dists.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let (n1_dx, n1_dy, n1_dz, n1_charge) = if let Some(&(idx, _)) = dists.get(0) {
+        let b = &world.batteries[idx];
+        (
+            b.position[0] - base_pos[0],
+            b.position[1] - base_pos[1],
+            b.position[2] - base_pos[2],
+            b.charge,
+        )
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+
+    let (n2_dx, n2_dy, n2_dz, n2_charge) = if let Some(&(idx, _)) = dists.get(1) {
+        let b = &world.batteries[idx];
+        (
+            b.position[0] - base_pos[0],
+            b.position[1] - base_pos[1],
+            b.position[2] - base_pos[2],
+            b.charge,
+        )
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+
+    // Sight cone summary
+    let (sight_total_charge, sight_avg_dist) = world.cast_sight_cone(base_pos, base_forward);
+
+    [
+        energy,
+        energy_change,
+        n1_dx,
+        n1_dy,
+        n1_dz,
+        n1_charge,
+        n2_dx,
+        n2_dy,
+        n2_dz,
+        n2_charge,
+        sight_total_charge,
+        sight_avg_dist,
+    ]
+}
