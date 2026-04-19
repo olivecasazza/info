@@ -4,9 +4,14 @@ version = "0.1.0"
 edition = "2021"
 description = "Shared Rapier3D physics for Spot quadruped robot"
 
+[features]
+default = []
+rerun = ["dep:rerun"]
+
 [dependencies]
 rapier3d = "0.22"
 nalgebra = "0.33"
 roxmltree = "0.20"
 noise = "0.9"
 log = "0.4"
+rerun = { version = "0.22", optional = true, default-features = false, features = ["sdk"] }

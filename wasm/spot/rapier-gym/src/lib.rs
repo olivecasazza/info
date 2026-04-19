@@ -119,6 +119,33 @@ impl SpotSim {
         let (total_charge, avg_dist) = self.inner.world.cast_sight_cone(pos, fwd);
         if avg_dist > 0.0 { total_charge / avg_dist } else { 0.0 }
     }
+
+    // Rerun visualization API
+
+    /// Start Rerun visualization by spawning a viewer process.
+    fn start_rerun(&mut self, app_name: &str) {
+        self.inner.start_rerun(app_name);
+    }
+
+    /// Start Rerun visualization by connecting to an existing viewer.
+    fn connect_rerun(&mut self, app_name: &str) {
+        self.inner.connect_rerun(app_name);
+    }
+
+    /// Start Rerun recording to an `.rrd` file.
+    fn save_rerun(&mut self, app_name: &str, path: &str) {
+        self.inner.save_rerun(app_name, path);
+    }
+
+    /// Stop Rerun visualization.
+    fn stop_rerun(&mut self) {
+        self.inner.stop_rerun();
+    }
+
+    /// Log a scalar metric to the active Rerun renderer.
+    fn log_rerun_scalar(&mut self, name: &str, value: f32) {
+        self.inner.log_rerun_scalar(name, value);
+    }
 }
 
 #[pymodule]
