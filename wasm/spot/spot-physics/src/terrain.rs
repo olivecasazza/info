@@ -288,6 +288,18 @@ pub fn create_stairs(
         handles.push(collider_set.insert(col));
     }
 
+    // Upper platform at the top of the stairs
+    let top_height = num_steps as f32 * step_height;
+    let platform_length = 2.0; // 2m deep platform at the top
+    let platform_x = x_start + num_steps as f32 * step_depth + platform_length * 0.5;
+    let col = ColliderBuilder::cuboid(platform_length * 0.5, top_height * 0.5, width * 0.5)
+        .friction(1.0)
+        .restitution(0.0)
+        .collision_groups(GROUND_GROUPS())
+        .translation(vector![platform_x, top_height * 0.5, 0.0])
+        .build();
+    handles.push(collider_set.insert(col));
+
     handles
 }
 

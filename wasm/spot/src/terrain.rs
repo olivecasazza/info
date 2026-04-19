@@ -198,14 +198,14 @@ fn spawn_terrain_visuals(
     difficulty: f32,
 ) {
     let ground_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.3, 0.35, 0.3, 0.6),
+        base_color: Color::srgba(0.05, 0.05, 0.05, 0.9),
         unlit: true,
         alpha_mode: AlphaMode::Blend,
         ..default()
     });
 
     let obstacle_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.5, 0.4, 0.3, 0.8),
+        base_color: Color::srgba(0.12, 0.12, 0.12, 0.9),
         unlit: true,
         alpha_mode: AlphaMode::Blend,
         double_sided: true,
@@ -460,7 +460,7 @@ fn spawn_heightfield_visual(
 
     let mesh_handle = meshes.add(mesh);
     let material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.3, 0.45, 0.3, 0.7),
+        base_color: Color::srgba(0.05, 0.05, 0.05, 0.9),
         unlit: true,
         alpha_mode: AlphaMode::Blend,
         double_sided: true,
