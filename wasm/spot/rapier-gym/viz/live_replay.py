@@ -1,9 +1,9 @@
-"""Live replay of latest checkpoint on ALL terrain types simultaneously.
+"""Live replay with actual robot STL meshes in Rerun 3D view.
 
-Runs on a training node. Loads the latest checkpoint, runs the robot
-on each terrain type in parallel, streams to Rerun with grid blueprint.
+Loads checkpoint policy, runs in Rapier, streams robot mesh poses + terrain
++ training metrics to Rerun. The 3D view shows the real robot model.
 
-Usage: python live_replay.py
+Usage: python viz/live_replay.py --checkpoint /tmp/spot_checkpoints
 View:  http://<host>:9091/?url=rerun%2Bhttp%3A%2F%2F<host>%3A9877%2Fproxy
 """
 import os
@@ -13,171 +13,201 @@ import pickle
 import math
 import time
 import argparse
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
 import numpy as np
 import torch
 import torch.nn as nn
-
 import rerun as rr
 import rerun.blueprint as rrb
 
 from spot_rapier.spot_rapier import SpotSim
-from pathlib import Path
+
+ASSETS_DIR = Path(__file__).parent.parent.parent / "assets"
+URDF_PATH = ASSETS_DIR / "spot.urdf"
+if not URDF_PATH.exists():
+    URDF_PATH = Path("/opt/spot-training-code/assets/spot.urdf")
+    ASSETS_DIR = URDF_PATH.parent
+
+TERRAINS = ["flat", "heightfield", "stairs", "platforms", "obstacles", "slopes", "mixed"]
 
 
 class CleanPolicy(nn.Module):
     def __init__(self, weights):
         super().__init__()
-        self.h0 = nn.Sequential(nn.Linear(50, 256), nn.Tanh())
+        input_dim = weights['_hidden_layers.0._model.0.weight'].shape[1]
+        self.h0 = nn.Sequential(nn.Linear(input_dim, 256), nn.Tanh())
         self.h1 = nn.Sequential(nn.Linear(256, 128), nn.Tanh())
         self.h2 = nn.Sequential(nn.Linear(128, 64), nn.Tanh())
         self.logits = nn.Sequential(nn.Linear(64, 12))
 
         state = self.state_dict()
-        state['h0.0.weight'] = torch.tensor(weights['_hidden_layers.0._model.0.weight'])
-        state['h0.0.bias'] = torch.tensor(weights['_hidden_layers.0._model.0.bias'])
-        state['h1.0.weight'] = torch.tensor(weights['_hidden_layers.1._model.0.weight'])
-        state['h1.0.bias'] = torch.tensor(weights['_hidden_layers.1._model.0.bias'])
-        state['h2.0.weight'] = torch.tensor(weights['_hidden_layers.2._model.0.weight'])
-        state['h2.0.bias'] = torch.tensor(weights['_hidden_layers.2._model.0.bias'])
-        state['logits.0.weight'] = torch.tensor(weights['_logits._model.0.weight'])
-        state['logits.0.bias'] = torch.tensor(weights['_logits._model.0.bias'])
+        for k in ['h0.0', 'h1.0', 'h2.0', 'logits.0']:
+            src = k.replace('h0.0', '_hidden_layers.0._model.0').replace(
+                'h1.0', '_hidden_layers.1._model.0').replace(
+                'h2.0', '_hidden_layers.2._model.0').replace(
+                'logits.0', '_logits._model.0')
+            state[f'{k}.weight'] = torch.tensor(weights[f'{src}.weight'])
+            state[f'{k}.bias'] = torch.tensor(weights[f'{src}.bias'])
         self.load_state_dict(state)
         self.eval()
 
     def forward(self, obs):
-        x = self.h0(obs)
-        x = self.h1(x)
-        x = self.h2(x)
-        return self.logits(x)
+        return self.logits(self.h2(self.h1(self.h0(obs))))
 
 
 def load_policy(checkpoint_dir):
     policy_path = os.path.join(checkpoint_dir, "policies/default_policy/policy_state.pkl")
     state = pickle.load(open(policy_path, "rb"))
     weights = state["weights"]
+    input_dim = weights['_hidden_layers.0._model.0.weight'].shape[1]
 
-    algo_path = os.path.join(checkpoint_dir, "algorithm_state.pkl")
-    algo_state = pickle.load(open(algo_path, "rb"))
-    filters = algo_state.get("worker", {}).get("filters", {})
-    mean = np.zeros(50, dtype=np.float32)
-    std = np.ones(50, dtype=np.float32)
-    if "default_policy" in filters:
-        f = filters["default_policy"]
-        if hasattr(f, "running_stats"):
-            rs = f.running_stats
-            mean = np.array(rs.mean, dtype=np.float32)
-            std = np.sqrt(np.array(rs.var, dtype=np.float32) + 1e-8)
+    mean = np.zeros(input_dim, dtype=np.float32)
+    std = np.ones(input_dim, dtype=np.float32)
+    try:
+        algo_path = os.path.join(checkpoint_dir, "algorithm_state.pkl")
+        algo_state = pickle.load(open(algo_path, "rb"))
+        filters = algo_state.get("worker", {}).get("filters", {})
+        if "default_policy" in filters:
+            f = filters["default_policy"]
+            if hasattr(f, "running_stats"):
+                rs = f.running_stats
+                mean = np.array(rs.mean, dtype=np.float32)
+                std = np.sqrt(np.array(rs.var, dtype=np.float32) + 1e-8)
+    except Exception as e:
+        print(f"Warning: no normalization stats: {e}", flush=True)
 
-    return CleanPolicy(weights), mean, std
-
-
-SKELETON = {
-    "body_f": ([0.15, 0, 0], [-0.15, 0, 0]),
-    "body_l": ([0.15, 0, 0.08], [-0.15, 0, 0.08]),
-    "body_r": ([0.15, 0, -0.08], [-0.15, 0, -0.08]),
-    "fl_hip": ([0.15, 0, 0.08], [0.15, 0, 0.15]),
-    "fl_upper": ([0.15, 0, 0.15], [0.15, -0.2, 0.15]),
-    "fl_lower": ([0.15, -0.2, 0.15], [0.15, -0.35, 0.15]),
-    "fr_hip": ([0.15, 0, -0.08], [0.15, 0, -0.15]),
-    "fr_upper": ([0.15, 0, -0.15], [0.15, -0.2, -0.15]),
-    "fr_lower": ([0.15, -0.2, -0.15], [0.15, -0.35, -0.15]),
-    "bl_hip": ([-0.15, 0, 0.08], [-0.15, 0, 0.15]),
-    "bl_upper": ([-0.15, 0, 0.15], [-0.15, -0.2, 0.15]),
-    "bl_lower": ([-0.15, -0.2, 0.15], [-0.15, -0.35, 0.15]),
-    "br_hip": ([-0.15, 0, -0.08], [-0.15, 0, -0.15]),
-    "br_upper": ([-0.15, 0, -0.15], [-0.15, -0.2, -0.15]),
-    "br_lower": ([-0.15, -0.2, -0.15], [-0.15, -0.35, -0.15]),
-}
-
-TERRAINS = ["flat", "heightfield", "stairs", "platforms", "obstacles", "slopes", "mixed"]
+    return CleanPolicy(weights), mean, std, input_dim
 
 
-def log_robot(prefix, sim):
-    height = sim.get_base_height()
-    contacts = sim.get_foot_contacts()
+def parse_urdf_meshes(urdf_path, assets_dir):
+    """Parse URDF and return link->mesh mapping with visual origins."""
+    tree = ET.parse(urdf_path)
+    root = tree.getroot()
+    meshes = {}
 
-    segments = []
-    seg_colors = []
-    for name, (start, end) in SKELETON.items():
-        s = [start[0], start[1] + height, start[2]]
-        e = [end[0], end[1] + height, end[2]]
-        segments.append([s, e])
-        if "lower" in name:
-            seg_colors.append([255, 150, 50, 255])
-        elif "upper" in name:
-            seg_colors.append([100, 180, 255, 255])
-        elif "body" in name:
-            seg_colors.append([220, 220, 220, 255])
-        else:
-            seg_colors.append([180, 180, 255, 255])
+    for link in root.findall('.//link'):
+        name = link.get('name')
+        visual = link.find('visual')
+        if visual is None:
+            continue
+        mesh_el = visual.find('.//mesh')
+        if mesh_el is None:
+            continue
 
-    rr.log(f"{prefix}/skeleton", rr.LineStrips3D(segments, colors=seg_colors, radii=0.008))
+        fname = mesh_el.get('filename', '').split('/')[-1]
+        stl_path = assets_dir / fname
+        if not stl_path.exists():
+            continue
 
-    foot_positions = [
-        [0.15, height - 0.35, 0.15],
-        [0.15, height - 0.35, -0.15],
-        [-0.15, height - 0.35, 0.15],
-        [-0.15, height - 0.35, -0.15],
-    ]
-    foot_colors = [[0, 255, 0, 255] if c else [255, 0, 0, 255] for c in contacts]
-    rr.log(f"{prefix}/feet", rr.Points3D(foot_positions, radii=0.02, colors=foot_colors))
-    rr.log(f"{prefix}/base", rr.Points3D([[0, height, 0]], radii=0.03, colors=[0, 200, 255, 255]))
+        origin = visual.find('origin')
+        xyz = [0.0, 0.0, 0.0]
+        rpy = [0.0, 0.0, 0.0]
+        if origin is not None:
+            if origin.get('xyz'):
+                xyz = [float(x) for x in origin.get('xyz').split()]
+            if origin.get('rpy'):
+                rpy = [float(x) for x in origin.get('rpy').split()]
+
+        meshes[name] = {
+            'stl_path': stl_path,
+            'stl_bytes': stl_path.read_bytes(),
+            'xyz': xyz,
+            'rpy': rpy,
+        }
+    return meshes
 
 
-def log_ground(prefix, terrain_type):
+def log_robot_meshes(meshes):
+    """Log all robot STL meshes as static assets in Rerun."""
+    for link_name, info in meshes.items():
+        entity = f"world/robot/{link_name}"
+        rr.log(entity, rr.Asset3D(contents=info['stl_bytes'], media_type="model/stl"),
+               static=True)
+
+
+def log_robot_pose(meshes, base_height):
+    """Update robot mesh transforms based on physics state."""
+    # For now, position the entire robot at the base height
+    # A full FK solution would compute per-link transforms from joint angles
+    rr.log("world/robot", rr.Transform3D(
+        translation=[0.0, base_height, 0.0],
+    ))
+
+
+def log_terrain(terrain_type, difficulty, seed):
+    """Log terrain as 3D geometry in Rerun."""
     if terrain_type == "flat":
-        rr.log(f"{prefix}/ground", rr.Boxes3D(
-            centers=[[0, -0.01, 0]], sizes=[[3, 0.02, 3]], colors=[[60, 120, 60, 180]],
+        rr.log("world/terrain/ground", rr.Boxes3D(
+            centers=[[0, -0.005, 0]], sizes=[[6, 0.01, 6]],
+            colors=[[30, 30, 30, 200]],
         ), static=True)
     elif terrain_type == "stairs":
-        boxes = []
-        for i in range(8):
-            h = 0.03 * (i + 1)
-            boxes.append({"center": [1.5 + i * 0.25, h / 2, 0], "size": [0.25, h, 1.0]})
-        rr.log(f"{prefix}/ground", rr.Boxes3D(
-            centers=[b["center"] for b in boxes],
-            sizes=[b["size"] for b in boxes],
-            colors=[[80, 80, 140, 200]] * len(boxes),
-        ), static=True)
-    elif terrain_type == "slopes":
-        rr.log(f"{prefix}/ground", rr.Boxes3D(
-            centers=[[1.5, 0.15, 0], [-1.5, 0.15, 0]],
-            sizes=[[2.0, 0.05, 1.0], [2.0, 0.05, 1.0]],
-            colors=[[140, 100, 60, 200], [140, 100, 60, 200]],
-        ), static=True)
+        centers, sizes, colors = [], [], []
+        n_steps = int(6 + 10 * difficulty)
+        step_h = 0.04 + 0.12 * difficulty
+        for i in range(n_steps):
+            h = step_h * (i + 1)
+            centers.append([1.5 + i * 0.3, h / 2, 0])
+            sizes.append([0.3, h, 2.0])
+            colors.append([40, 40, 60, 200])
+        # Top platform
+        top_h = step_h * n_steps
+        centers.append([1.5 + n_steps * 0.3 + 1.0, top_h / 2, 0])
+        sizes.append([2.0, top_h, 2.0])
+        colors.append([40, 40, 60, 200])
+        rr.log("world/terrain/stairs", rr.Boxes3D(
+            centers=centers, sizes=sizes, colors=colors), static=True)
     elif terrain_type == "platforms":
         import random
-        random.seed(42)
+        random.seed(seed)
         centers, sizes, colors = [], [], []
-        for _ in range(12):
-            x = random.uniform(-2, 2)
-            z = random.uniform(-2, 2)
-            h = random.uniform(0.03, 0.12)
-            w = random.uniform(0.3, 0.8)
-            d = random.uniform(0.3, 0.8)
-            centers.append([x, h / 2, z])
-            sizes.append([w, h, d])
-            colors.append([100, 140, 100, 200])
-        rr.log(f"{prefix}/ground", rr.Boxes3D(centers=centers, sizes=sizes, colors=colors), static=True)
-    elif terrain_type == "obstacles":
-        import random
-        random.seed(42)
-        centers, radii, colors = [], [], []
-        for _ in range(15):
-            x = random.uniform(-2, 2)
-            z = random.uniform(-2, 2)
+        for _ in range(int(8 + 12 * difficulty)):
+            x, z = random.uniform(-3, 3), random.uniform(-3, 3)
             if abs(x) < 1 and abs(z) < 1:
                 continue
-            r = random.uniform(0.05, 0.15)
+            h = random.uniform(0.02, 0.15 * max(difficulty, 0.1))
+            w, d = random.uniform(0.3, 0.8), random.uniform(0.3, 0.8)
+            centers.append([x, h / 2, z])
+            sizes.append([w, h, d])
+            colors.append([30, 50, 30, 200])
+        if centers:
+            rr.log("world/terrain/platforms", rr.Boxes3D(
+                centers=centers, sizes=sizes, colors=colors), static=True)
+    elif terrain_type == "obstacles":
+        import random
+        random.seed(seed)
+        centers, radii, colors = [], [], []
+        for _ in range(int(10 + 20 * difficulty)):
+            x, z = random.uniform(-3, 3), random.uniform(-3, 3)
+            if abs(x) < 1 and abs(z) < 1:
+                continue
+            r = random.uniform(0.05, 0.2 * max(difficulty, 0.1))
             centers.append([x, r, z])
             radii.append(r)
-            colors.append([180, 80, 80, 200])
+            colors.append([60, 30, 30, 200])
         if centers:
-            rr.log(f"{prefix}/ground", rr.Points3D(centers, radii=radii, colors=colors), static=True)
-    else:
-        rr.log(f"{prefix}/ground", rr.Boxes3D(
-            centers=[[0, -0.01, 0]], sizes=[[3, 0.02, 3]], colors=[[60, 100, 60, 150]],
+            rr.log("world/terrain/obstacles", rr.Points3D(
+                centers, radii=radii, colors=colors), static=True)
+    elif terrain_type == "slopes":
+        rr.log("world/terrain/slopes", rr.Boxes3D(
+            centers=[[2, 0.2, 0], [-2, 0.2, 0], [0, 0.2, 2], [0, 0.2, -2]],
+            sizes=[[3, 0.1, 1], [3, 0.1, 1], [1, 0.1, 3], [1, 0.1, 3]],
+            colors=[[50, 40, 30, 200]] * 4,
         ), static=True)
+    else:
+        rr.log("world/terrain/ground", rr.Boxes3D(
+            centers=[[0, -0.005, 0]], sizes=[[6, 0.01, 6]],
+            colors=[[30, 30, 30, 200]],
+        ), static=True)
+    # Grid lines
+    lines = []
+    for i in range(-5, 6):
+        lines.append([[i, 0, -5], [i, 0, 5]])
+        lines.append([[-5, 0, i], [5, 0, i]])
+    rr.log("world/terrain/grid", rr.LineStrips3D(
+        lines, colors=[[50, 50, 50, 100]] * len(lines), radii=0.002), static=True)
 
 
 def main():
@@ -186,120 +216,96 @@ def main():
     parser.add_argument("--grpc-port", type=int, default=9877)
     parser.add_argument("--web-port", type=int, default=9091)
     parser.add_argument("--fps", type=int, default=15)
-    parser.add_argument("--difficulty", type=float, default=0.5)
+    parser.add_argument("--difficulty", type=float, default=0.3)
+    parser.add_argument("--terrain", default="flat")
+    parser.add_argument("--connect-url", default="rerun+https://rerun-data.casazza.io/proxy",
+                        help="Public gRPC URL for web viewer auto-connect (via Envoy gRPC-Web proxy)")
     args = parser.parse_args()
 
     print(f"Loading checkpoint from {args.checkpoint}...", flush=True)
-    policy, obs_mean, obs_std = load_policy(args.checkpoint)
+    policy, obs_mean, obs_std, input_dim = load_policy(args.checkpoint)
+    print(f"Policy loaded (input_dim={input_dim})", flush=True)
 
-    urdf_content = Path("/opt/spot-training-code/assets/spot.urdf").read_text()
-
-    # Build blueprint: grid of 3D views (one per terrain) + metrics
-    terrain_views = []
-    for t in TERRAINS:
-        terrain_views.append(
-            rrb.Spatial3DView(name=t.capitalize(), contents=[f"+ /{t}/**"])
-        )
+    urdf_content = URDF_PATH.read_text()
+    meshes = parse_urdf_meshes(URDF_PATH, ASSETS_DIR)
+    print(f"Loaded {len(meshes)} mesh parts", flush=True)
 
     blueprint = rrb.Blueprint(
-        rrb.Vertical(
-            rrb.Grid(
-                *terrain_views,
-                name="Terrain Views",
+        rrb.Horizontal(
+            rrb.Spatial3DView(name="Robot", contents=["+ /world/**"]),
+            rrb.Vertical(
+                rrb.TimeSeriesView(name="Height", contents=["+ /metrics/height"]),
+                rrb.TimeSeriesView(name="Reward", contents=["+ /metrics/reward"]),
+                rrb.TimeSeriesView(name="Contacts",
+                                   contents=["+ /metrics/foot_contacts/**"]),
             ),
-            rrb.Horizontal(
-                rrb.TimeSeriesView(
-                    name="Survival (steps before fall)",
-                    contents=[f"+ /{t}/survival" for t in TERRAINS],
-                ),
-                rrb.TimeSeriesView(
-                    name="Height",
-                    contents=[f"+ /{t}/height" for t in TERRAINS],
-                ),
-            ),
+            column_shares=[3, 1],
         ),
         collapse_panels=True,
     )
 
-    rr.init("spot_terrains", default_blueprint=blueprint)
-    rr.serve_grpc(grpc_port=args.grpc_port)
-    rr.serve_web_viewer(web_port=args.web_port, open_browser=False)
+    rr.init("spot_replay", default_blueprint=blueprint)
+    grpc_uri = rr.serve_grpc(grpc_port=args.grpc_port)
+    connect_url = args.connect_url or grpc_uri
+    rr.serve_web_viewer(web_port=args.web_port, open_browser=False, connect_to=connect_url)
+    rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Y_UP, static=True)
 
-    # Set Y-up for all terrain roots
-    for t in TERRAINS:
-        rr.log(t, rr.ViewCoordinates.RIGHT_HAND_Y_UP, static=True)
-        log_ground(t, t)
+    # Log robot meshes (static — transforms update per step)
+    log_robot_meshes(meshes)
+    log_terrain(args.terrain, args.difficulty, 42)
 
-    host = "192.168.1.123"
-    print(f"View: http://{host}:{args.web_port}/?url=rerun%2Bhttp%3A%2F%2F{host}%3A{args.grpc_port}%2Fproxy", flush=True)
+    print(f"Web: http://0.0.0.0:{args.web_port}", flush=True)
+    print(f"gRPC: {grpc_uri}", flush=True)
+    print(f"Connect URL: {connect_url}", flush=True)
 
     dt = 1.0 / args.fps
-    behavior_onehot = np.array([1, 0, 0, 0, 0], dtype=np.float32)
+    behavior_onehot = np.zeros(max(6, input_dim - 45), dtype=np.float32)
+    behavior_onehot[0] = 1.0  # walk
     episode = 0
 
     while True:
-        # Create one sim per terrain
-        sims = {}
-        prev_actions = {}
-        alive = {}
-        step_counts = {}
-
-        for t in TERRAINS:
-            seed = 42 + episode
-            sims[t] = SpotSim(urdf_content, t, seed, args.difficulty)
-            prev_actions[t] = np.zeros(12, dtype=np.float32)
-            alive[t] = True
-            step_counts[t] = 0
+        sim = SpotSim(urdf_content, args.terrain, 42 + episode, args.difficulty)
+        episode_reward = 0.0
 
         for step in range(2000):
             rr.set_time("step", sequence=episode * 2000 + step)
 
-            any_alive = False
-            for t in TERRAINS:
-                if not alive[t]:
-                    continue
-                any_alive = True
+            raw_obs = np.array(sim.get_observation(), dtype=np.float32)
+            raw_obs[42:45] = [0.5, 0, 0]  # walk forward
+            full_obs = np.concatenate([raw_obs, behavior_onehot])[:input_dim]
 
-                sim = sims[t]
-                raw_obs = np.array(sim.get_observation(), dtype=np.float32)
-                raw_obs[42:45] = [0.5, 0, 0]
-                full_obs = np.concatenate([raw_obs, behavior_onehot])
+            normed = (full_obs - obs_mean[:input_dim]) / obs_std[:input_dim]
+            with torch.no_grad():
+                action = policy(torch.tensor(normed).unsqueeze(0)).squeeze(0).numpy()
+            action = np.clip(action, -0.25, 0.25)
 
-                normed = (full_obs - obs_mean) / obs_std
-                with torch.no_grad():
-                    action = policy(torch.tensor(normed).unsqueeze(0)).squeeze(0).numpy()
-                action = np.clip(action, -0.25, 0.25)
+            sim.step(action.tolist())
 
-                sim.step(action.tolist())
-                step_counts[t] = step + 1
+            height = sim.get_base_height()
+            episode_reward += 0.5 + max(0, 1.0 - abs(height - 0.35) * 5)
 
-                if step % 3 == 0:
-                    log_robot(t, sim)
-                    rr.log(f"{t}/height", rr.Scalars(sim.get_base_height()))
+            if step % 2 == 0:
+                log_robot_pose(meshes, height)
+                rr.log("metrics/height", rr.Scalars(height))
+                rr.log("metrics/reward", rr.Scalars(episode_reward))
 
-                if sim.is_fallen():
-                    alive[t] = False
-                    rr.log(f"{t}/survival", rr.Scalars(float(step)))
-                    print(f"  {t}: fell at step {step}", flush=True)
+                contacts = sim.get_foot_contacts()
+                for i, name in enumerate(["FL", "FR", "BL", "BR"]):
+                    rr.log(f"metrics/foot_contacts/{name}",
+                           rr.Scalars(1.0 if contacts[i] else 0.0))
 
-            if not any_alive:
+            if sim.is_fallen():
+                print(f"  Episode {episode}: fell at step {step}", flush=True)
                 break
+
             time.sleep(dt)
-
-        # Log survival for terrains that didn't fall
-        for t in TERRAINS:
-            if alive[t]:
-                rr.log(f"{t}/survival", rr.Scalars(2000.0))
-
-        survived = sum(1 for t in TERRAINS if alive[t])
-        print(f"Episode {episode}: {survived}/{len(TERRAINS)} survived, steps={step_counts}", flush=True)
+        else:
+            print(f"  Episode {episode}: survived 2000 steps, r={episode_reward:.0f}", flush=True)
 
         episode += 1
-
-        # Reload policy every 3 episodes
         if episode % 3 == 0:
             try:
-                policy, obs_mean, obs_std = load_policy(args.checkpoint)
+                policy, obs_mean, obs_std, input_dim = load_policy(args.checkpoint)
                 print(f"  Reloaded checkpoint", flush=True)
             except Exception:
                 pass
