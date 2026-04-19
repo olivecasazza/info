@@ -10,7 +10,7 @@ name = "spot_rapier"
 crate-type = ["cdylib"]
 
 [dependencies]
-spot-physics = { path = "../spot-physics" }
+spot-physics = { path = "../spot-physics", features = ["rerun"] }
 rapier3d = "0.22"
 nalgebra = "0.33"
 pyo3 = { version = "0.22", features = ["extension-module"] }

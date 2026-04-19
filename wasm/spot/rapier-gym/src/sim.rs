@@ -7,6 +7,8 @@ use spot_physics::config::{
 use spot_physics::config::JOINT_NAMES;
 use spot_physics::observation::{collect_observation, collect_foraging_observation};
 use spot_physics::physics::PhysicsWorld;
+use spot_physics::renderer::Renderer;
+use spot_physics::rerun_renderer::RerunRenderer;
 
 pub use spot_physics::config::DECIMATION;
 
@@ -17,6 +19,7 @@ pub struct RapierSim {
     pub prev_joint_vel: [f32; 12],
     pub time: f32,
     pub decimation: usize,
+    pub step_count: u64,
 
     /// Current energy level (0.0 to 1.0).
     pub energy: f32,
@@ -24,6 +27,9 @@ pub struct RapierSim {
     pub prev_energy: f32,
     /// Whether this sim is using foraging terrain.
     pub is_foraging: bool,
+
+    /// Optional Rerun renderer for training visualization.
+    pub renderer: Option<RerunRenderer>,
 }
 
 impl RapierSim {
@@ -60,9 +66,11 @@ impl RapierSim {
             prev_joint_vel: [0.0; 12],
             time: 0.0,
             decimation: DECIMATION,
+            step_count: 0,
             energy: ENERGY_START,
             prev_energy: ENERGY_START,
             is_foraging,
+            renderer: None,
         }
     }
 
@@ -102,6 +110,62 @@ impl RapierSim {
 
     pub fn post_step(&mut self) {
         self.prev_joint_vel = self.get_joint_velocities_array();
+        self.step_count += 1;
+
+        if let Some(ref mut renderer) = self.renderer {
+            renderer.update(&self.world, self.step_count);
+        }
+    }
+
+    /// Start Rerun visualization by spawning a viewer process.
+    pub fn start_rerun(&mut self, app_name: &str) {
+        match RerunRenderer::spawn(app_name) {
+            Ok(mut r) => {
+                r.init(&self.world, &[]);
+                self.renderer = Some(r);
+            }
+            Err(e) => {
+                eprintln!("Failed to start Rerun: {e}");
+            }
+        }
+    }
+
+    /// Start Rerun visualization by connecting to an existing viewer.
+    pub fn connect_rerun(&mut self, app_name: &str) {
+        match RerunRenderer::connect(app_name) {
+            Ok(mut r) => {
+                r.init(&self.world, &[]);
+                self.renderer = Some(r);
+            }
+            Err(e) => {
+                eprintln!("Failed to connect Rerun: {e}");
+            }
+        }
+    }
+
+    /// Start Rerun recording to an `.rrd` file.
+    pub fn save_rerun(&mut self, app_name: &str, path: &str) {
+        match RerunRenderer::save(app_name, path) {
+            Ok(mut r) => {
+                r.init(&self.world, &[]);
+                self.renderer = Some(r);
+            }
+            Err(e) => {
+                eprintln!("Failed to save Rerun: {e}");
+            }
+        }
+    }
+
+    /// Stop Rerun visualization and drop the renderer.
+    pub fn stop_rerun(&mut self) {
+        self.renderer = None;
+    }
+
+    /// Log a scalar metric to the active Rerun renderer.
+    pub fn log_rerun_scalar(&mut self, name: &str, value: f32) {
+        if let Some(ref mut renderer) = self.renderer {
+            renderer.log_scalar(name, value);
+        }
     }
 
     pub fn collect_observation(&self) -> Vec<f32> {
