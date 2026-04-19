@@ -108,6 +108,17 @@ class CurriculumCallback(tune.Callback):
 def train(args):
     ray.init(address="auto" if os.environ.get("RAY_ADDRESS") else None)
 
+    # Start Rerun dashboard as a Ray Serve deployment
+    if not args.no_dashboard:
+        try:
+            from viz.serve import start_dashboard
+            start_dashboard(
+                web_port=args.dashboard_web_port,
+                grpc_port=args.dashboard_grpc_port,
+            )
+        except Exception as e:
+            print(f"[warn] Dashboard failed to start: {e}", flush=True)
+
     tune.register_env("spot_rapier", lambda c: SpotEnvRapier(config=c))
 
     total_timesteps = args.total_timesteps
@@ -231,5 +242,8 @@ if __name__ == "__main__":
     parser.add_argument("--no-gpu", dest="gpu", action="store_false")
     parser.add_argument("--no-wandb", action="store_true")
     parser.add_argument("--no-grid", action="store_true", help="Skip entropy grid search")
+    parser.add_argument("--no-dashboard", action="store_true", help="Skip Rerun dashboard")
+    parser.add_argument("--dashboard-web-port", type=int, default=9091)
+    parser.add_argument("--dashboard-grpc-port", type=int, default=9877)
     args = parser.parse_args()
     train(args)
