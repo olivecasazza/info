@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Spot Training Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; color: #e0e0e0; font-family: monospace; height: 100vh; overflow: hidden; }
+    .header {
+      background: #111; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid #333; height: 36px;
+    }
+    .header h1 { font-size: 14px; color: #8f8; }
+    .header .status { font-size: 12px; color: #888; }
+    .container { display: flex; height: calc(100vh - 36px); }
+    .wasm-panel { flex: 1; border-right: 1px solid #333; }
+    .metrics-panel { width: 50%; display: flex; flex-direction: column; }
+    .wasm-panel iframe, .metrics-panel iframe {
+      width: 100%; height: 100%; border: none; background: #000;
+    }
+    .metrics-panel iframe { height: 100%; }
+    .tab-bar {
+      display: flex; background: #111; border-bottom: 1px solid #333;
+    }
+    .tab-bar button {
+      padding: 6px 14px; background: #1a1a1a; color: #aaa; border: none;
+      border-bottom: 2px solid transparent; cursor: pointer; font-family: monospace; font-size: 12px;
+    }
+    .tab-bar button.active { color: #8f8; border-bottom-color: #8f8; }
+    .tab-bar button:hover { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>spot training dashboard</h1>
+    <span class="status" id="status">connecting...</span>
+  </div>
+  <div class="container">
+    <div class="wasm-panel">
+      <iframe id="wasm-frame" src="/projects/spot"></iframe>
+    </div>
+    <div class="metrics-panel">
+      <div class="tab-bar">
+        <button class="active" onclick="switchTab('rerun')">metrics</button>
+        <button onclick="switchTab('nodes')">nodes</button>
+      </div>
+      <iframe id="metrics-frame" src="http://192.168.1.35:9091/?url=rerun%2Bhttp%3A%2F%2F192.168.1.35%3A9877%2Fproxy"></iframe>
+    </div>
+  </div>
+  <script>
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      const frame = document.getElementById('metrics-frame');
+      if (tab === 'rerun') {
+        frame.src = 'http://192.168.1.35:9091/?url=rerun%2Bhttp%3A%2F%2F192.168.1.35%3A9877%2Fproxy';
+      } else if (tab === 'nodes') {
+        frame.srcdoc = '<html><body style="background:#0a0a0a;color:#aaa;font-family:monospace;padding:16px"><h3>Training Nodes</h3><pre id="nodes">Loading...</pre><script>setInterval(()=>fetch("/api/training-status").then(r=>r.json()).then(d=>document.getElementById("nodes").textContent=JSON.stringify(d,null,2)).catch(()=>{}),5000)<\/script></body></html>';
+      }
+    }
+
+    // Poll for status
+    setInterval(() => {
+      fetch('/api/training-status')
+        .then(r => r.json())
+        .then(d => {
+          const el = document.getElementById('status');
+          const nodes = Object.entries(d.nodes || {});
+          const best = nodes.reduce((b, [k, v]) => v.reward > b.reward ? {name: k, ...v} : b, {reward: -Infinity});
+          el.textContent = `${nodes.length} nodes | best: ${best.name} r=${best.reward?.toFixed(0)} | ${best.steps} steps`;
+        })
+        .catch(() => {
+          document.getElementById('status').textContent = 'no api connection';
+        });
+    }, 5000);
+  </script>
+</body>
+</html>
