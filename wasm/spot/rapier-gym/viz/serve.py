@@ -558,9 +558,6 @@ def start_dashboard(
         ray_actor_options={
             "num_cpus": 1,
             "num_gpus": 0,
-            "scheduling_strategy": NodeAffinitySchedulingStrategy(
-                node_id=head_node_id, soft=False,
-            ),
         },
     ).bind(web_port=web_port, grpc_port=grpc_port, difficulty=difficulty)
 
