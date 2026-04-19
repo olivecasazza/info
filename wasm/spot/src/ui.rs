@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
 use crate::camera::CameraOrbit;
+use crate::terrain::{TerrainSelection, TerrainType};
 use crate::web_bevy::SpotState;
 
 /// Main UI system - renders egui debug interface
@@ -13,6 +14,7 @@ pub fn ui_system(
     mut contexts: EguiContexts,
     mut state: ResMut<SpotState>,
     mut orbit: ResMut<CameraOrbit>,
+    mut terrain: ResMut<TerrainSelection>,
     keyboard: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
 ) {
@@ -34,6 +36,40 @@ pub fn ui_system(
                 ui.checkbox(&mut orbit.following, "Follow Robot");
                 ui.add(egui::Slider::new(&mut orbit.distance, 0.5..=10.0).text("Distance"));
                 ui.label("Control: Drag to Orbit, Shift+Drag to Pan, Scroll to Zoom");
+            });
+
+        egui::CollapsingHeader::new("Terrain")
+            .default_open(true)
+            .show(egui_ui, |ui| {
+                let current_label = terrain.current_terrain.label();
+                egui::ComboBox::from_label("Type")
+                    .selected_text(current_label)
+                    .show_ui(ui, |ui| {
+                        for &t in TerrainType::ALL {
+                            let selected = terrain.current_terrain == t;
+                            if ui.selectable_label(selected, t.label()).clicked() {
+                                terrain.current_terrain = t;
+                            }
+                        }
+                    });
+
+                ui.add(
+                    egui::Slider::new(&mut terrain.difficulty, 0.0..=1.0)
+                        .text("Difficulty"),
+                );
+
+                ui.horizontal(|ui| {
+                    ui.label(format!("Seed: {}", terrain.seed));
+                    if ui.button("Random").clicked() {
+                        // Use frame time as entropy source (no rand crate needed)
+                        terrain.seed = (state.controller.total_time * 1_000_000.0) as u64
+                            ^ 0xDEAD_BEEF_CAFE;
+                    }
+                });
+
+                if ui.button("Regenerate Terrain").clicked() {
+                    terrain.needs_rebuild = true;
+                }
             });
 
         egui::CollapsingHeader::new("Robot Control")
