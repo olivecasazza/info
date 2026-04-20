@@ -2,7 +2,7 @@
 //
 // Goals:
 // - Allow BackgroundWrapper to pick a random project for non-project pages.
-// - Allow project pages (/projects/<slug>) to force-load a specific project.
+// - Allow project pages (/src/<slug>) to force-load a specific project.
 // - Make it easy to add more projects later by adding entries here.
 //
 // Each project must export (from wasm-pack pkg output):
@@ -48,7 +48,7 @@ export function getWasmProjectBySlug (slug: WasmProjectSlug): WasmProjectDefinit
 }
 
 export function getWasmProjectSlugFromRoutePath (path: string): string | null {
-  const match = path.match(/^\/projects\/([^/]+)\/?$/)
+  const match = path.match(/^\/src\/([^/]+)\/?$/)
   const slug = match?.[1] ?? null
   if (!slug) { return null }
   return WASM_PROJECTS.some(p => p.slug === slug) ? slug : null
