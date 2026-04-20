@@ -12,13 +12,13 @@
     </p>
     <pre class="text-xs text-gray-400 overflow-x-auto">{{ usage }}</pre>
     <div class="flex gap-4">
-      <a href="https://github.com/ocasazza/bird-nix" target="_blank" class="link">source</a>
+      <a href="https://github.com/olivecasazza/bird-nix" target="_blank" class="link">source</a>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const usage = `inputs.bird-nix.url = "github:ocasazza/bird-nix";
+const usage = `inputs.bird-nix.url = "github:olivecasazza/bird-nix";
 
 # As a full library:
 let bn = inputs.bird-nix.lib {}; in bn.I "hello"
