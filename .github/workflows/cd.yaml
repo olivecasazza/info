@@ -165,6 +165,10 @@ jobs:
           echo "/_nuxt/*.wasm https://info-assets.casazza.info/_nuxt/:splat.wasm 302" >> .output/public/_redirects
           echo "# Redirect spot assets to R2 CDN" >> .output/public/_redirects
           echo "/spot-assets/* https://info-assets.casazza.info/spot/:splat 302" >> .output/public/_redirects
+          # SPA fallback: Cloudflare Pages serves real files first, so this only catches
+          # client-side routes (e.g. /lib/<name>, /src/<name>). Without it, deep links
+          # return HTTP 404 even though the Nuxt shell still hydrates correctly.
+          echo "/*                    /index.html 200" >> .output/public/_redirects
           echo "Created _redirects:"
           cat .output/public/_redirects
 
