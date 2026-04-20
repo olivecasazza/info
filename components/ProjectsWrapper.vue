@@ -22,6 +22,17 @@
 // ! from the same source. [refactor]
 const categories = [
   {
+    subject: 'languages',
+    items: [
+      {
+        heading: 'bird-nix',
+        text: 'Combinator library from "To Mock a Mockingbird" — I, M, K, B, C, W, S, V, Y — as pure Nix, with compiler, DSL, and property-based testing.',
+        link: '/projects/bird-nix',
+        source: 'https://github.com/ocasazza/bird-nix'
+      }
+    ]
+  },
+  {
     subject: 'animation',
     items: [
       {
