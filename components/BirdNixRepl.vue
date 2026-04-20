@@ -53,7 +53,7 @@ onMounted(async () => {
 
   term.writeln('bird-nix REPL — real Nix via tvix-eval (wasm)')
   term.writeln(`birds in scope: ${BIRDS.join(' ')}`)
-  term.writeln('try: with inputs.bird-nix.lib {}; B (x: x + 1) (y: y * 2) 3')
+  term.writeln('try: B (x: x + 1) (y: y * 2) 3   (I M K KI B C L W S V Y are already in scope)')
   term.writeln('')
 
   let nixEval: NixEval | null = null
