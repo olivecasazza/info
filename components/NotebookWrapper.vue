@@ -1,68 +1,44 @@
-<script  setup lang="ts">
-
-const isMounted = ref(false)
-onMounted(() => { isMounted.value = true })
-
-const props = defineProps<{
-  notebookPath: string
-}>()
-
-</script>
-
 <template>
-  <div class="w-full h-full flex items-center justify-center z-20">
-    <iframe
-      :ref="props.notebookPath"
-      :src="props.notebookPath"
-      sandbox="allow-same-origin allow-scripts"
-      class="w-11/12 h-5/6 z-20 border border-gray-600"
-    />
-  </div>
-  <div class="w-full h-full flex items-center justify-center z-10 absolute rainbow-text-animated">
-    LOADING....
+  <div class="w-full h-full flex flex-col items-center justify-center">
+    <div class="w-11/12 flex items-baseline justify-between text-xs text-gray-500 pb-1">
+      <span v-if="title" class="truncate">{{ title }}</span>
+      <span v-else />
+      <span class="flex gap-3">
+        <a v-if="sourceUrl" :href="sourceUrl" target="_blank" rel="noopener" class="link">source ↳</a>
+        <a :href="notebookPath" target="_blank" rel="noopener" class="link">open in new tab ↗</a>
+      </span>
+    </div>
+    <div class="w-11/12 h-5/6 relative border border-gray-600">
+      <div
+        v-if="!loaded && !errored"
+        class="absolute inset-0 z-10 flex items-center justify-center bg-black/80 rainbow-text-animated text-sm"
+      >
+        loading…
+      </div>
+      <div
+        v-if="errored"
+        class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/90 text-sm text-gray-300 gap-2"
+      >
+        <span class="text-primary-300">failed to load notebook.</span>
+        <a :href="notebookPath" target="_blank" rel="noopener" class="link">open in new tab ↗</a>
+      </div>
+      <iframe
+        :src="notebookPath"
+        sandbox="allow-same-origin allow-scripts"
+        class="w-full h-full block bg-black"
+        @load="loaded = true"
+        @error="errored = true"
+      />
+    </div>
   </div>
 </template>
 
-<style scoped>
-
-@keyframes ldio-yepym19m4 {
-  0% {
-    transform: rotate(0deg)
-  }
-
-  100% {
-    transform: rotate(360deg)
-  }
-}
-
-.loader {
-  width: 48px;
-  height: 48px;
-  border: 2px solid #FFF;
-  border-radius: 50%;
-  display: inline-block;
-  position: relative;
-  box-sizing: border-box;
-  animation: rotation 1s linear infinite;
-}
-.loader::after {
-  content: '';
-  box-sizing: border-box;
-  position: absolute;
-  left: 50%;
-  top: 0;
-  background: #FF3D00;
-  width: 3px;
-  height: 24px;
-  transform: translateX(-50%);
-}
-
-@keyframes rotation {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-</style>
+<script setup lang="ts">
+defineProps<{
+  notebookPath: string
+  title?: string
+  sourceUrl?: string
+}>()
+const loaded = ref(false)
+const errored = ref(false)
+</script>
