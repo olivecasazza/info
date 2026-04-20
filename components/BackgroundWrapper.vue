@@ -61,14 +61,14 @@ const initialForcedSlug = getWasmProjectSlugFromRoutePath(useRoute().path)
 const backgroundSlug = ref<string>(initialForcedSlug ?? pickRandomBackgroundSlug())
 
 const desiredSlug = computed(() => {
-  // On /projects/<slug>, force that slug.
+  // On /src/<slug>, force that slug.
   if (forcedSlug.value) { return forcedSlug.value }
   // Otherwise use the random background slug.
   return backgroundSlug.value
 })
 
 function isUiVisibleForSlug (slug: string, path: string): boolean {
-  return path === `/projects/${slug}`
+  return path === `/src/${slug}`
 }
 
 async function loadWasmProject (slug: string): Promise<void> {

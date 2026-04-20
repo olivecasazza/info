@@ -2,11 +2,13 @@
 { pkgs, wasmPkgs }:
 
 let
-  # Sync WASM from Nix store (symlinks for speed, no copies needed)
+  # Sync WASM from Nix store. vite-plugin-wasm-pack copies wasm/<pkg>/pkg into
+  # node_modules/<pkg> and trips on symlinks into the read-only nix store, so
+  # materialize real writable files here.
   sync-wasm = pkgs.writeShellApplication {
     name = "sync-wasm";
     runtimeInputs = [ pkgs.coreutils pkgs.git ];
-    meta.description = "Sync WASM packages from Nix store via symlinks";
+    meta.description = "Sync WASM packages from Nix store (writable copies)";
     text = ''
       ROOT="$(git rev-parse --show-toplevel)"
       cd "$ROOT"
@@ -15,24 +17,23 @@ let
         echo "Syncing wasm/$pkg/pkg..."
         rm -rf "wasm/$pkg/pkg"
 
-        # Get source path from Nix store
         case $pkg in
           flock)     SRC="${wasmPkgs.flock}" ;;
           pipedream) SRC="${wasmPkgs.pipedream}" ;;
           spot)      SRC="${wasmPkgs.spot}" ;;
         esac
 
-        # Create directory and symlink individual files (not the whole dir, to allow .gitignore)
         mkdir -p "wasm/$pkg/pkg"
         for f in "$SRC"/*; do
           fname=$(basename "$f")
           # Skip tar files and symlinks in source
           if [ ! -L "$f" ] && [[ ! "$fname" =~ \.tar\.zst ]]; then
-            ln -sf "$f" "wasm/$pkg/pkg/$fname"
+            cp -L "$f" "wasm/$pkg/pkg/$fname"
+            chmod u+w "wasm/$pkg/pkg/$fname"
           fi
         done
 
-        echo "  -> $(find wasm/$pkg/pkg/ -maxdepth 1 -type l | wc -l) files"
+        echo "  -> $(find wasm/$pkg/pkg/ -maxdepth 1 -type f | wc -l) files"
       done
       echo "Done."
     '';
