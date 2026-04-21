@@ -19,7 +19,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 import ray
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
-from ray.rllib.callbacks.callbacks import RLlibCallback, make_multi_callbacks
+from ray.rllib.callbacks.callbacks import RLlibCallback
 from ray.air.integrations.wandb import WandbLoggerCallback
 import socket
 import numpy as np
@@ -177,6 +177,30 @@ class AutoCheckpointCallback(RLlibCallback):
                 print(f"[CKPT] save failed at iter={iteration}: {e}", file=sys.stderr, flush=True)
 
 
+class TrainingCallbacks(AutoCheckpointCallback, RemoteRerunCallback):
+    """Compose checkpoint saves and Rerun streaming.
+
+    `make_multi_callbacks` was removed from `ray.rllib.callbacks.callbacks`
+    in recent Ray. Multiple inheritance gives us both behaviours through a
+    single class that RLlib instantiates with no args.
+    """
+
+    def __init__(self, *args, **kwargs):
+        AutoCheckpointCallback.__init__(self)
+        RemoteRerunCallback.__init__(self)
+
+    def on_train_result(self, *, algorithm, result, **kwargs):
+        AutoCheckpointCallback.on_train_result(
+            self, algorithm=algorithm, result=result, **kwargs
+        )
+        RemoteRerunCallback.on_train_result(
+            self, algorithm=algorithm, result=result, **kwargs
+        )
+
+    def on_episode_end(self, *, episode, **kwargs):
+        RemoteRerunCallback.on_episode_end(self, episode=episode, **kwargs)
+
+
 class CurriculumCallback(tune.Callback):
     def __init__(self, total_timesteps: int):
         self.total_timesteps = total_timesteps
@@ -267,7 +291,7 @@ def train(args):
             enable_env_runner_and_connector_v2=False,
         )
         .resources(num_gpus=1 if args.gpu else 0)
-        .callbacks(make_multi_callbacks([AutoCheckpointCallback, RemoteRerunCallback]))
+        .callbacks(TrainingCallbacks)
     )
 
     config.model = {
