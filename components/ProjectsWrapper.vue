@@ -92,6 +92,7 @@ const categories: Category[] = [
         links: [
           { label: 'demo', url: '/src/spot' },
           { label: 'training', url: '/src/spot-training' },
+          { label: 'build log', url: '/src/spot-training-notes' },
           { label: 'source', url: 'https://github.com/olivecasazza/info/tree/main/wasm/spot' }
         ]
       }
