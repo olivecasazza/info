@@ -159,23 +159,28 @@ jobs:
           done
           echo "GLB upload complete"
 
-      - name: Create _redirects for WASM
+      - name: Copy spot assets into Pages bundle
         run: |
-          echo "# Redirect WASM to R2 CDN" >> .output/public/_redirects
-          echo "/_nuxt/*.wasm https://info-assets.casazza.info/_nuxt/:splat.wasm 302" >> .output/public/_redirects
-          echo "# Redirect spot assets to R2 CDN" >> .output/public/_redirects
-          echo "/spot-assets/* https://info-assets.casazza.info/spot/:splat 302" >> .output/public/_redirects
-          # SPA fallback: Cloudflare Pages serves real files first, so this only catches
-          # client-side routes (e.g. /lib/<name>, /src/<name>). Without it, deep links
-          # return HTTP 404 even though the Nuxt shell still hydrates correctly.
+          mkdir -p .output/public/spot-assets
+          cp -r wasm/spot/assets/* .output/public/spot-assets/
+          echo "Spot assets staged under .output/public/spot-assets/ ($(du -sh .output/public/spot-assets | cut -f1))"
+
+      - name: Create _redirects
+        run: |
+          # NOTE: R2 redirects temporarily removed because info-assets.casazza.info is
+          # not bound to the R2 bucket in Cloudflare, so the redirect targets 404.
+          # WASM files stay in the Pages bundle (largest is spot_bg.*.wasm ~24 MB;
+          # Pages per-file limit is 25 MB). Restore the R2 redirects once the
+          # custom-domain route is attached to bucket `info-assets`:
+          #   echo "/_nuxt/*.wasm https://info-assets.casazza.info/_nuxt/:splat.wasm 302" >> .output/public/_redirects
+          #   echo "/spot-assets/* https://info-assets.casazza.info/spot/:splat 302" >> .output/public/_redirects
+
+          # SPA fallback: Cloudflare Pages serves real files first, so this only
+          # catches client-side routes (e.g. /lib/<name>, /src/<name>). Without it,
+          # deep links return HTTP 404 even though the Nuxt shell still hydrates.
           echo "/*                    /index.html 200" >> .output/public/_redirects
           echo "Created _redirects:"
           cat .output/public/_redirects
-
-      - name: Remove WASM from Pages bundle
-        run: |
-          rm -f .output/public/_nuxt/*.wasm
-          echo "WASM removed from Pages (served from R2)"
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
