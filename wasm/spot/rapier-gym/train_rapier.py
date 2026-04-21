@@ -19,12 +19,107 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 import ray
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
-from ray.rllib.callbacks.callbacks import RLlibCallback
+from ray.rllib.callbacks.callbacks import RLlibCallback, make_multi_callbacks
 from ray.air.integrations.wandb import WandbLoggerCallback
 import socket
 import numpy as np
 
 from spot_rapier import SpotEnvRapier
+
+try:
+    import rerun as _rr
+except ImportError:
+    _rr = None
+
+
+class RemoteRerunCallback(RLlibCallback):
+    """Stream training metrics to a remote Rerun viewer.
+
+    Activates when the RERUN_ENDPOINT env var is set (e.g.
+    spot-walk.hpc.svc.cluster.local:9876). Per-worker rr.init+connect_tcp,
+    keyed by application id from RERUN_APPLICATION_ID. Targets the 0.22.x
+    Python SDK API (`rr.Scalar`, `rr.set_time_sequence`).
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._endpoint = os.environ.get("RERUN_ENDPOINT")
+        self._app_id = os.environ.get("RERUN_APPLICATION_ID", "spot_training")
+        self._connected = False
+        self._iter_counter = 0
+        self._episode_counter = 0
+
+    def _ensure_connected(self):
+        if self._connected or _rr is None or not self._endpoint:
+            return
+        try:
+            # rr.connect_tcp wants raw "ip:port"; resolve hostnames first.
+            host, _, port = self._endpoint.rpartition(":")
+            try:
+                import socket as _sk
+                host = _sk.gethostbyname(host)
+            except Exception:
+                pass
+            _rr.init(self._app_id, recording_id=f"{self._app_id}-{socket.gethostname()}")
+            _rr.connect_tcp(addr=f"{host}:{port}")
+            self._connected = True
+        except Exception as e:
+            import sys
+            print(f"[rerun] connect failed: {e}", file=sys.stderr, flush=True)
+
+    def on_episode_end(self, *, episode, **kwargs):
+        self._ensure_connected()
+        if not self._connected:
+            return
+        try:
+            self._episode_counter += 1
+            _rr.set_time_sequence("episode", self._episode_counter)
+            r = getattr(episode, "total_reward", None)
+            length = getattr(episode, "length", None)
+            if r is not None:
+                _rr.log("training/episode_reward", _rr.Scalar(float(r)))
+            if length is not None:
+                _rr.log("training/episode_length", _rr.Scalar(float(length)))
+        except Exception:
+            pass
+
+    def on_train_result(self, *, algorithm, result, **kwargs):
+        self._ensure_connected()
+        if not self._connected:
+            return
+        try:
+            self._iter_counter = result.get("training_iteration", self._iter_counter + 1)
+            _rr.set_time_sequence("iteration", self._iter_counter)
+
+            def _get(path):
+                cur = result
+                for k in path.split("/"):
+                    if not isinstance(cur, dict) or k not in cur:
+                        return None
+                    cur = cur[k]
+                return cur
+
+            for log_path, candidates in {
+                "metrics/reward_mean": ["env_runners/episode_reward_mean", "episode_reward_mean"],
+                "metrics/reward_min":  ["env_runners/episode_reward_min",  "episode_reward_min"],
+                "metrics/reward_max":  ["env_runners/episode_reward_max",  "episode_reward_max"],
+                "metrics/episode_len_mean": ["env_runners/episode_len_mean", "episode_len_mean"],
+                "training/timesteps_total": ["timesteps_total"],
+                "training/time_total_s":    ["time_total_s"],
+            }.items():
+                for k in candidates:
+                    v = _get(k)
+                    if v is not None:
+                        _rr.log(log_path, _rr.Scalar(float(v)))
+                        break
+
+            learner = _get("info/learner/default_policy/learner_stats")
+            if isinstance(learner, dict):
+                for stat in ["entropy", "kl", "vf_loss", "policy_loss", "total_loss"]:
+                    if stat in learner:
+                        _rr.log(f"training/learner/{stat}", _rr.Scalar(float(learner[stat])))
+        except Exception:
+            pass
 
 
 class AutoCheckpointCallback(RLlibCallback):
@@ -172,7 +267,7 @@ def train(args):
             enable_env_runner_and_connector_v2=False,
         )
         .resources(num_gpus=1 if args.gpu else 0)
-        .callbacks(AutoCheckpointCallback)
+        .callbacks(make_multi_callbacks([AutoCheckpointCallback, RemoteRerunCallback]))
     )
 
     config.model = {
