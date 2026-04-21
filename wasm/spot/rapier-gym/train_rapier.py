@@ -33,43 +33,43 @@ except ImportError:
 
 
 class RemoteRerunCallback(RLlibCallback):
-    """Stream training metrics to a remote Rerun viewer.
+    """Save training metrics to a local Rerun .rrd file.
 
-    Activates when the RERUN_ENDPOINT env var is set (e.g.
-    spot-walk.hpc.svc.cluster.local:9876). Per-worker rr.init+connect_tcp,
-    keyed by application id from RERUN_APPLICATION_ID. Targets the 0.22.x
-    Python SDK API (`rr.Scalar`, `rr.set_time_sequence`).
+    The training pod uploads the file to GCS at end-of-run; the public
+    info site embeds https://app.rerun.io/?url=<gs-public-url>. No live
+    streaming, no operator-managed dashboards.
+
+    Output path: /tmp/spot.rrd (override via RERUN_RRD_PATH env).
+    Application id from RERUN_APPLICATION_ID (defaults to spot_training).
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._endpoint = os.environ.get("RERUN_ENDPOINT")
+        self._rrd_path = os.environ.get("RERUN_RRD_PATH", "/tmp/spot.rrd")
         self._app_id = os.environ.get("RERUN_APPLICATION_ID", "spot_training")
-        self._connected = False
+        self._initialized = False
         self._iter_counter = 0
         self._episode_counter = 0
 
-    def _ensure_connected(self):
-        if self._connected or _rr is None or not self._endpoint:
+    def _ensure_initialized(self):
+        if self._initialized or _rr is None:
             return
         try:
-            # rr.connect_tcp wants raw "ip:port"; resolve hostnames first.
-            host, _, port = self._endpoint.rpartition(":")
-            try:
-                import socket as _sk
-                host = _sk.gethostbyname(host)
-            except Exception:
-                pass
-            _rr.init(self._app_id, recording_id=f"{self._app_id}-{socket.gethostname()}")
-            _rr.connect_tcp(addr=f"{host}:{port}")
-            self._connected = True
+            _rr.init(
+                self._app_id,
+                recording_id=f"{self._app_id}-{socket.gethostname()}",
+            )
+            _rr.save(self._rrd_path)
+            self._initialized = True
+            import sys
+            print(f"[rerun] writing to {self._rrd_path}", file=sys.stderr, flush=True)
         except Exception as e:
             import sys
-            print(f"[rerun] connect failed: {e}", file=sys.stderr, flush=True)
+            print(f"[rerun] save failed: {e}", file=sys.stderr, flush=True)
 
     def on_episode_end(self, *, episode, **kwargs):
-        self._ensure_connected()
-        if not self._connected:
+        self._ensure_initialized()
+        if not self._initialized:
             return
         try:
             self._episode_counter += 1
@@ -84,8 +84,8 @@ class RemoteRerunCallback(RLlibCallback):
             pass
 
     def on_train_result(self, *, algorithm, result, **kwargs):
-        self._ensure_connected()
-        if not self._connected:
+        self._ensure_initialized()
+        if not self._initialized:
             return
         try:
             self._iter_counter = result.get("training_iteration", self._iter_counter + 1)
