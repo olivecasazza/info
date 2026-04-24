@@ -73,13 +73,13 @@ class RemoteRerunCallback(RLlibCallback):
             return
         try:
             self._episode_counter += 1
-            _rr.set_time_sequence("episode", self._episode_counter)
+            _rr.set_time("episode", sequence=self._episode_counter)
             r = getattr(episode, "total_reward", None)
             length = getattr(episode, "length", None)
             if r is not None:
-                _rr.log("training/episode_reward", _rr.Scalar(float(r)))
+                _rr.log("training/episode_reward", _rr.Scalars(float(r)))
             if length is not None:
-                _rr.log("training/episode_length", _rr.Scalar(float(length)))
+                _rr.log("training/episode_length", _rr.Scalars(float(length)))
         except Exception:
             pass
 
@@ -89,7 +89,7 @@ class RemoteRerunCallback(RLlibCallback):
             return
         try:
             self._iter_counter = result.get("training_iteration", self._iter_counter + 1)
-            _rr.set_time_sequence("iteration", self._iter_counter)
+            _rr.set_time("iteration", sequence=self._iter_counter)
 
             def _get(path):
                 cur = result
@@ -110,14 +110,14 @@ class RemoteRerunCallback(RLlibCallback):
                 for k in candidates:
                     v = _get(k)
                     if v is not None:
-                        _rr.log(log_path, _rr.Scalar(float(v)))
+                        _rr.log(log_path, _rr.Scalars(float(v)))
                         break
 
             learner = _get("info/learner/default_policy/learner_stats")
             if isinstance(learner, dict):
                 for stat in ["entropy", "kl", "vf_loss", "policy_loss", "total_loss"]:
                     if stat in learner:
-                        _rr.log(f"training/learner/{stat}", _rr.Scalar(float(learner[stat])))
+                        _rr.log(f"training/learner/{stat}", _rr.Scalars(float(learner[stat])))
         except Exception:
             pass
 
