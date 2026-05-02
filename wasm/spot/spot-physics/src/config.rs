@@ -35,12 +35,24 @@ pub const DEFAULT_JOINT_ANGLES: [f32; 12] = [
 /// Action offset limit (radians) per joint per step.
 pub const ACTION_LIMIT: f32 = 0.25;
 
-// PD gains matching PyBullet: KP=1.5, KD=0.3
-// PyBullet POSITION_CONTROL: torque = KD * (KP * pos_error - vel)
-// Rapier spring-damper: torque = stiffness * pos_error - damping * vel
-// stiffness = KP * KD = 0.45, damping = KD = 0.3
-pub const STIFFNESS: f32 = 0.45;
-pub const DAMPING: f32 = 0.3;
+// PD gains for joint position control. Rapier joint motor uses
+// `torque = stiffness * (target - pos) - damping * vel`, both N·m·rad^-1.
+//
+// Previous values (STIFFNESS=0.45, DAMPING=0.3) were derived from a wrong
+// translation of PyBullet's positionGain/velocityGain (`stiffness = KP * KD`
+// is dimensionally nonsensical; KP and stiffness share units). At those
+// gains the actuators behave like rubber bands — even max torque can't drive
+// the legs to commanded poses, so PPO never converges to a walking gait
+// regardless of reward shaping.
+//
+// Current values match published legged-RL configs:
+//   - legged_gym ANYmal/Spot: stiffness ≈ 80, damping ≈ 2
+//   - ETH ANYmal-D papers:    stiffness 40–80 N·m/rad
+//
+// Any policy trained at the old gains is invalidated by this change; expect
+// the robot to thrash on first replay until a fresh training run lands.
+pub const STIFFNESS: f32 = 40.0;
+pub const DAMPING: f32 = 2.0;
 pub const MAX_FORCE: f32 = 200.0;
 
 /// Physics timestep: 200Hz (matches PyBullet training).
