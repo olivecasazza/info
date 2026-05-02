@@ -70,6 +70,23 @@ impl SpotSim {
         self.inner.get_body_collision_count()
     }
 
+    /// Extract terrain mesh as (flat_vertices, flat_triangles).
+    /// `flat_vertices`: x0,y0,z0,x1,y1,z1,...
+    /// `flat_triangles`: i00,i01,i02,i10,i11,i12,...
+    /// None if the active terrain has no TriMesh colliders (flat ground).
+    fn get_terrain_mesh(&self) -> Option<(Vec<f32>, Vec<u32>)> {
+        let (verts, tris) = self.inner.get_terrain_mesh()?;
+        let mut flat_v = Vec::with_capacity(verts.len() * 3);
+        for v in verts {
+            flat_v.extend_from_slice(&v);
+        }
+        let mut flat_t = Vec::with_capacity(tris.len() * 3);
+        for t in tris {
+            flat_t.extend_from_slice(&t);
+        }
+        Some((flat_v, flat_t))
+    }
+
     fn is_fallen(&self) -> bool {
         self.inner.is_fallen()
     }

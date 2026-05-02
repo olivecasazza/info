@@ -231,6 +231,10 @@ impl RapierSim {
         self.world.get_body_collision_count()
     }
 
+    pub fn get_terrain_mesh(&self) -> Option<(Vec<[f32; 3]>, Vec<[u32; 3]>)> {
+        self.world.get_terrain_mesh()
+    }
+
     pub fn is_fallen(&self) -> bool {
         self.world.is_fallen()
     }

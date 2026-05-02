@@ -268,6 +268,36 @@ impl PhysicsWorld {
     }
 
     /// Count non-foot body parts in contact with ground.
+    /// Extract the ground terrain mesh as (vertices, triangle_indices).
+    ///
+    /// Walks every collider attached to no rigid body (terrain is static) and
+    /// pulls vertices/indices off the underlying TriMesh shape. Heightfield,
+    /// stairs, slopes, mixed, etc. all bake to TriMesh during construction;
+    /// flat ground uses a Cuboid and is skipped here. Returns None if no
+    /// terrain mesh is available (e.g. flat-only).
+    pub fn get_terrain_mesh(&self) -> Option<(Vec<[f32; 3]>, Vec<[u32; 3]>)> {
+        let mut all_verts: Vec<[f32; 3]> = Vec::new();
+        let mut all_tris: Vec<[u32; 3]> = Vec::new();
+        for (_, collider) in self.collider_set.iter() {
+            // Only static (parentless) colliders are terrain.
+            if collider.parent().is_some() {
+                continue;
+            }
+            if let Some(trimesh) = collider.shape().as_trimesh() {
+                let offset = all_verts.len() as u32;
+                all_verts.extend(trimesh.vertices().iter().map(|p| [p.x, p.y, p.z]));
+                all_tris.extend(trimesh.indices().iter().map(|&[a, b, c]| {
+                    [a + offset, b + offset, c + offset]
+                }));
+            }
+        }
+        if all_verts.is_empty() {
+            None
+        } else {
+            Some((all_verts, all_tris))
+        }
+    }
+
     pub fn get_body_collision_count(&self) -> usize {
         let foot_handles: std::collections::HashSet<_> =
             self.foot_link_handles.iter().copied().collect();
