@@ -60,6 +60,23 @@ impl RerunRenderer {
         })
     }
 
+    /// Create a renderer that connects to a running Rerun TCP/WS server.
+    /// `addr` is `host:port` (e.g. `spot-walk.hpc.svc.cluster.local:9876`);
+    /// DNS-resolved to a SocketAddr for the rerun 0.22 TCP transport.
+    pub fn connect_to(app_name: &str, addr: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        use std::net::ToSocketAddrs;
+        let socket_addr = addr
+            .to_socket_addrs()?
+            .next()
+            .ok_or_else(|| format!("could not resolve {addr}"))?;
+        let rec = rerun::RecordingStreamBuilder::new(app_name)
+            .connect_tcp_opts(socket_addr, Default::default())?;
+        Ok(Self {
+            rec,
+            initialized: false,
+        })
+    }
+
     /// Log collider primitive shapes for a single link entity.
     fn log_link_colliders(&self, entity: &str, world: &PhysicsWorld, handle: rapier3d::prelude::RigidBodyHandle) {
         for (_, collider) in world.collider_set.iter() {

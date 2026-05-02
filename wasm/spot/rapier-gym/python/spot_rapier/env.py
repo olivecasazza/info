@@ -12,6 +12,7 @@ Supports multi-behavior training via behavior conditioning:
     - "forage": battery energy foraging
 """
 
+import os
 import gymnasium as gym
 import numpy as np
 from pathlib import Path
@@ -104,6 +105,14 @@ class SpotEnvRapier(gym.Env):
         self.terrain_type = config.get("terrain_type", None)  # auto-select if None
         self.cmd_vel_scale = config.get("cmd_vel_scale", 1.0)
         self.max_episode_steps = config.get("max_episode_steps", 2000)
+        # Rerun endpoint template (e.g. "spot-<behavior>.hpc.svc.cluster.local:9876").
+        # `<behavior>` is substituted with the trial's behavior name. When set,
+        # the SpotSim connects to the in-cluster RerunDashboard for live logging.
+        self.rerun_endpoint = (
+            config.get("rerun_endpoint")
+            or os.environ.get("SPOT_RERUN_ENDPOINT")
+            or ""
+        )
 
         # 45 physics + 6 behavior one-hot + 12 foraging = 63
         forage_obs_dim = 12
@@ -157,6 +166,10 @@ class SpotEnvRapier(gym.Env):
             self._episode_seed,
             self.terrain_difficulty,
         )
+
+        if self.rerun_endpoint:
+            url = self.rerun_endpoint.replace("<behavior>", self.behavior)
+            self.sim.connect_rerun_to(f"spot_{self.behavior}", url)
 
         self.current_step = 0
         self.foot_air_time = np.zeros(4, dtype=np.float32)

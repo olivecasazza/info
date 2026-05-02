@@ -127,6 +127,11 @@ impl SpotSim {
         self.inner.start_rerun(app_name);
     }
 
+    /// Connect Rerun renderer to a specific TCP address.
+    fn connect_rerun_to(&mut self, app_name: &str, addr: &str) {
+        self.inner.connect_rerun_to(app_name, addr);
+    }
+
     /// Start Rerun visualization by connecting to an existing viewer.
     fn connect_rerun(&mut self, app_name: &str) {
         self.inner.connect_rerun(app_name);

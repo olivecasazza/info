@@ -14,4 +14,4 @@ nalgebra = "0.33"
 roxmltree = "0.20"
 noise = "0.9"
 log = "0.4"
-rerun = { version = "0.22", optional = true, default-features = false, features = ["sdk"] }
+rerun = { version = "0.22", optional = true, default-features = false, features = ["sdk", "server"] }

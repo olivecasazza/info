@@ -227,17 +227,6 @@ class CurriculumCallback(tune.Callback):
 def train(args):
     ray.init(address="auto" if os.environ.get("RAY_ADDRESS") else None)
 
-    # Start Rerun dashboard as a Ray Serve deployment
-    if not args.no_dashboard:
-        try:
-            from viz.serve import start_dashboard
-            start_dashboard(
-                web_port=args.dashboard_web_port,
-                grpc_port=args.dashboard_grpc_port,
-            )
-        except Exception as e:
-            print(f"[warn] Dashboard failed to start: {e}", flush=True)
-
     tune.register_env("spot_rapier", lambda c: SpotEnvRapier(config=c))
 
     total_timesteps = args.total_timesteps
@@ -263,6 +252,7 @@ def train(args):
                 "cmd_vel_scale": 0.0,
                 "terrain_difficulty": 0.0,
                 "max_episode_steps": 2000,
+                "rerun_endpoint": args.rerun_endpoint,
             },
             disable_env_checking=True,
         )
@@ -316,13 +306,18 @@ def train(args):
             save_checkpoints=False,
         ))
 
+    # Parallelize across behaviors: one concurrent trial per behavior, so a
+    # multi-behavior `--behavior walk,terrain,...` launch fans out instead
+    # of serializing. `--max-concurrent-trials` overrides if explicitly set.
+    max_concurrent = args.max_concurrent_trials or max(len(behaviors), 1)
+
     tuner = tune.Tuner(
         "PPO",
         param_space=config,
         tune_config=tune.TuneConfig(
             mode="max",
             metric="env_runners/episode_reward_mean",
-            max_concurrent_trials=1,
+            max_concurrent_trials=max_concurrent,
             num_samples=1,
         ),
         run_config=tune.RunConfig(
@@ -361,8 +356,20 @@ if __name__ == "__main__":
     parser.add_argument("--no-gpu", dest="gpu", action="store_false")
     parser.add_argument("--no-wandb", action="store_true")
     parser.add_argument("--no-grid", action="store_true", help="Skip entropy grid search")
-    parser.add_argument("--no-dashboard", action="store_true", help="Skip Rerun dashboard")
-    parser.add_argument("--dashboard-web-port", type=int, default=9091)
-    parser.add_argument("--dashboard-grpc-port", type=int, default=9877)
+    parser.add_argument(
+        "--max-concurrent-trials",
+        type=int,
+        default=0,
+        help="Max trials running concurrently. 0 = one per behavior in --behavior.",
+    )
+    parser.add_argument(
+        "--rerun-endpoint",
+        default="",
+        help=(
+            "Rerun gRPC endpoint template, e.g. "
+            "'spot-<behavior>.hpc.svc.cluster.local:9876'. The literal "
+            "'<behavior>' is substituted per-trial. Empty disables live logging."
+        ),
+    )
     args = parser.parse_args()
     train(args)

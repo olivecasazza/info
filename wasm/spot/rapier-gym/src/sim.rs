@@ -130,6 +130,19 @@ impl RapierSim {
         }
     }
 
+    /// Connect Rerun renderer to a specific TCP address.
+    pub fn connect_rerun_to(&mut self, app_name: &str, addr: &str) {
+        match RerunRenderer::connect_to(app_name, addr) {
+            Ok(mut r) => {
+                r.init(&self.world, &[]);
+                self.renderer = Some(r);
+            }
+            Err(e) => {
+                eprintln!("Failed to connect Rerun to {addr}: {e}");
+            }
+        }
+    }
+
     /// Start Rerun visualization by connecting to an existing viewer.
     pub fn connect_rerun(&mut self, app_name: &str) {
         match RerunRenderer::connect(app_name) {
