@@ -21,8 +21,10 @@ from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.callbacks.callbacks import RLlibCallback
 from ray.air.integrations.wandb import WandbLoggerCallback
+import random
 import socket
 import numpy as np
+import torch
 
 from spot_rapier import SpotEnvRapier
 
@@ -224,7 +226,22 @@ class CurriculumCallback(tune.Callback):
         trial.config["env_config"]["terrain_difficulty"] = terrain_diff
 
 
+def _seed_all(seed: int) -> None:
+    """Pin every RNG we touch so a re-run with the same --seed produces the
+    same trajectory. Required to verify a config change is reproducible
+    rather than reading noise.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def train(args):
+    if args.seed is not None:
+        _seed_all(args.seed)
+
     ray.init(address="auto" if os.environ.get("RAY_ADDRESS") else None)
 
     tune.register_env("spot_rapier", lambda c: SpotEnvRapier(config=c))
@@ -276,6 +293,21 @@ def train(args):
             minibatch_size=1024,
             num_epochs=5,
         )
+        # Run a deterministic rollout every `eval_interval` train iterations on
+        # one dedicated runner (separate from training rollouts so the eval
+        # signal isn't confounded with on-policy training noise). This produces
+        # the `evaluation/env_runners/episode_reward_mean` metric, which is
+        # the load-bearing "is the policy actually improving" signal — distinct
+        # from training-time reward, which moves around with reward shaping
+        # changes and exploration.
+        .evaluation(
+            evaluation_interval=args.eval_interval if args.eval_interval > 0 else None,
+            evaluation_duration=args.eval_episodes,
+            evaluation_duration_unit="episodes",
+            evaluation_num_env_runners=1,
+            evaluation_config=PPOConfig.overrides(explore=False),
+        )
+        .debugging(seed=args.seed)
         .api_stack(
             enable_rl_module_and_learner=False,
             enable_env_runner_and_connector_v2=False,
@@ -370,6 +402,29 @@ if __name__ == "__main__":
             "'spot-<behavior>.hpc.svc.cluster.local:9876'. The literal "
             "'<behavior>' is substituted per-trial. Empty disables live logging."
         ),
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help=(
+            "Pin RNG state across Python (random/numpy/torch), Ray RLlib's "
+            "policy init, and the env's reset() so two runs with the same "
+            "seed produce the same trajectory. Required to verify a config "
+            "change is causal rather than reading noise. None = unseeded."
+        ),
+    )
+    parser.add_argument(
+        "--eval-interval",
+        type=int,
+        default=10,
+        help="Run a deterministic eval rollout every N train iterations. 0 disables.",
+    )
+    parser.add_argument(
+        "--eval-episodes",
+        type=int,
+        default=5,
+        help="Number of eval episodes per evaluation pass.",
     )
     args = parser.parse_args()
     train(args)
