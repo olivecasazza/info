@@ -83,6 +83,13 @@ pub const SIGHT_CONE_RANGE: f32 = 3.0;
 pub const NUM_SIGHT_RAYS: usize = 8;
 pub const FORAGING_OBS_SIZE: usize = 12;
 
+/// Forward obstacle-detection cone exposed to the policy via Observation
+/// for non-foraging behaviors (path planning, walk, terrain). NUM_OBSTACLE_RAYS
+/// must equal Observation::obstacle_distances.len().
+pub const NUM_OBSTACLE_RAYS: usize = 8;
+pub const OBSTACLE_CONE_HALF_ANGLE: f32 = 1.047; // 60° (matches SIGHT_CONE_HALF_ANGLE)
+pub const OBSTACLE_RAY_MAX_RANGE: f32 = 3.0;
+
 /// Build a HashMap of joint name -> default angle from the canonical arrays.
 pub fn default_angles_map() -> HashMap<String, f32> {
     JOINT_NAMES

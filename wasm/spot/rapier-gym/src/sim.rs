@@ -239,6 +239,14 @@ impl RapierSim {
         self.world.get_link_world_poses()
     }
 
+    /// Per-ray distances from the forward obstacle cone. Origin = base_link,
+    /// forward = base local +X in world frame.
+    pub fn cast_obstacle_cone(&self) -> Vec<f32> {
+        let pos = self.get_base_pos();
+        let fwd = self.get_base_forward();
+        self.world.cast_obstacle_cone(pos, fwd)
+    }
+
     pub fn is_fallen(&self) -> bool {
         self.world.is_fallen()
     }

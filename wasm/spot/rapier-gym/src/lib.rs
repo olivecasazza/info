@@ -70,6 +70,14 @@ impl SpotSim {
         self.inner.get_body_collision_count()
     }
 
+    /// Per-ray distances from the forward obstacle cone. Length = 8.
+    /// Distance to nearest environment-group collider per ray, clamped to the
+    /// configured max range. Use this for terrain / obstacle-avoidance
+    /// observations in non-foraging behaviors.
+    fn cast_obstacle_cone(&self) -> Vec<f32> {
+        self.inner.cast_obstacle_cone()
+    }
+
     /// World-frame pose for every registered link.
     ///
     /// Returns a list of `(link_name, [x, y, z], [qx, qy, qz, qw])` so the

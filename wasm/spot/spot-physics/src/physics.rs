@@ -4,7 +4,8 @@ use std::collections::HashMap;
 
 use crate::config::{
     ACTION_LIMIT, BATTERY_COLLECT_RADIUS, DAMPING, DEFAULT_JOINT_ANGLES, FOOT_LINKS, JOINT_NAMES,
-    MAX_FORCE, NUM_SIGHT_RAYS, PHYSICS_DT, SIGHT_CONE_HALF_ANGLE, SIGHT_CONE_RANGE, STIFFNESS,
+    MAX_FORCE, NUM_OBSTACLE_RAYS, NUM_SIGHT_RAYS, OBSTACLE_CONE_HALF_ANGLE, OBSTACLE_RAY_MAX_RANGE,
+    PHYSICS_DT, SIGHT_CONE_HALF_ANGLE, SIGHT_CONE_RANGE, STIFFNESS,
 };
 
 /// A battery pickup item in the foraging environment.
@@ -507,6 +508,64 @@ impl PhysicsWorld {
         };
 
         (total_charge, avg_dist)
+    }
+
+    /// Cast NUM_OBSTACLE_RAYS rays in a forward cone and return per-ray
+    /// distance to the nearest environment hit, clamped to OBSTACLE_RAY_MAX_RANGE.
+    ///
+    /// Distinct from `cast_sight_cone` (which scans Group::GROUP_3 — battery
+    /// objects — and aggregates charge): this scans Group::GROUP_1 — terrain +
+    /// obstacles — and returns per-ray data so the policy can reason about
+    /// the spatial layout in front of the robot for path planning. Output
+    /// length is fixed at NUM_OBSTACLE_RAYS (8) so it can sit in a fixed-size
+    /// observation slot.
+    pub fn cast_obstacle_cone(
+        &self,
+        base_pos: [f32; 3],
+        base_forward: [f32; 3],
+    ) -> Vec<f32> {
+        let origin = point![base_pos[0], base_pos[1], base_pos[2]];
+        let fwd = na::Vector3::new(base_forward[0], base_forward[1], base_forward[2]);
+        let fwd_norm = if fwd.norm() > 1e-6 {
+            fwd.normalize()
+        } else {
+            na::Vector3::x()
+        };
+        let up = na::Vector3::y();
+        let right = fwd_norm.cross(&up);
+        let right_norm = if right.norm() > 1e-6 {
+            right.normalize()
+        } else {
+            na::Vector3::z()
+        };
+
+        let mut distances = vec![OBSTACLE_RAY_MAX_RANGE; NUM_OBSTACLE_RAYS];
+        let filter = QueryFilter::default()
+            .groups(InteractionGroups::new(Group::ALL, Group::GROUP_1));
+
+        for i in 0..NUM_OBSTACLE_RAYS {
+            let t = if NUM_OBSTACLE_RAYS > 1 {
+                i as f32 / (NUM_OBSTACLE_RAYS - 1) as f32
+            } else {
+                0.5
+            };
+            let angle = -OBSTACLE_CONE_HALF_ANGLE + 2.0 * OBSTACLE_CONE_HALF_ANGLE * t;
+            let dir = fwd_norm * angle.cos() + right_norm * angle.sin();
+            let ray = Ray::new(origin, vector![dir.x, dir.y, dir.z]);
+
+            if let Some((_, toi)) = self.query_pipeline.cast_ray(
+                &self.rigid_body_set,
+                &self.collider_set,
+                &ray,
+                OBSTACLE_RAY_MAX_RANGE,
+                true, // solid
+                filter,
+            ) {
+                distances[i] = toi;
+            }
+        }
+
+        distances
     }
 
     /// Check if the robot has fallen over.

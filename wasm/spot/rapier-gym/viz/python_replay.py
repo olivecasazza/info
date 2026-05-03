@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import rerun as rr
+import rerun.blueprint as rrb
 import torch
 import torch.nn as nn
 
@@ -189,7 +190,82 @@ def main():
     paths = build_paths(joints)
     joints_by_name = {j["name"]: j for j in joints}
 
-    rr.init("spot_walk_real", recording_id="spot-walk-heightfield")
+    # Explicit Blueprint so app.rerun.io shows every motor's plot on load
+    # without the user having to drill into the entity tree. Per-leg time-series
+    # views group the three joints of each leg together; sensor cone obstacle
+    # distances get their own panel. Grid layout matches the kinematic
+    # symmetry of the robot.
+    blueprint = rrb.Blueprint(
+        rrb.Horizontal(
+            rrb.Spatial3DView(
+                name="Robot + terrain + sensors",
+                origin="/world",
+                contents=["+ /world/**"],
+            ),
+            rrb.Vertical(
+                rrb.TimeSeriesView(
+                    name="Body",
+                    contents=[
+                        "+ /metrics/base_height",
+                        "+ /metrics/forward_velocity",
+                        "+ /metrics/lateral_velocity",
+                        "+ /metrics/base_pitch",
+                        "+ /metrics/base_roll",
+                        "+ /metrics/base_yaw",
+                    ],
+                ),
+                rrb.Grid(
+                    rrb.TimeSeriesView(
+                        name="Front Left motors",
+                        contents=[
+                            "+ /metrics/joints/motor_front_left_hip",
+                            "+ /metrics/joints/motor_front_left_upper_leg",
+                            "+ /metrics/joints/motor_front_left_lower_leg",
+                        ],
+                    ),
+                    rrb.TimeSeriesView(
+                        name="Front Right motors",
+                        contents=[
+                            "+ /metrics/joints/motor_front_right_hip",
+                            "+ /metrics/joints/motor_front_right_upper_leg",
+                            "+ /metrics/joints/motor_front_right_lower_leg",
+                        ],
+                    ),
+                    rrb.TimeSeriesView(
+                        name="Back Left motors",
+                        contents=[
+                            "+ /metrics/joints/motor_back_left_hip",
+                            "+ /metrics/joints/motor_back_left_upper_leg",
+                            "+ /metrics/joints/motor_back_left_lower_leg",
+                        ],
+                    ),
+                    rrb.TimeSeriesView(
+                        name="Back Right motors",
+                        contents=[
+                            "+ /metrics/joints/motor_back_right_hip",
+                            "+ /metrics/joints/motor_back_right_upper_leg",
+                            "+ /metrics/joints/motor_back_right_lower_leg",
+                        ],
+                    ),
+                    grid_columns=2,
+                ),
+                rrb.TimeSeriesView(
+                    name="Foot contacts",
+                    contents=["+ /metrics/foot_contacts/**"],
+                ),
+                rrb.TimeSeriesView(
+                    name="Obstacle distances (forward cone)",
+                    contents=["+ /metrics/sensors/obstacle_ray_*"],
+                ),
+                row_shares=[1, 4, 1, 1],
+            ),
+            column_shares=[3, 4],
+        ),
+        collapse_panels=True,
+    )
+
+    rr.init("spot_walk_real", recording_id="spot-walk-heightfield",
+            default_blueprint=blueprint)
     rr.save(OUT)
 
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Y_UP, static=True)
@@ -275,7 +351,10 @@ def main():
         rr.set_time("time", duration=step / 50.0)
 
         raw = np.array(sim.get_observation(), dtype=np.float32)
-        raw[42:45] = COMMAND
+        # 60-dim physics obs: body_ang_vel(3) body_lin_vel(3) gravity(3)
+        # joint_pos(12) joint_vel(12) prev_action(12) command(3)
+        # foot_contacts(4) obstacle_dist(8). Command lives at 45:48.
+        raw[45:48] = COMMAND
         obs = np.concatenate([raw, behavior_onehot, forage_pad])
         if obs.shape[0] < policy.dim:
             obs = np.concatenate([obs, np.zeros(policy.dim - obs.shape[0], dtype=np.float32)])
@@ -315,6 +394,44 @@ def main():
         rr.log("metrics/lateral_velocity", rr.Scalars(float(vel[2])))
         for i, jname in enumerate(JOINT_ORDER):
             rr.log(f"metrics/joints/{jname}", rr.Scalars(float(joint_pos[i])))
+
+        # Foot contacts (4) — exposed to the policy via obs[48:52].
+        contacts = sim.get_foot_contacts()
+        for i, foot in enumerate(("front_left", "front_right", "back_left", "back_right")):
+            rr.log(f"metrics/foot_contacts/{foot}", rr.Scalars(1.0 if contacts[i] else 0.0))
+
+        # Forward obstacle cone — 8 ray distances per step. Logged as scalars
+        # for time-series view AND as Arrows3D under base_link so the cone is
+        # visible in the 3D view (color-coded by hit distance, red=close).
+        ray_dists = sim.cast_obstacle_cone()
+        for i, d in enumerate(ray_dists):
+            rr.log(f"metrics/sensors/obstacle_ray_{i}", rr.Scalars(float(d)))
+
+        # Build cone arrows in base_link's local frame: forward = +X, half angle
+        # 60°. Attached as a child of base_link so it follows the body.
+        n = len(ray_dists)
+        half_angle = 1.047  # OBSTACLE_CONE_HALF_ANGLE in radians
+        vectors, colors = [], []
+        for i, d in enumerate(ray_dists):
+            t = i / max(n - 1, 1)
+            angle = -half_angle + 2.0 * half_angle * t
+            # Forward in base_link local = +X; spread on local XZ plane.
+            dx = math.cos(angle) * d
+            dz = math.sin(angle) * d
+            vectors.append((dx, 0.0, dz))
+            # Color: red (close) to green (far) along the ray's hit distance.
+            far_frac = min(d / 3.0, 1.0)
+            colors.append(
+                (int(255 * (1.0 - far_frac)), int(255 * far_frac), 0)
+            )
+        rr.log(
+            "world/robot/base_link/sensor_cone",
+            rr.Arrows3D(
+                origins=[(0.0, 0.0, 0.0)] * n,
+                vectors=vectors,
+                colors=colors,
+            ),
+        )
 
         if sim.is_fallen():
             print(f"fell at step {step}", flush=True)

@@ -114,9 +114,13 @@ class SpotEnvRapier(gym.Env):
             or ""
         )
 
-        # 45 physics + 6 behavior one-hot + 12 foraging = 63
+        # 60 physics+sensor + 6 behavior one-hot + 12 foraging = 78.
+        # Physics obs grew from 45 -> 60 in spot-physics/observation.rs by
+        # adding body linear velocity (3), foot contacts (4), and the forward
+        # obstacle ray cone (8). Existing checkpoints are invalidated by this
+        # change and need a fresh training run.
         forage_obs_dim = 12
-        obs_dim = 45 + NUM_BEHAVIORS + forage_obs_dim
+        obs_dim = 60 + NUM_BEHAVIORS + forage_obs_dim
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(obs_dim,), dtype=np.float32,
         )
@@ -236,8 +240,11 @@ class SpotEnvRapier(gym.Env):
 
     def _get_observation(self):
         raw_obs = np.array(self.sim.get_observation(), dtype=np.float32)
-        # Replace command placeholder (last 3 elements) with actual command
-        raw_obs[42:45] = self.command * self.cmd_vel_scale
+        # Replace command placeholder with the live command. With the obs
+        # layout grown to 60 dims (body_ang_vel(3) + body_lin_vel(3) +
+        # gravity(3) + joint_pos(12) + joint_vel(12) + prev_action(12)),
+        # command lives at indices 45:48 — NOT 42:45 as in the 45-dim era.
+        raw_obs[45:48] = self.command * self.cmd_vel_scale
 
         # Append behavior one-hot
         behavior_id = BEHAVIORS.get(self.behavior, 0)
