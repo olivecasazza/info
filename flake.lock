@@ -70,7 +70,8 @@
         "crane": "crane",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
-        "rust-overlay": "rust-overlay"
+        "rust-overlay": "rust-overlay",
+        "skypilot-env": "skypilot-env"
       }
     },
     "rust-overlay": {
@@ -88,6 +89,35 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "skypilot-env": {
+      "inputs": {
+        "crane": [
+          "crane"
+        ],
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rust-overlay": [
+          "rust-overlay"
+        ]
+      },
+      "locked": {
+        "lastModified": 1777775827,
+        "narHash": "sha256-N45RzHS2d5Dk3jsirCw3pZWdRt7miB7XG9zlLQ4ETKk=",
+        "owner": "olivecasazza",
+        "repo": "skypilot-env",
+        "rev": "c4a6075a4efe85c21cae0a0a25af5d7fa1f22295",
+        "type": "github"
+      },
+      "original": {
+        "owner": "olivecasazza",
+        "repo": "skypilot-env",
         "type": "github"
       }
     },

@@ -1,10 +1,32 @@
 # WASM package builds using crane
-{ pkgs, craneLib }:
+{ pkgs, craneLib, spotPhysicsSrc }:
 
 let
-  # Source for the entire wasm workspace (includes ui-theme)
+  # The spot crate's Cargo.toml declares
+  #   spot-physics = { path = "../../../skypilot-env/spot/spot-physics" }
+  # so we materialize a build root that contains both this repo's wasm/ tree
+  # and the skypilot-env spot/ tree at exactly that relative offset:
+  #
+  #   $mergedRoot/info/wasm/...
+  #   $mergedRoot/skypilot-env/spot/spot-physics/
+  #   $mergedRoot/skypilot-env/spot/rapier-gym/      (kept for cargo workspace)
+  #   $mergedRoot/skypilot-env/spot/Cargo.toml       (the spot workspace)
+  #
+  # From info/wasm/spot/Cargo.toml the relative path "../../../skypilot-env/
+  # spot/spot-physics" then lands inside this same root, so cargo follows the
+  # path dep correctly inside the sandbox. Local-dev cargo builds rely on the
+  # actual sibling-repo layout under ~/Repositories/.
+  mergedSrc = pkgs.runCommand "wasm-spot-merged-src" { } ''
+    mkdir -p $out/info $out/skypilot-env
+    cp -r ${../wasm} $out/info/wasm
+    cp -r ${spotPhysicsSrc}/. $out/skypilot-env/spot/
+    chmod -R u+w $out
+  '';
+
+  # Source for the entire wasm workspace (includes ui-theme + spot assets +
+  # the merged-in spot-physics tree from skypilot-env).
   wasmWorkspaceSrc = pkgs.lib.cleanSourceWith {
-    src = ../wasm;
+    src = mergedSrc;
     filter = path: type:
       (craneLib.filterCargoSources path type)
       || (builtins.match ".*/themeColors\\.json$" (toString path) != null)
@@ -13,9 +35,16 @@ let
       || (builtins.match ".*\\.(glb|urdf|stl|onnx)$" (toString path) != null);
   };
 
-  # Common args for the entire workspace
+  # Common args for the entire workspace. sourceRoot tells crane / cargo to
+  # treat info/wasm as the workspace root inside the merged tree. cargoLock
+  # is set explicitly because crane defaults to looking at the top of the
+  # `src` derivation, which is one level above the workspace in our merged
+  # layout.
   wasmCommonArgs = {
     src = wasmWorkspaceSrc;
+    sourceRoot = "source/info/wasm";
+    cargoLock = ../wasm/Cargo.lock;
+    cargoToml = ../wasm/Cargo.toml;
     pname = "wasm-workspace";
     version = "0.1.0";
     strictDeps = true;

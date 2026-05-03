@@ -87,6 +87,12 @@ wasm/spot/training/.venv-submit
 wasm/target
 wasm/pkg
 
+# Spot training artifacts: obs-norm snapshots emitted by rapier-gym training
+# (canonical home: skypilot-env/spot/assets/). The WASM viewer doesn't read
+# these — they're just leftovers from when rapier-gym lived in info.
+wasm/spot/assets/obs_mean.npy
+wasm/spot/assets/obs_std.npy
+
 # Prevent nested wasm build artifacts
 wasm/*/wasm/
 result*
