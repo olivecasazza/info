@@ -122,6 +122,70 @@ def sanity_check_gravity(sim, *, axis_up: int = 1, n_steps: int = 50,
     }
 
 
+def sanity_check_determinism(urdf_text: str, *, terrain: str = "flat",
+                              seed: int = 42, n_steps: int = 30) -> dict:
+    """Trajectory reproducibility: two sims with the same seed + same fixed
+    action sequence must produce identical link world poses at every step.
+
+    Catches:
+      - Hidden RNG state leaking between episodes (would cause runs with the
+        same seed to diverge — debugging becomes impossible)
+      - Floating-point non-determinism in the physics step (FMA/SIMD ordering
+        changes between threads — divergence accumulates)
+      - HashMap iteration order leaking into outputs (subtle: same data,
+        different order, comparison fails — but consumers also see
+        different ordering, breaking downstream code)
+
+    Deterministic by construction: action sequence is `sin(...) * 0.05` not
+    random; seed is fixed; n_steps fixed; tolerance fixed. Same pass/fail
+    result every run.
+    """
+    from spot_rapier.spot_rapier import SpotSim
+    sim_a = SpotSim(urdf_text, terrain, seed, 0.0)
+    sim_b = SpotSim(urdf_text, terrain, seed, 0.0)
+
+    actions = [
+        [float(np.sin((step + j * 0.7) * 0.1) * 0.05) for j in range(12)]
+        for step in range(n_steps)
+    ]
+
+    max_dev_t = 0.0
+    max_dev_q = 0.0
+    for step, action in enumerate(actions):
+        sim_a.step(action)
+        sim_b.step(action)
+        a = sorted(sim_a.get_link_world_poses(), key=lambda p: p[0])
+        b = sorted(sim_b.get_link_world_poses(), key=lambda p: p[0])
+        assert len(a) == len(b), f"link count diverged at step {step}: {len(a)} vs {len(b)}"
+        for (na, ta, qa), (nb, tb, qb) in zip(a, b):
+            assert na == nb, f"link name diverged at step {step}: {na} vs {nb}"
+            dev_t = float(np.max(np.abs(np.asarray(ta) - np.asarray(tb))))
+            dev_q = float(np.max(np.abs(np.asarray(qa) - np.asarray(qb))))
+            max_dev_t = max(max_dev_t, dev_t)
+            max_dev_q = max(max_dev_q, dev_q)
+
+    # f32 accumulates ~1e-6 per multiply; over 30 physics steps × ~4 substeps,
+    # ~1e-4 is the realistic ceiling for byte-identical determinism. >1e-3
+    # indicates a real divergence (different effective seed, hidden RNG,
+    # iteration-order leak, or floating-point non-associativity in threads).
+    assert max_dev_t < 1e-4, (
+        f"non-deterministic translation: max deviation = {max_dev_t:.2e} m. "
+        "Same seed + same actions produced different trajectories — physics "
+        "step or get_link_world_poses() has hidden non-determinism."
+    )
+    assert max_dev_q < 1e-4, (
+        f"non-deterministic rotation: max quaternion deviation = {max_dev_q:.2e}. "
+        "Same seed + same actions produced different orientations."
+    )
+
+    return {
+        "max_translation_deviation": max_dev_t,
+        "max_quaternion_deviation": max_dev_q,
+        "n_steps": n_steps,
+        "seed": seed,
+    }
+
+
 def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
                       verbose: bool = True) -> dict:
     """Run every spawn-time invariant. Single entrypoint for callers.
@@ -131,13 +195,23 @@ def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
     """
     spawn = sanity_check_spawn(sim, axis_up=1)
     gravity = sanity_check_gravity(sim, axis_up=1, urdf_text=urdf_text, terrain=terrain)
+    determinism = (
+        sanity_check_determinism(urdf_text, terrain=terrain)
+        if urdf_text is not None
+        else {"skipped": "no urdf_text passed"}
+    )
 
     if verbose:
         import sys
+        det_t = determinism.get("max_translation_deviation", "skip")
+        det_q = determinism.get("max_quaternion_deviation", "skip")
+        det_t_str = f"{det_t:.2e}" if isinstance(det_t, float) else det_t
+        det_q_str = f"{det_q:.2e}" if isinstance(det_q, float) else det_q
         print(f"[sanity] base_up={spawn['base_up']:.3f} "
               f"feet_spread={spawn['foot_spread']*1000:.1f}mm "
               f"terrain_max_up={spawn['terrain_max_up']} "
-              f"drop_delta={[round(x, 4) for x in gravity.get('drop_delta', [])]}",
+              f"drop_delta={[round(x, 4) for x in gravity.get('drop_delta', [])]} "
+              f"det_dev_t={det_t_str} det_dev_q={det_q_str}",
               file=sys.stderr, flush=True)
 
-    return {"spawn": spawn, "gravity": gravity}
+    return {"spawn": spawn, "gravity": gravity, "determinism": determinism}

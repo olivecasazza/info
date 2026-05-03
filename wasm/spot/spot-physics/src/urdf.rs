@@ -1,13 +1,21 @@
 use rapier3d::prelude::*;
 use roxmltree::Document;
 use nalgebra as na;
-use std::collections::{HashMap, HashSet, VecDeque};
+// BTreeMap, not HashMap. The default Rust HashMap uses RandomState — a
+// per-instance random hash seed — so two URDF loads in the same process
+// iterate in different orders. That randomness leaks into Rapier's
+// RigidBodySet insertion order, which changes the solver's processing
+// order at every physics step. Same seed + same actions ended up producing
+// trajectories that diverged by ~3 cm over 30 steps; viz/sanity_check.py
+// caught it. BTreeMap iterates alphabetically by key, so two URDF loads
+// produce identical Rapier handle layouts and identical physics outputs.
+use std::collections::{BTreeMap, HashSet, VecDeque};
 
 use crate::config::{DEFAULT_JOINT_ANGLES, DENSITY, JOINT_NAMES, STIFFNESS, DAMPING};
 use crate::physics::PhysicsWorld;
 
-fn default_angles() -> HashMap<String, f32> {
-    let mut angles = HashMap::new();
+fn default_angles() -> BTreeMap<String, f32> {
+    let mut angles = BTreeMap::new();
     for (i, name) in JOINT_NAMES.iter().enumerate() {
         angles.insert(name.to_string(), DEFAULT_JOINT_ANGLES[i]);
     }
@@ -54,12 +62,12 @@ fn parse_urdf_origin(node: Option<roxmltree::Node>) -> Isometry<f32> {
 pub fn load_robot(world: &mut PhysicsWorld, urdf_content: &str) {
     let doc = Document::parse(urdf_content).expect("Failed to parse URDF");
 
-    let mut links_xml: HashMap<&str, roxmltree::Node> = HashMap::new();
-    let mut joints_xml: HashMap<&str, roxmltree::Node> = HashMap::new();
-    let mut adjacency: HashMap<
+    let mut links_xml: BTreeMap<&str, roxmltree::Node> = BTreeMap::new();
+    let mut joints_xml: BTreeMap<&str, roxmltree::Node> = BTreeMap::new();
+    let mut adjacency: BTreeMap<
         String,
         Vec<(String, Isometry<f32>, String, Option<Vector<f32>>)>,
-    > = HashMap::new();
+    > = BTreeMap::new();
 
     for node in doc.descendants() {
         if node.has_tag_name("link") {
@@ -114,7 +122,7 @@ pub fn load_robot(world: &mut PhysicsWorld, urdf_content: &str) {
     }
 
     // Compute global poses via BFS from base_link
-    let mut global_poses: HashMap<String, Isometry<f32>> = HashMap::new();
+    let mut global_poses: BTreeMap<String, Isometry<f32>> = BTreeMap::new();
     let root = "base_link";
     let default_angles = default_angles();
 
@@ -152,7 +160,7 @@ pub fn load_robot(world: &mut PhysicsWorld, urdf_content: &str) {
     }
 
     // Create rigid bodies and colliders
-    let mut links_handles: HashMap<String, RigidBodyHandle> = HashMap::new();
+    let mut links_handles: BTreeMap<String, RigidBodyHandle> = BTreeMap::new();
 
     for (name, node) in &links_xml {
         let pose = global_poses.get(*name).cloned().unwrap_or_else(|| {

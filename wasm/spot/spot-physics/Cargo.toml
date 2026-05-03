@@ -9,7 +9,13 @@ default = []
 rerun = ["dep:rerun"]
 
 [dependencies]
-rapier3d = "0.22"
+# enhanced-determinism: forces simba/libm_force + parry3d/enhanced-determinism
+# so physics steps are bit-identical across runs of the same compiled binary
+# (no FMA-vs-fmuladd variation, no hardware-specific math). Required for
+# debugging RL policies — without it, two sims with the same seed + same
+# action sequence diverge by ~3 cm over 30 steps (caught by the determinism
+# sanity check in viz/sanity_check.py).
+rapier3d = { version = "0.22", features = ["enhanced-determinism"] }
 nalgebra = "0.33"
 roxmltree = "0.20"
 noise = "0.9"
