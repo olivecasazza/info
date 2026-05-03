@@ -42,9 +42,10 @@ impl RerunRenderer {
     }
 
     /// Create a renderer that connects to an already-running Rerun Viewer
-    /// via TCP (default `127.0.0.1:9876`).
+    /// via gRPC (default `127.0.0.1:9876`). Renamed from connect_tcp in
+    /// rerun 0.23+ which unified the wire protocol on gRPC.
     pub fn connect(app_name: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let rec = rerun::RecordingStreamBuilder::new(app_name).connect_tcp()?;
+        let rec = rerun::RecordingStreamBuilder::new(app_name).connect_grpc()?;
         Ok(Self {
             rec,
             initialized: false,
@@ -60,17 +61,19 @@ impl RerunRenderer {
         })
     }
 
-    /// Create a renderer that connects to a running Rerun TCP/WS server.
-    /// `addr` is `host:port` (e.g. `spot-walk.hpc.svc.cluster.local:9876`);
-    /// DNS-resolved to a SocketAddr for the rerun 0.22 TCP transport.
+    /// Create a renderer that connects to a running Rerun gRPC server.
+    /// `addr` is `host:port` (e.g. `spot-walk.hpc.svc.cluster.local:9876`).
+    /// rerun 0.23+ takes a URL string instead of a SocketAddr.
     pub fn connect_to(app_name: &str, addr: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        use std::net::ToSocketAddrs;
-        let socket_addr = addr
-            .to_socket_addrs()?
-            .next()
-            .ok_or_else(|| format!("could not resolve {addr}"))?;
-        let rec = rerun::RecordingStreamBuilder::new(app_name)
-            .connect_tcp_opts(socket_addr, Default::default())?;
+        // 0.31's connect_grpc_opts takes a single rerun+http://host:port/proxy
+        // URL string (no separate options arg). The /proxy path is required —
+        // it's how rerun multiplexes data + viewer endpoints onto one server.
+        let url = if addr.starts_with("rerun+http://") || addr.starts_with("rerun+https://") {
+            addr.to_string()
+        } else {
+            format!("rerun+http://{addr}/proxy")
+        };
+        let rec = rerun::RecordingStreamBuilder::new(app_name).connect_grpc_opts(url)?;
         Ok(Self {
             rec,
             initialized: false,
@@ -193,7 +196,7 @@ impl Renderer for RerunRenderer {
         for (i, name) in JOINT_NAMES.iter().enumerate() {
             let _ = self.rec.log(
                 format!("world/metrics/joints/{name}"),
-                &rerun::Scalar::new(joint_positions[i] as f64),
+                &rerun::Scalars::new([joint_positions[i] as f64]),
             );
         }
 
@@ -202,7 +205,7 @@ impl Renderer for RerunRenderer {
         for (i, foot_name) in FOOT_LINKS.iter().enumerate() {
             let _ = self.rec.log(
                 format!("world/metrics/contacts/{foot_name}"),
-                &rerun::Scalar::new(if contacts[i] { 1.0 } else { 0.0 }),
+                &rerun::Scalars::new([if contacts[i] { 1.0 } else { 0.0 }]),
             );
         }
 
@@ -210,7 +213,7 @@ impl Renderer for RerunRenderer {
         let height = world.get_base_height();
         let _ = self.rec.log(
             "world/metrics/height",
-            &rerun::Scalar::new(height as f64),
+            &rerun::Scalars::new([height as f64]),
         );
 
         // Log base velocity magnitude
@@ -218,22 +221,22 @@ impl Renderer for RerunRenderer {
         let vel_mag = (vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2]).sqrt();
         let _ = self.rec.log(
             "world/metrics/velocity",
-            &rerun::Scalar::new(vel_mag as f64),
+            &rerun::Scalars::new([vel_mag as f64]),
         );
 
         // Log base orientation (roll, pitch, yaw)
         let rpy = world.get_base_orientation_rpy();
         let _ = self.rec.log(
             "world/metrics/orientation/roll",
-            &rerun::Scalar::new(rpy[0] as f64),
+            &rerun::Scalars::new([rpy[0] as f64]),
         );
         let _ = self.rec.log(
             "world/metrics/orientation/pitch",
-            &rerun::Scalar::new(rpy[1] as f64),
+            &rerun::Scalars::new([rpy[1] as f64]),
         );
         let _ = self.rec.log(
             "world/metrics/orientation/yaw",
-            &rerun::Scalar::new(rpy[2] as f64),
+            &rerun::Scalars::new([rpy[2] as f64]),
         );
 
         // Update battery positions (they can respawn)
@@ -259,7 +262,7 @@ impl Renderer for RerunRenderer {
     fn log_scalar(&mut self, name: &str, value: f32) {
         let _ = self.rec.log(
             format!("world/metrics/{name}"),
-            &rerun::Scalar::new(value as f64),
+            &rerun::Scalars::new([value as f64]),
         );
     }
 }
