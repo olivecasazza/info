@@ -22,6 +22,43 @@ fn default_angles() -> BTreeMap<String, f32> {
     angles
 }
 
+/// Parse a URDF `<inertial>` block into Rapier MassProperties.
+///
+/// Reads `<mass value=...>`, `<origin xyz=... rpy=...>` (COM offset from link
+/// frame), and `<inertia ixx ... izz>` (diagonal inertia tensor). Off-diagonal
+/// inertia terms are ignored — for the spot URDF they are all zero, but if a
+/// future URDF adds them, we'd need to diagonalize the tensor here.
+///
+/// Returns None if no `<inertial>` block is present, in which case the caller
+/// should fall back to collider-density mass.
+fn parse_urdf_inertial(node: roxmltree::Node) -> Option<MassProperties> {
+    let inertial = node.children().find(|n| n.has_tag_name("inertial"))?;
+
+    let mass = inertial
+        .children()
+        .find(|n| n.has_tag_name("mass"))
+        .and_then(|m| m.attribute("value"))
+        .and_then(|s| s.parse::<f32>().ok())?;
+
+    let origin = parse_urdf_origin(inertial.children().find(|n| n.has_tag_name("origin")));
+    let local_com = Point::from(origin.translation.vector);
+
+    let (ixx, iyy, izz) = inertial
+        .children()
+        .find(|n| n.has_tag_name("inertia"))
+        .map(|i| {
+            let parse = |attr: &str| {
+                i.attribute(attr)
+                    .and_then(|s| s.parse::<f32>().ok())
+                    .unwrap_or(0.0)
+            };
+            (parse("ixx"), parse("iyy"), parse("izz"))
+        })
+        .unwrap_or((0.0, 0.0, 0.0));
+
+    Some(MassProperties::new(local_com, mass, vector![ixx, iyy, izz]))
+}
+
 /// Parse a URDF `<origin>` element into a Rapier Isometry.
 fn parse_urdf_origin(node: Option<roxmltree::Node>) -> Isometry<f32> {
     let mut xyz = vector![0.0, 0.0, 0.0];
@@ -170,11 +207,22 @@ pub fn load_robot(world: &mut PhysicsWorld, urdf_content: &str) {
             )
         });
 
-        let rb = RigidBodyBuilder::dynamic()
+        // Use the URDF's <inertial> block if present (mass + COM + inertia
+        // tensor) and turn off collider-density mass below. This matches what
+        // every other URDF consumer (PyBullet, MuJoCo, ROS) does and is the
+        // only way to get a Spot URDF that balances on its own legs — using
+        // density × ball(0.06) for mesh collisions assigns ~1.8 kg of point
+        // mass to every link regardless of the URDF's specified masses.
+        let inertial = parse_urdf_inertial(*node);
+        let rb_builder = RigidBodyBuilder::dynamic()
             .position(pose)
             .linear_damping(0.5)
-            .angular_damping(0.5)
-            .build();
+            .angular_damping(0.5);
+        let rb = match &inertial {
+            Some(mp) => rb_builder.additional_mass_properties(*mp).build(),
+            None => rb_builder.build(),
+        };
+        let use_inertial_mass = inertial.is_some();
         let handle = world.rigid_body_set.insert(rb);
         links_handles.insert(name.to_string(), handle);
         world.link_map.insert(name.to_string(), handle);
@@ -220,9 +268,13 @@ pub fn load_robot(world: &mut PhysicsWorld, urdf_content: &str) {
                 }
 
                 if let Some(builder) = collider_builder {
+                    // If the URDF gave us an <inertial> block we already used
+                    // it; collider density 0 keeps the collider for collision
+                    // shape only and doesn't double-count mass.
+                    let density = if use_inertial_mass { 0.0 } else { DENSITY };
                     let collider = builder
                         .friction(1.0)
-                        .density(DENSITY)
+                        .density(density)
                         .position(col_origin)
                         .collision_groups(InteractionGroups::new(self_group, filter))
                         .build();
