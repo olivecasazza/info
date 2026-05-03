@@ -268,6 +268,54 @@ def sanity_check_settled_stand(urdf_text: str, *, settle_steps: int = 50,
     }
 
 
+def sanity_check_joint_activity(urdf_text: str, *, n_steps: int = 5) -> dict:
+    """Apply a distinct, non-zero target offset to each of the 12 joints and
+    confirm every joint registers measurable position AND velocity change
+    within `n_steps`. Catches the silent-zero failure mode in
+    PhysicsWorld::get_joint_positions/velocities (looks up `joint_map.get(name)`
+    and returns 0.0 if the lookup misses — same as a stationary joint).
+
+    Deterministic by construction: per-joint action = (i + 1) * 0.02 (so the
+    twelve targets are 0.02, 0.04, ..., 0.24 rad), seed fixed, n_steps fixed.
+    """
+    from spot_rapier.spot_rapier import SpotSim
+
+    sim = SpotSim(urdf_text, "flat", 0, 0.0)
+    actions = [(i + 1) * 0.02 for i in range(12)]
+    for _ in range(n_steps):
+        sim.step(actions)
+
+    positions = sim.get_joint_positions()
+    velocities = sim.get_joint_velocities()
+
+    silent = []
+    joint_names = [
+        "motor_front_left_hip", "motor_front_left_upper_leg", "motor_front_left_lower_leg",
+        "motor_front_right_hip", "motor_front_right_upper_leg", "motor_front_right_lower_leg",
+        "motor_back_left_hip", "motor_back_left_upper_leg", "motor_back_left_lower_leg",
+        "motor_back_right_hip", "motor_back_right_upper_leg", "motor_back_right_lower_leg",
+    ]
+    for i, name in enumerate(joint_names):
+        if abs(positions[i]) < 1e-6 and abs(velocities[i]) < 1e-6:
+            silent.append((i, name, positions[i], velocities[i]))
+
+    assert not silent, (
+        f"after {n_steps} steps with distinct per-joint actions, "
+        f"{len(silent)} joint(s) showed zero position AND zero velocity: "
+        f"{silent}. Either the URDF doesn't define those motors, or the "
+        f"loader's joint_map lookup is missing them, or the action ordering "
+        f"in apply_actions is wrong. JOINT_NAMES in spot-physics/config.rs "
+        f"must match URDF <joint name=\"motor_*\"> exactly."
+    )
+
+    return {
+        "joints_active": len(joint_names) - len(silent),
+        "joints_total": len(joint_names),
+        "max_pos": float(max(abs(p) for p in positions)),
+        "max_vel": float(max(abs(v) for v in velocities)),
+    }
+
+
 def sanity_check_env_reset_determinism(*, behavior: str = "walk",
                                           seed: int = 42, n_steps: int = 10) -> dict:
     """env.reset(seed=N) must produce the same starting observation every time.
@@ -341,6 +389,11 @@ def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
         if urdf_text is not None
         else {"skipped": "no urdf_text passed"}
     )
+    activity = (
+        sanity_check_joint_activity(urdf_text)
+        if urdf_text is not None
+        else {"skipped": "no urdf_text passed"}
+    )
     env_reset = (
         sanity_check_env_reset_determinism()
         if urdf_text is not None
@@ -369,5 +422,6 @@ def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
         "gravity": gravity,
         "determinism": determinism,
         "settled": settled,
+        "joint_activity": activity,
         "env_reset": env_reset,
     }

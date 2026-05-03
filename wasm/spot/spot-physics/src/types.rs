@@ -35,11 +35,22 @@ pub struct Observation {
     /// across SIGHT_CONE_HALF_ANGLE; rays with no hit clamp to the maximum
     /// range so the input distribution is bounded.
     pub obstacle_distances: [f32; 8],
+    /// Per-joint torque applied last step (proprioceptive feedback). Same
+    /// JOINT_NAMES order as positions/velocities. Required for the policy to
+    /// reason about contact reactions and motor saturation — without it the
+    /// policy is force-blind and learns timing-only gait. (12)
+    pub joint_torques: [f32; 12],
+    /// Count of non-foot body parts currently in contact with the
+    /// environment, divided by 8 to keep the obs in a sensible range.
+    /// Non-zero means the robot is scraping or tipping; the reward already
+    /// penalizes this via get_body_collision_count, but the policy was blind
+    /// to the signal until now. (1)
+    pub body_contact_count: f32,
 }
 
 impl Observation {
     /// Total observation dimension.
-    pub const SIZE: usize = 60;
+    pub const SIZE: usize = 73;
 
     /// Flatten to a Vec<f32> in canonical training order.
     pub fn to_vec(&self) -> Vec<f32> {
@@ -53,6 +64,8 @@ impl Observation {
         v.extend_from_slice(&self.command);
         v.extend_from_slice(&self.foot_contacts);
         v.extend_from_slice(&self.obstacle_distances);
+        v.extend_from_slice(&self.joint_torques);
+        v.push(self.body_contact_count);
         v
     }
 }

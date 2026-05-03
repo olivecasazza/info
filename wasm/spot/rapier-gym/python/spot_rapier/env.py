@@ -114,13 +114,15 @@ class SpotEnvRapier(gym.Env):
             or ""
         )
 
-        # 60 physics+sensor + 6 behavior one-hot + 12 foraging = 78.
-        # Physics obs grew from 45 -> 60 in spot-physics/observation.rs by
-        # adding body linear velocity (3), foot contacts (4), and the forward
-        # obstacle ray cone (8). Existing checkpoints are invalidated by this
-        # change and need a fresh training run.
+        # 73 physics+sensor + 6 behavior one-hot + 12 foraging = 91.
+        # Physics obs has grown across multiple iterations:
+        #   45  -> 60  (body lin vel, foot contacts, obstacle ray cone)
+        #   60  -> 72  (joint torques: proprioceptive feedback)
+        #   72  -> 73  (body_contact_count: non-foot collision exposure)
+        # Each bump invalidates trained checkpoints; fresh training picks up
+        # the new layout via observation_space.shape.
         forage_obs_dim = 12
-        obs_dim = 60 + NUM_BEHAVIORS + forage_obs_dim
+        obs_dim = 73 + NUM_BEHAVIORS + forage_obs_dim
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(obs_dim,), dtype=np.float32,
         )

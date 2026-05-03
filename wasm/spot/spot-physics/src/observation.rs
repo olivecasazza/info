@@ -81,6 +81,19 @@ pub fn collect_observation(
         obstacle_distances[i] = *d;
     }
 
+    // Joint torques applied last step (proprioceptive feedback). Same order
+    // as positions/velocities. Computed from previous_action via the same
+    // PD law Rapier applies internally.
+    let torque_vec = world.get_joint_torques(previous_action);
+    let mut joint_torques = [0.0f32; 12];
+    for i in 0..12 {
+        joint_torques[i] = torque_vec.get(i).copied().unwrap_or(0.0);
+    }
+
+    // Body contact count = number of non-foot body parts touching the env,
+    // normalized to give a reasonable obs scale (typical max is 4-8).
+    let body_contact_count = (world.get_body_collision_count() as f32) / 8.0;
+
     Observation {
         body_angular_velocity: [body_angvel.x, body_angvel.y, body_angvel.z],
         body_linear_velocity: [body_linvel.x, body_linvel.y, body_linvel.z],
@@ -91,6 +104,8 @@ pub fn collect_observation(
         command: *command,
         foot_contacts,
         obstacle_distances,
+        joint_torques,
+        body_contact_count,
     }
 }
 
