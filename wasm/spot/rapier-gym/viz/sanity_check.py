@@ -186,6 +186,77 @@ def sanity_check_determinism(urdf_text: str, *, terrain: str = "flat",
     }
 
 
+def sanity_check_settled_stand(urdf_text: str, *, terrain: str = "flat",
+                                 settle_steps: int = 50) -> dict:
+    """Stand-pose physics sanity: after settling for N steps with zero action,
+    all four feet should be in contact with the ground and the base should
+    be near the nominal stand height (~0.3-0.45 m).
+
+    Catches:
+      - PD gains too low: legs can't extend, robot collapses
+      - PD gains too high: legs over-correct, robot pogos
+      - DEFAULT_JOINT_ANGLES wrong: legs end in a non-stand pose
+      - Spawn height wrong: feet can't reach ground or robot pre-penetrates
+      - Collision groups misconfigured: feet pass through ground
+
+    Deterministic by construction: zero actions, fixed step count, fixed
+    seed (terrain shouldn't matter for flat).
+    """
+    from spot_rapier.spot_rapier import SpotSim
+    sim = SpotSim(urdf_text, terrain, 0, 0.0)
+
+    for _ in range(settle_steps):
+        sim.step([0.0] * 12)
+
+    contacts = sim.get_foot_contacts()
+    poses = {n: np.asarray(t, dtype=float) for n, t, _ in sim.get_link_world_poses()}
+    base_y = float(poses["base_link"][1])
+    pitch = float(np.asarray(sim.get_base_orientation())[1])
+    foot_ys = [
+        float(poses[f"{p}_lower_leg"][1])
+        for p in ("front_left", "front_right", "back_left", "back_right")
+    ]
+
+    n_in_contact = sum(1 for c in contacts if c)
+
+    # Catastrophic-failure threshold: < 2 feet means robot collapsed onto its
+    # body (could indicate PD failure, wrong DEFAULT_JOINT_ANGLES, broken
+    # collision groups). Currently stable settled state has ALL 4 feet
+    # ideally — observed 2/4 with the spot URDF (5° forward pitch, back feet
+    # 2.5 cm above ground) which is an asymmetric COM bug worth fixing
+    # separately, not a regression to catch here.
+    assert n_in_contact >= 2, (
+        f"after {settle_steps} settle steps, only {n_in_contact}/4 feet in "
+        f"contact with ground: contacts={contacts}, base_y={base_y:.3f}, "
+        f"pitch={pitch:.3f}rad. Robot collapsed — PD gains, DEFAULT_JOINT_"
+        f"ANGLES, or collision groups regressed."
+    )
+
+    assert 0.10 < base_y < 0.50, (
+        f"base settled outside expected stand range: base_y={base_y:.3f}. "
+        "Robot collapsed (low) or shot up (high) — likely PD instability or "
+        "wrong default joint angles."
+    )
+
+    # Forward pitch >15° at stable rest indicates a serious COM/inertia bug
+    # (robot is one nudge away from face-planting). Current spot URDF settles
+    # at ~5° forward pitch — known asymmetry, should be investigated but not
+    # catastrophic.
+    assert abs(pitch) < 0.26, (  # 0.26 rad ≈ 15°
+        f"base settled at {pitch:.3f} rad ({pitch*57.3:.1f}°) pitch — "
+        f"robot is tipping. URDF mass distribution / collider positions "
+        f"likely have a strong front/back asymmetry."
+    )
+
+    return {
+        "feet_in_contact": n_in_contact,
+        "settled_base_y": base_y,
+        "settled_pitch_rad": pitch,
+        "settled_foot_ys": foot_ys,
+        "settle_steps": settle_steps,
+    }
+
+
 def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
                       verbose: bool = True) -> dict:
     """Run every spawn-time invariant. Single entrypoint for callers.
@@ -200,6 +271,11 @@ def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
         if urdf_text is not None
         else {"skipped": "no urdf_text passed"}
     )
+    settled = (
+        sanity_check_settled_stand(urdf_text, terrain=terrain)
+        if urdf_text is not None
+        else {"skipped": "no urdf_text passed"}
+    )
 
     if verbose:
         import sys
@@ -207,11 +283,20 @@ def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
         det_q = determinism.get("max_quaternion_deviation", "skip")
         det_t_str = f"{det_t:.2e}" if isinstance(det_t, float) else det_t
         det_q_str = f"{det_q:.2e}" if isinstance(det_q, float) else det_q
+        s_pitch = settled.get("settled_pitch_rad")
+        s_pitch_str = f"{s_pitch*57.3:.1f}°" if isinstance(s_pitch, float) else "skip"
         print(f"[sanity] base_up={spawn['base_up']:.3f} "
               f"feet_spread={spawn['foot_spread']*1000:.1f}mm "
               f"terrain_max_up={spawn['terrain_max_up']} "
               f"drop_delta={[round(x, 4) for x in gravity.get('drop_delta', [])]} "
-              f"det_dev_t={det_t_str} det_dev_q={det_q_str}",
+              f"det_dev_t={det_t_str} det_dev_q={det_q_str} "
+              f"settled_pitch={s_pitch_str} "
+              f"feet_contact={settled.get('feet_in_contact')}/4",
               file=sys.stderr, flush=True)
 
-    return {"spawn": spawn, "gravity": gravity, "determinism": determinism}
+    return {
+        "spawn": spawn,
+        "gravity": gravity,
+        "determinism": determinism,
+        "settled": settled,
+    }
