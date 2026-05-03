@@ -235,6 +235,10 @@ impl RapierSim {
         self.world.get_terrain_mesh()
     }
 
+    pub fn get_link_world_poses(&self) -> Vec<(String, [f32; 3], [f32; 4])> {
+        self.world.get_link_world_poses()
+    }
+
     pub fn is_fallen(&self) -> bool {
         self.world.is_fallen()
     }

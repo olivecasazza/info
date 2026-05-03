@@ -194,15 +194,32 @@ def main():
 
     rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Y_UP, static=True)
 
+    # Origin axes for visual orientation check (red=X, green=Y up, blue=Z).
+    rr.log(
+        "world/origin",
+        rr.Arrows3D(
+            origins=[(0, 0, 0)] * 3,
+            vectors=[(1, 0, 0), (0, 1, 0), (0, 0, 1)],
+            colors=[(255, 0, 0), (0, 255, 0), (0, 0, 255)],
+        ),
+        static=True,
+    )
+
+    # Static link meshes — flat hierarchy, each link logged at world/robot/<name>
+    # with its mesh as a child carrying the URDF visual `<origin>` offset.
+    # Per-step, get_link_world_poses() overwrites the link transform with the
+    # authoritative pose from Rapier (which already includes the URDF Z-up →
+    # Rapier Y-up axis remap done in urdf.rs::load_robot).
     for name, link in links.items():
-        if name not in paths or not link["mesh"]:
+        if not link["mesh"]:
             continue
         stl = ASSETS / link["mesh"]
         if not stl.exists():
             continue
-        rr.log(f"{paths[name]}/mesh", rr.Asset3D(path=str(stl)), static=True)
+        entity = f"world/robot/{name}"
+        rr.log(f"{entity}/mesh", rr.Asset3D(path=str(stl)), static=True)
         rr.log(
-            f"{paths[name]}/mesh",
+            f"{entity}/mesh",
             rr.Transform3D(
                 translation=link["v_xyz"],
                 quaternion=euler_to_quat(*link["v_rpy"]),
@@ -214,9 +231,14 @@ def main():
     sim = SpotSim(urdf_text, TERRAIN, TERRAIN_SEED, TERRAIN_DIFFICULTY)
     print(f"sim spawned: terrain={TERRAIN} difficulty={TERRAIN_DIFFICULTY}", flush=True)
 
+    # Spawn-time invariants: base above feet, feet symmetric, terrain below
+    # robot, drop test (gravity points -Y). Failure here means the .rrd this
+    # script produces would render wrong-but-plausibly, so fail fast instead.
+    from sanity_check import sanity_check_all
+    sanity_check_all(sim, urdf_text=urdf_text, terrain=TERRAIN)
+
     # Pull the actual terrain mesh out of Rapier — exact physics geometry,
-    # not a Python approximation. Flat ground returns None (Cuboid), in which
-    # case we fall back to a thin box at y=0.
+    # not a Python approximation. Flat ground returns None (Cuboid).
     mesh = sim.get_terrain_mesh()
     if mesh is not None:
         flat_v, flat_t = mesh
@@ -231,7 +253,8 @@ def main():
             ),
             static=True,
         )
-        print(f"terrain mesh: {len(verts)} verts, {len(tris)} tris", flush=True)
+        print(f"terrain mesh: {len(verts)} verts, {len(tris)} tris, "
+              f"y range [{verts[:,1].min():.3f}, {verts[:,1].max():.3f}]", flush=True)
     else:
         rr.log(
             "world/terrain",
@@ -268,21 +291,18 @@ def main():
         action = np.clip(action, -0.25, 0.25).astype(np.float32)
         sim.step(action.tolist())
 
+        # Authoritative per-link pose from Rapier (no Python FK, no axis-remap
+        # bugs). Each link is logged at world/robot/<name> independently — the
+        # parent-chain transforms are baked into the world poses already.
+        for link_name, t, q in sim.get_link_world_poses():
+            rr.log(
+                f"world/robot/{link_name}",
+                rr.Transform3D(translation=tuple(t), quaternion=tuple(q)),
+            )
+
         bp = sim.get_base_position()
         bo = sim.get_base_orientation()
-        base_q = euler_to_quat(bo[0], bo[1], bo[2])
-        rr.log(paths["base_link"], rr.Transform3D(translation=(bp[0], bp[1], bp[2]), quaternion=base_q))
-
         joint_pos = sim.get_joint_positions()
-        for i, jname in enumerate(JOINT_ORDER):
-            j = joints_by_name.get(jname)
-            if j is None or j["child"] not in paths:
-                continue
-            angle = joint_pos[i]
-            origin_q = euler_to_quat(*j["rpy"])
-            axis_q = axis_angle_to_quat(j["axis"], angle)
-            q = quat_mul(origin_q, axis_q)
-            rr.log(paths[j["child"]], rr.Transform3D(translation=j["xyz"], quaternion=q))
 
         rr.log("metrics/base_height", rr.Scalars(float(bp[1])))
         rr.log("metrics/base_x", rr.Scalars(float(bp[0])))

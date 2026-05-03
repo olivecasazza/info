@@ -298,6 +298,33 @@ impl PhysicsWorld {
         }
     }
 
+    /// Return every link's world-frame pose (translation + quaternion).
+    ///
+    /// Use this for visualization / external KSDK clients instead of computing
+    /// forward kinematics in the consumer — Rapier already owns the authoritative
+    /// pose, including the -π/2 X-axis rotation `urdf.rs::load_robot` applies
+    /// to the root to remap URDF Z-up onto the Y-up Rapier world. Reproducing
+    /// that chain in Python invariably drifts on the rotation, which surfaces
+    /// as the robot rendering "sideways" relative to gravity.
+    ///
+    /// Returns `(name, [x, y, z], [qx, qy, qz, qw])` for each registered link.
+    pub fn get_link_world_poses(&self) -> Vec<(String, [f32; 3], [f32; 4])> {
+        let mut out = Vec::with_capacity(self.link_map.len());
+        for (name, &handle) in &self.link_map {
+            if let Some(body) = self.rigid_body_set.get(handle) {
+                let pos = body.position();
+                let t = pos.translation;
+                let r = pos.rotation;
+                out.push((
+                    name.clone(),
+                    [t.x, t.y, t.z],
+                    [r.i, r.j, r.k, r.w],
+                ));
+            }
+        }
+        out
+    }
+
     pub fn get_body_collision_count(&self) -> usize {
         let foot_handles: std::collections::HashSet<_> =
             self.foot_link_handles.iter().copied().collect();

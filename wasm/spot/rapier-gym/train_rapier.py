@@ -238,9 +238,35 @@ def _seed_all(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def _run_sanity_checks() -> None:
+    """Spawn one throwaway env per behavior and run orientation/gravity
+    invariants. Catches a broken URDF axis remap or a mis-set gravity vector
+    BEFORE 50M timesteps of training silently produce a useless policy.
+    """
+    import sys
+    from pathlib import Path
+    from spot_rapier.spot_rapier import SpotSim
+    from viz.sanity_check import sanity_check_all
+
+    urdf_paths = [
+        Path(__file__).parent / "assets" / "spot.urdf",
+        Path(__file__).parent.parent / "assets" / "spot.urdf",
+        Path("/opt/spot-training-code/assets/spot.urdf"),
+    ]
+    urdf_path = next((p for p in urdf_paths if p.exists()), None)
+    if urdf_path is None:
+        print("[sanity] urdf not found, skipping pre-train checks", file=sys.stderr)
+        return
+    urdf_text = urdf_path.read_text()
+    sim = SpotSim(urdf_text, "flat", 0, 0.0)
+    sanity_check_all(sim, urdf_text=urdf_text, terrain="flat")
+
+
 def train(args):
     if args.seed is not None:
         _seed_all(args.seed)
+
+    _run_sanity_checks()
 
     ray.init(address="auto" if os.environ.get("RAY_ADDRESS") else None)
 

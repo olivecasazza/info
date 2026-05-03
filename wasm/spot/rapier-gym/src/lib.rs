@@ -70,6 +70,18 @@ impl SpotSim {
         self.inner.get_body_collision_count()
     }
 
+    /// World-frame pose for every registered link.
+    ///
+    /// Returns a list of `(link_name, [x, y, z], [qx, qy, qz, qw])` so the
+    /// caller can log each link's transform without re-doing forward kinematics
+    /// (which is failure-prone given the URDF Z-up → Rapier Y-up axis remap
+    /// applied during URDF load).
+    fn get_link_world_poses(&self) -> Vec<(String, Vec<f32>, Vec<f32>)> {
+        self.inner.get_link_world_poses().into_iter().map(|(n, t, q)| {
+            (n, t.to_vec(), q.to_vec())
+        }).collect()
+    }
+
     /// Extract terrain mesh as (flat_vertices, flat_triangles).
     /// `flat_vertices`: x0,y0,z0,x1,y1,z1,...
     /// `flat_triangles`: i00,i01,i02,i10,i11,i12,...
