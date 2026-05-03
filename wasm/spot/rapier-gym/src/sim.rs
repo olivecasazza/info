@@ -247,6 +247,14 @@ impl RapierSim {
         self.world.cast_obstacle_cone(pos, fwd)
     }
 
+    /// Unit vectors of each cone ray in world frame (same index order as
+    /// cast_obstacle_cone()). Lets visualizers render the cone the policy
+    /// sees, rather than reconstructing the geometry independently.
+    pub fn obstacle_cone_directions(&self) -> Vec<[f32; 3]> {
+        let fwd = self.get_base_forward();
+        self.world.obstacle_cone_directions(fwd)
+    }
+
     pub fn is_fallen(&self) -> bool {
         self.world.is_fallen()
     }

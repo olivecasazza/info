@@ -78,6 +78,18 @@ impl SpotSim {
         self.inner.cast_obstacle_cone()
     }
 
+    /// Flat unit-vector list of each cone ray in world frame, layout
+    /// `[x0, y0, z0, x1, y1, z1, ...]`. Length = NUM_OBSTACLE_RAYS * 3 = 24.
+    /// Same index order as cast_obstacle_cone() distances.
+    fn obstacle_cone_directions(&self) -> Vec<f32> {
+        let dirs = self.inner.obstacle_cone_directions();
+        let mut flat = Vec::with_capacity(dirs.len() * 3);
+        for d in dirs {
+            flat.extend_from_slice(&d);
+        }
+        flat
+    }
+
     /// World-frame pose for every registered link.
     ///
     /// Returns a list of `(link_name, [x, y, z], [qx, qy, qz, qw])` so the

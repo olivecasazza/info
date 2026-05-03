@@ -407,27 +407,29 @@ def main():
         for i, d in enumerate(ray_dists):
             rr.log(f"metrics/sensors/obstacle_ray_{i}", rr.Scalars(float(d)))
 
-        # Build cone arrows in base_link's local frame: forward = +X, half angle
-        # 60°. Attached as a child of base_link so it follows the body.
+        # Cone arrows pulled directly from the same Rust function the policy
+        # samples — guarantees the visual cone matches what the policy sees,
+        # including the 3D pitch spread (4 yaws × 2 pitches = 8 rays).
+        # Logged at world/cone (world frame) since the directions are already
+        # in world frame; attaching to base_link's local frame would require
+        # un-rotating which is just additional FP error.
         n = len(ray_dists)
-        half_angle = 1.047  # OBSTACLE_CONE_HALF_ANGLE in radians
+        flat_dirs = sim.obstacle_cone_directions()
+        bp_arr = (float(bp[0]), float(bp[1]), float(bp[2]))
         vectors, colors = [], []
         for i, d in enumerate(ray_dists):
-            t = i / max(n - 1, 1)
-            angle = -half_angle + 2.0 * half_angle * t
-            # Forward in base_link local = +X; spread on local XZ plane.
-            dx = math.cos(angle) * d
-            dz = math.sin(angle) * d
-            vectors.append((dx, 0.0, dz))
-            # Color: red (close) to green (far) along the ray's hit distance.
+            dx = flat_dirs[i * 3 + 0] * float(d)
+            dy = flat_dirs[i * 3 + 1] * float(d)
+            dz = flat_dirs[i * 3 + 2] * float(d)
+            vectors.append((dx, dy, dz))
             far_frac = min(d / 3.0, 1.0)
             colors.append(
                 (int(255 * (1.0 - far_frac)), int(255 * far_frac), 0)
             )
         rr.log(
-            "world/robot/base_link/sensor_cone",
+            "world/cone",
             rr.Arrows3D(
-                origins=[(0.0, 0.0, 0.0)] * n,
+                origins=[bp_arr] * n,
                 vectors=vectors,
                 colors=colors,
             ),

@@ -84,11 +84,23 @@ pub const NUM_SIGHT_RAYS: usize = 8;
 pub const FORAGING_OBS_SIZE: usize = 12;
 
 /// Forward obstacle-detection cone exposed to the policy via Observation
-/// for non-foraging behaviors (path planning, walk, terrain). NUM_OBSTACLE_RAYS
-/// must equal Observation::obstacle_distances.len().
+/// for non-foraging behaviors (path planning, walk, terrain). 8 rays
+/// arranged in a 4-wide × 2-tall grid: 4 azimuths spread across
+/// OBSTACLE_CONE_HALF_ANGLE on each side of forward, at TWO pitches
+/// (horizontal level + pitched down). Gives the policy both
+/// "what's at body height in front of me" and "what's the terrain
+/// in front of me to step on." Single horizontal-plane spread gave
+/// no information about ground geometry ahead.
 pub const NUM_OBSTACLE_RAYS: usize = 8;
-pub const OBSTACLE_CONE_HALF_ANGLE: f32 = 1.047; // 60° (matches SIGHT_CONE_HALF_ANGLE)
+pub const OBSTACLE_CONE_HALF_ANGLE: f32 = 0.785; // 45° azimuth half-angle
 pub const OBSTACLE_RAY_MAX_RANGE: f32 = 3.0;
+/// Down-pitch (radians) applied to the lower half of the ray grid so it
+/// looks at the ground in front of the robot rather than the horizon.
+/// Negative because Rapier Y-up + body local +X forward — pitching down
+/// means rotating forward toward -Y.
+pub const OBSTACLE_RAY_DOWN_PITCH: f32 = -0.436; // -25°
+/// 4 azimuth × 2 pitch grid; configured here so changes only need this file.
+pub const OBSTACLE_RAYS_PER_PITCH: usize = 4;
 
 /// Build a HashMap of joint name -> default angle from the canonical arrays.
 pub fn default_angles_map() -> HashMap<String, f32> {

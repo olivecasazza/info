@@ -4,9 +4,62 @@ use std::collections::HashMap;
 
 use crate::config::{
     ACTION_LIMIT, BATTERY_COLLECT_RADIUS, DAMPING, DEFAULT_JOINT_ANGLES, FOOT_LINKS, JOINT_NAMES,
-    MAX_FORCE, NUM_OBSTACLE_RAYS, NUM_SIGHT_RAYS, OBSTACLE_CONE_HALF_ANGLE, OBSTACLE_RAY_MAX_RANGE,
-    PHYSICS_DT, SIGHT_CONE_HALF_ANGLE, SIGHT_CONE_RANGE, STIFFNESS,
+    MAX_FORCE, NUM_OBSTACLE_RAYS, NUM_SIGHT_RAYS, OBSTACLE_CONE_HALF_ANGLE, OBSTACLE_RAY_DOWN_PITCH,
+    OBSTACLE_RAY_MAX_RANGE, OBSTACLE_RAYS_PER_PITCH, PHYSICS_DT, SIGHT_CONE_HALF_ANGLE,
+    SIGHT_CONE_RANGE, STIFFNESS,
 };
+
+/// Generate the NUM_OBSTACLE_RAYS unit vectors for the forward obstacle cone.
+///
+/// 4-azimuth × 2-pitch grid: indices 0..3 are horizontal-level rays at four
+/// evenly-spaced yaws across [-OBSTACLE_CONE_HALF_ANGLE, +OBSTACLE_CONE_HALF_ANGLE];
+/// indices 4..7 are the same yaws but pitched down by OBSTACLE_RAY_DOWN_PITCH
+/// to scan terrain in front of the robot's feet.
+///
+/// Pure function (no PhysicsWorld access) so visualizers can call it to render
+/// the same cone shape Rapier is sampling. Up axis is Y (Rapier convention).
+pub fn obstacle_cone_directions(base_forward: [f32; 3]) -> Vec<[f32; 3]> {
+    let fwd = na::Vector3::new(base_forward[0], base_forward[1], base_forward[2]);
+    let fwd_norm = if fwd.norm() > 1e-6 {
+        fwd.normalize()
+    } else {
+        na::Vector3::x()
+    };
+    let up = na::Vector3::y();
+    let right = fwd_norm.cross(&up);
+    let right_norm = if right.norm() > 1e-6 {
+        right.normalize()
+    } else {
+        na::Vector3::z()
+    };
+    // Re-orthogonalize "up" against the now-normalized right + forward so
+    // the pitch axis is exactly perpendicular to both. Avoids any roll
+    // sneaking in if base_forward isn't perfectly horizontal.
+    let local_up = right_norm.cross(&fwd_norm).normalize();
+
+    let mut dirs = Vec::with_capacity(NUM_OBSTACLE_RAYS);
+    let pitches = [0.0f32, OBSTACLE_RAY_DOWN_PITCH];
+    for &pitch in &pitches {
+        for j in 0..OBSTACLE_RAYS_PER_PITCH {
+            let t = if OBSTACLE_RAYS_PER_PITCH > 1 {
+                j as f32 / (OBSTACLE_RAYS_PER_PITCH - 1) as f32
+            } else {
+                0.5
+            };
+            let yaw = -OBSTACLE_CONE_HALF_ANGLE + 2.0 * OBSTACLE_CONE_HALF_ANGLE * t;
+            // Compose: yaw around up, then pitch around right.
+            let yawed = fwd_norm * yaw.cos() + right_norm * yaw.sin();
+            // Rotate `yawed` around the right axis by `pitch`. Since pitch is
+            // small and `right_norm` is independent, use Rodrigues' formula
+            // simplified to up-vs-yawed components.
+            let cos_p = pitch.cos();
+            let sin_p = pitch.sin();
+            let dir = yawed * cos_p + local_up * sin_p;
+            dirs.push([dir.x, dir.y, dir.z]);
+        }
+    }
+    dirs
+}
 
 /// A battery pickup item in the foraging environment.
 pub struct BatteryItem {
@@ -524,35 +577,14 @@ impl PhysicsWorld {
         base_pos: [f32; 3],
         base_forward: [f32; 3],
     ) -> Vec<f32> {
+        let dirs = obstacle_cone_directions(base_forward);
         let origin = point![base_pos[0], base_pos[1], base_pos[2]];
-        let fwd = na::Vector3::new(base_forward[0], base_forward[1], base_forward[2]);
-        let fwd_norm = if fwd.norm() > 1e-6 {
-            fwd.normalize()
-        } else {
-            na::Vector3::x()
-        };
-        let up = na::Vector3::y();
-        let right = fwd_norm.cross(&up);
-        let right_norm = if right.norm() > 1e-6 {
-            right.normalize()
-        } else {
-            na::Vector3::z()
-        };
-
         let mut distances = vec![OBSTACLE_RAY_MAX_RANGE; NUM_OBSTACLE_RAYS];
         let filter = QueryFilter::default()
             .groups(InteractionGroups::new(Group::ALL, Group::GROUP_1));
 
-        for i in 0..NUM_OBSTACLE_RAYS {
-            let t = if NUM_OBSTACLE_RAYS > 1 {
-                i as f32 / (NUM_OBSTACLE_RAYS - 1) as f32
-            } else {
-                0.5
-            };
-            let angle = -OBSTACLE_CONE_HALF_ANGLE + 2.0 * OBSTACLE_CONE_HALF_ANGLE * t;
-            let dir = fwd_norm * angle.cos() + right_norm * angle.sin();
-            let ray = Ray::new(origin, vector![dir.x, dir.y, dir.z]);
-
+        for (i, dir) in dirs.iter().enumerate().take(NUM_OBSTACLE_RAYS) {
+            let ray = Ray::new(origin, vector![dir[0], dir[1], dir[2]]);
             if let Some((_, toi)) = self.query_pipeline.cast_ray(
                 &self.rigid_body_set,
                 &self.collider_set,
@@ -564,8 +596,15 @@ impl PhysicsWorld {
                 distances[i] = toi;
             }
         }
-
         distances
+    }
+
+    /// Public wrapper around the cone-direction generator so visualizers can
+    /// render the same cone the policy is reading. Returns NUM_OBSTACLE_RAYS
+    /// unit vectors in world frame, in the same index order as the distances
+    /// from `cast_obstacle_cone`.
+    pub fn obstacle_cone_directions(&self, base_forward: [f32; 3]) -> Vec<[f32; 3]> {
+        obstacle_cone_directions(base_forward)
     }
 
     /// Check if the robot has fallen over.
