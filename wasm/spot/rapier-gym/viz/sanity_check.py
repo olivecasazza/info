@@ -268,6 +268,60 @@ def sanity_check_settled_stand(urdf_text: str, *, settle_steps: int = 50,
     }
 
 
+def sanity_check_env_reset_determinism(*, behavior: str = "walk",
+                                          seed: int = 42, n_steps: int = 10) -> dict:
+    """env.reset(seed=N) must produce the same starting observation every time.
+
+    Stronger than sim-level determinism: also covers the gymnasium env wrapper,
+    SpotEnvRapier's terrain selection, command sampling, observation
+    construction, and the obs filter pipeline. If env reset isn't
+    deterministic, every training episode starts from a different state even
+    with the seed pinned, and "rerun with --seed=42" stops being a meaningful
+    debugging tool.
+    """
+    from spot_rapier import SpotEnvRapier
+
+    cfg = {"behavior": behavior, "max_episode_steps": 200}
+    env_a = SpotEnvRapier(config=cfg)
+    env_b = SpotEnvRapier(config=cfg)
+    obs_a, _ = env_a.reset(seed=seed)
+    obs_b, _ = env_b.reset(seed=seed)
+
+    obs_a = np.asarray(obs_a, dtype=float)
+    obs_b = np.asarray(obs_b, dtype=float)
+    init_dev = float(np.max(np.abs(obs_a - obs_b)))
+    assert init_dev < 1e-5, (
+        f"env.reset(seed={seed}) returned divergent observations: max "
+        f"deviation = {init_dev:.2e}. Two envs with the same seed are "
+        "starting in different states — episode-level reproducibility broken."
+    )
+
+    # Step forward with zero action; obs should match step-for-step.
+    max_obs_dev = init_dev
+    for step in range(n_steps):
+        zero = np.zeros(env_a.action_space.shape, dtype=np.float32)
+        oa, *_ = env_a.step(zero)
+        ob, *_ = env_b.step(zero)
+        oa = np.asarray(oa, dtype=float)
+        ob = np.asarray(ob, dtype=float)
+        dev = float(np.max(np.abs(oa - ob)))
+        max_obs_dev = max(max_obs_dev, dev)
+
+    assert max_obs_dev < 1e-4, (
+        f"env trajectories diverged with same seed + zero actions over "
+        f"{n_steps} steps: max obs deviation = {max_obs_dev:.2e}. "
+        "Either env.reset() leaks state across instances, or env.step() has "
+        "non-determinism not caught by the sim-level check."
+    )
+
+    return {
+        "init_obs_deviation": init_dev,
+        "max_obs_deviation_over_steps": max_obs_dev,
+        "n_steps": n_steps,
+        "seed": seed,
+    }
+
+
 def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
                       verbose: bool = True) -> dict:
     """Run every spawn-time invariant. Single entrypoint for callers.
@@ -284,6 +338,11 @@ def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
     )
     settled = (
         sanity_check_settled_stand(urdf_text)
+        if urdf_text is not None
+        else {"skipped": "no urdf_text passed"}
+    )
+    env_reset = (
+        sanity_check_env_reset_determinism()
         if urdf_text is not None
         else {"skipped": "no urdf_text passed"}
     )
@@ -310,4 +369,5 @@ def sanity_check_all(sim, *, urdf_text: str = None, terrain: str = "flat",
         "gravity": gravity,
         "determinism": determinism,
         "settled": settled,
+        "env_reset": env_reset,
     }
