@@ -98,6 +98,15 @@ impl WebHandle {
 
     #[wasm_bindgen]
     pub fn spawn_at_norm(&self, _x: f32, _y: f32) {}
+
+    #[wasm_bindgen]
+    pub fn set_command(&self, vel_x: f32, vel_y: f32, yaw_rate: f32) {
+        if let Ok(mut cmd) = crate::input::JS_COMMAND.lock() {
+            cmd.vel_x = vel_x;
+            cmd.vel_y = vel_y;
+            cmd.yaw_rate = yaw_rate;
+        }
+    }
 }
 
 /// Spot robot plugin for Bevy.
