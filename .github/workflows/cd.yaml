@@ -167,13 +167,9 @@ jobs:
 
       - name: Create _redirects
         run: |
-          # NOTE: R2 redirects temporarily removed because info-assets.casazza.info is
-          # not bound to the R2 bucket in Cloudflare, so the redirect targets 404.
-          # WASM files stay in the Pages bundle (largest is spot_bg.*.wasm ~24 MB;
-          # Pages per-file limit is 25 MB). Restore the R2 redirects once the
-          # custom-domain route is attached to bucket `info-assets`:
-          #   echo "/_nuxt/*.wasm https://info-assets.casazza.info/_nuxt/:splat.wasm 302" >> .output/public/_redirects
-          #   echo "/spot-assets/* https://info-assets.casazza.info/spot/:splat 302" >> .output/public/_redirects
+          # spot.casazza.io is a custom domain on this Pages project pointing at /spot.
+          # Redirect bare root to the gym page; everything else falls through to the SPA.
+          echo "/  /spot  302" >> .output/public/_redirects
 
           # SPA fallback: Cloudflare Pages serves real files first, so this only
           # catches client-side routes (e.g. /lib/<name>, /src/<name>). Without it,
