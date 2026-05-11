@@ -11,26 +11,28 @@
       <!--
         On /src/<wasm-project> we want the canvas to be fully interactive.
         Keep the page content hidden but in layout so the NavBar stays bottom.
+        On /spot we show the page content (sidebar overlay) but still have wasm fullscreen.
       -->
       <NuxtPage
         :class="[
           'flex-grow overflow-y-scroll',
-          isWasmProjectRoute ? 'hidden' : 'pointer-events-auto'
+          isWasmFullscreenRoute ? 'hidden' : 'pointer-events-auto'
         ]"
       />
 
-      <!-- Keep NavBar interactive everywhere -->
-      <NavBar class="h-fit z-50 pointer-events-auto mt-auto" />
+      <!-- Keep NavBar interactive everywhere; hide it on /spot (has its own nav) -->
+      <NavBar v-if="!isSpotRoute" class="h-fit z-50 pointer-events-auto mt-auto" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { isWasmProjectRoutePath } from '~/utils/wasmProjects'
+import { isWasmFullscreenRoutePath } from '~/utils/wasmProjects'
 
 const route = useRoute()
 
-const isWasmProjectRoute = computed(() => isWasmProjectRoutePath(route.path))
+const isWasmFullscreenRoute = computed(() => isWasmFullscreenRoutePath(route.path))
+const isSpotRoute = computed(() => route.path === '/spot' || route.path === '/spot/')
 </script>
 
 <style>

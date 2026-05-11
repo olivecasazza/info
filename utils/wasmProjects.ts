@@ -48,12 +48,25 @@ export function getWasmProjectBySlug (slug: WasmProjectSlug): WasmProjectDefinit
 }
 
 export function getWasmProjectSlugFromRoutePath (path: string): string | null {
-  const match = path.match(/^\/src\/([^/]+)\/?$/)
-  const slug = match?.[1] ?? null
-  if (!slug) { return null }
-  return WASM_PROJECTS.some(p => p.slug === slug) ? slug : null
+  // /src/<slug> routes
+  const srcMatch = path.match(/^\/src\/([^/]+)\/?$/)
+  const srcSlug = srcMatch?.[1] ?? null
+  if (srcSlug && WASM_PROJECTS.some(p => p.slug === srcSlug)) { return srcSlug }
+
+  // Top-level /spot route maps to the spot project
+  if (path === '/spot' || path === '/spot/') { return 'spot' }
+
+  return null
 }
 
 export function isWasmProjectRoutePath (path: string): boolean {
   return getWasmProjectSlugFromRoutePath(path) !== null
+}
+
+// Routes where the NuxtPage content should be hidden so the wasm canvas fills the screen.
+// /spot has its own sidebar overlay rendered inside NuxtPage, so it is NOT a fullscreen-only route.
+export function isWasmFullscreenRoutePath (path: string): boolean {
+  const match = path.match(/^\/src\/([^/]+)\/?$/)
+  const slug = match?.[1] ?? null
+  return !!(slug && WASM_PROJECTS.some(p => p.slug === slug))
 }

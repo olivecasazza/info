@@ -68,7 +68,8 @@ const desiredSlug = computed(() => {
 })
 
 function isUiVisibleForSlug (slug: string, path: string): boolean {
-  return path === `/src/${slug}`
+  // Show egui UI on the dedicated /src/<slug> route or on /spot (top-level gym page)
+  return path === `/src/${slug}` || (slug === 'spot' && (path === '/spot' || path === '/spot/'))
 }
 
 async function loadWasmProject (slug: string): Promise<void> {
