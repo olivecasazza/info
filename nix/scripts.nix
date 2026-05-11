@@ -85,21 +85,24 @@ let
       echo ""
       echo "🚀 Starting dev server (Vue HMR + WASM auto-rebuild)"
       echo "   Initial: crane-cached from Nix store"
-      echo "   Updates: wasm-pack incremental on file change"
+      echo "   Updates: wasm-pack incremental on file change (flock/pipedream only)"
+      echo "   Note:    spot is sourced from skypilot-env via Nix; run sync-wasm to update"
       echo ""
 
       # Cleanup on exit
       trap 'kill $(jobs -p) 2>/dev/null' EXIT
 
       # Smart WASM watcher - rebuild only changed package with wasm-pack (incremental)
+      # spot is excluded: its source lives in skypilot-env, not locally.
       # shellcheck disable=SC2016
       watchexec -w wasm -e rs,toml \
         --ignore 'wasm/*/pkg/**' \
         --ignore 'wasm/target/**' \
         --ignore 'wasm/*/target/**' \
+        --ignore 'wasm/spot/**' \
         --debounce 300ms \
         -- sh -c '
-          for pkg in flock pipedream spot; do
+          for pkg in flock pipedream; do
             if find "wasm/$pkg/src" -name "*.rs" -newer "wasm/$pkg/pkg" 2>/dev/null | grep -q .; then
               echo "♻️  Rebuilding $pkg (incremental)..."
               (cd "wasm/$pkg" && wasm-pack build . --target web) 2>&1 | tail -2
@@ -113,13 +116,21 @@ let
   };
 
   # Generator for game assets (textures, terrain)
+  # Source lives in skypilot-env/spot/wasm-gym/tools/asset-gen
   generate-assets = pkgs.writeShellApplication {
     name = "generate-assets";
     runtimeInputs = [ pkgs.cargo pkgs.rustc ];
     meta.description = "Generate procedural assets (textures, terrain) using Rust";
     text = ''
       ROOT="$(git rev-parse --show-toplevel)"
-      cd "$ROOT/wasm/spot/tools/asset-gen"
+      SKYPILOT_REPO="$(dirname "$ROOT")/skypilot-env"
+      ASSET_GEN_DIR="$SKYPILOT_REPO/spot/wasm-gym/tools/asset-gen"
+      if [ ! -d "$ASSET_GEN_DIR" ]; then
+        echo "Error: asset-gen not found at $ASSET_GEN_DIR"
+        echo "Ensure skypilot-env is checked out as a sibling of the info repo."
+        exit 1
+      fi
+      cd "$ASSET_GEN_DIR"
       echo "🔨 Compiling and running asset generator..."
       cargo run --release
     '';

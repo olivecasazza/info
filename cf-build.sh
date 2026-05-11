@@ -31,8 +31,8 @@ wasm-pack build ./wasm/flock/ --target web --release
 echo "Building wasm/pipedream..."
 wasm-pack build ./wasm/pipedream/ --target web --release
 
-echo "Building wasm/spot..."
-wasm-pack build ./wasm/spot/ --target web --release
+# Note: wasm/spot is sourced from skypilot-env via Nix (nix run .#build-pages).
+# The fallback path here does not support spot; use Nix for a complete build.
 
 # build nuxt package
 echo "Generating static site..."

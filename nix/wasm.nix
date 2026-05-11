@@ -8,6 +8,7 @@ let
   # and the skypilot-env spot/ tree at exactly that relative offset:
   #
   #   $mergedRoot/info/wasm/...
+  #   $mergedRoot/info/wasm/spot/        (sourced from spotPhysicsSrc/wasm-gym)
   #   $mergedRoot/skypilot-env/spot/spot-physics/
   #   $mergedRoot/skypilot-env/spot/rapier-gym/      (kept for cargo workspace)
   #   $mergedRoot/skypilot-env/spot/Cargo.toml       (the spot workspace)
@@ -19,6 +20,8 @@ let
   mergedSrc = pkgs.runCommand "wasm-spot-merged-src" { } ''
     mkdir -p $out/info $out/skypilot-env
     cp -r ${../wasm} $out/info/wasm
+    # Overlay spot source from skypilot-env (wasm-gym is the canonical source)
+    cp -r ${spotPhysicsSrc}/wasm-gym $out/info/wasm/spot
     cp -r ${spotPhysicsSrc}/. $out/skypilot-env/spot/
     chmod -R u+w $out
   '';
