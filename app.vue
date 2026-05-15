@@ -1,6 +1,8 @@
 <template>
   <div class="w-screen h-screen">
-    <BackgroundWrapper />
+    <ClientOnly>
+      <BackgroundWrapper />
+    </ClientOnly>
 
     <!--
       This wrapper sits above the canvas.
