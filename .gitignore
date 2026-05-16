@@ -95,7 +95,6 @@ wasm/spot/assets/obs_std.npy
 
 # wasm/spot is sourced from skypilot-env/spot/wasm-gym via Nix at build time.
 # It is not tracked in this repo; sync-wasm populates wasm/spot/pkg at runtime.
-wasm/spot/
 
 # Prevent nested wasm build artifacts
 wasm/*/wasm/
