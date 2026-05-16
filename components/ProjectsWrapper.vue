@@ -82,21 +82,10 @@ const categories: Category[] = [
         link: '/src/pipedream',
         links: [
           { label: 'demo', url: '/src/pipedream' },
-          { label: 'source', url: 'https://github.com/olivecasazza/info/tree/main/wasm/pipedream' }
-        ]
-      },
-      {
-        heading: 'Spot',
-        text: 'Quadruped robot with Ray cluster RL training and real-time 3D physics rendering.',
-        link: '/src/spot',
-        links: [
-          { label: 'demo', url: '/src/spot' },
-          { label: 'training', url: '/src/spot-training' },
-          { label: 'build log', url: '/src/spot-training-notes' },
-          { label: 'source', url: 'https://github.com/olivecasazza/info/tree/main/wasm/spot' }
-        ]
-      }
-    ]
+         { label: 'source', url: 'https://github.com/olivecasazza/info/tree/main/wasm/pipedream' }
+       ]
+     }
+   ]
   },
   {
     subject: 'notebooks',

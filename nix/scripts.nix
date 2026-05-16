@@ -68,35 +68,32 @@ let
       [ -x node_modules/.bin/nuxt ] || npm install
 
       # Use crane-built WASM packages if available (fast, cached)
-      # Only fall back to wasm-pack for incremental dev rebuilds
-      if [ ! -d wasm/flock/pkg ] || [ ! -d wasm/pipedream/pkg ] || [ ! -d wasm/spot/pkg ]; then
-        echo "📦 Syncing WASM from Nix store (crane-cached)..."
+     # Only fall back to wasm-pack for incremental dev rebuilds
+      if [ ! -d wasm/flock/pkg ] || [ ! -d wasm/pipedream/pkg ]; then
+       echo "📦 Syncing WASM from Nix store (crane-cached)..."
         ${sync-wasm}/bin/sync-wasm
       fi
 
-      # Clean stale modules
-      rm -rf node_modules/flock node_modules/pipedream node_modules/spot 2>/dev/null || true
-      chmod -R u+rwX node_modules 2>/dev/null || true
+     # Clean stale modules
+      rm -rf node_modules/flock node_modules/pipedream 2>/dev/null || true
+     chmod -R u+rwX node_modules 2>/dev/null || true
 
       echo ""
-      echo "🚀 Starting dev server (Vue HMR + WASM auto-rebuild)"
-      echo "   Initial: crane-cached from Nix store"
-      echo "   Updates: wasm-pack incremental on file change (flock/pipedream only)"
-      echo "   Note:    spot is sourced from skypilot-env via Nix; run sync-wasm to update"
-      echo ""
+     echo "🚀 Starting dev server (Vue HMR + WASM auto-rebuild)"
+     echo "   Initial: crane-cached from Nix store"
+     echo "   Updates: wasm-pack incremental on file change (flock/pipedream only)"
+     echo ""
 
       # Cleanup on exit
       trap 'kill $(jobs -p) 2>/dev/null' EXIT
 
-      # Smart WASM watcher - rebuild only changed package with wasm-pack (incremental)
-      # spot is excluded: its source lives in skypilot-env, not locally.
-      # shellcheck disable=SC2016
-      watchexec -w wasm -e rs,toml \
-        --ignore 'wasm/*/pkg/**' \
-        --ignore 'wasm/target/**' \
-        --ignore 'wasm/*/target/**' \
-        --ignore 'wasm/spot/**' \
-        --debounce 300ms \
+     # Smart WASM watcher - rebuild only changed package with wasm-pack (incremental)
+     # shellcheck disable=SC2016
+     watchexec -w wasm -e rs,toml \
+       --ignore 'wasm/*/pkg/**' \
+       --ignore 'wasm/target/**' \
+       --ignore 'wasm/*/target/**' \
+       --debounce 300ms \
         -- sh -c '
           for pkg in flock pipedream; do
             if find "wasm/$pkg/src" -name "*.rs" -newer "wasm/$pkg/pkg" 2>/dev/null | grep -q .; then
