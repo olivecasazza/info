@@ -17,6 +17,9 @@ export interface WasmProjectDefinition {
   // Dynamic import keeps initial JS bundle smaller and avoids eagerly loading wasm.
   // eslint-disable-next-line @typescript-eslint/ban-types
   loader: () => Promise<{ default: () => Promise<unknown>; WebHandle: new () => any }>
+  // If false, this project won't be randomly selected for the background on generic pages
+  // Default is true if undefined.
+  allowRandomBackground?: boolean
 }
 
 export const WASM_PROJECTS: WasmProjectDefinition[] = [
@@ -35,7 +38,8 @@ export const WASM_PROJECTS: WasmProjectDefinition[] = [
   {
     slug: 'spot',
     title: 'Spot Simulation',
-    loader: () => import('~/wasm/spot/pkg/spot.js')
+    loader: () => import('~/wasm/spot/pkg/spot.js'),
+    allowRandomBackground: false // spot is now hosted externally, don't load randomly on info site
   }
 ]
 

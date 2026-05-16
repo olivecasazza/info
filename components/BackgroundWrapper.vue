@@ -51,7 +51,8 @@ const forcedSlug = computed(() => getWasmProjectSlugFromRoutePath(route.path))
 
 function pickRandomBackgroundSlug (): string {
   // Exclude any project-specific routes from randomness by selecting from registry.
-  const options = WASM_PROJECTS.map(p => p.slug)
+  // Also respect the allowRandomBackground flag (defaults to true).
+  const options = WASM_PROJECTS.filter(p => p.allowRandomBackground !== false).map(p => p.slug)
   return options[Math.floor(Math.random() * options.length)]
 }
 
