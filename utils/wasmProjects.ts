@@ -17,9 +17,6 @@ export interface WasmProjectDefinition {
   // Dynamic import keeps initial JS bundle smaller and avoids eagerly loading wasm.
   // eslint-disable-next-line @typescript-eslint/ban-types
   loader: () => Promise<{ default: () => Promise<unknown>; WebHandle: new () => any }>
-  // If false, this project won't be randomly selected for the background on generic pages
-  // Default is true if undefined.
-  allowRandomBackground?: boolean
 }
 
 export const WASM_PROJECTS: WasmProjectDefinition[] = [
@@ -34,12 +31,6 @@ export const WASM_PROJECTS: WasmProjectDefinition[] = [
     title: 'Pipedream',
     // Explicit .js extension avoids Vite/Nuxt dynamic-import resolution edge cases.
     loader: () => import('~/wasm/pipedream/pkg/pipedream.js')
-  },
-  {
-    slug: 'spot',
-    title: 'Spot Simulation',
-    loader: () => import('~/wasm/spot/pkg/spot.js'),
-    allowRandomBackground: false // spot is now hosted externally, don't load randomly on info site
   }
 ]
 
@@ -56,9 +47,6 @@ export function getWasmProjectSlugFromRoutePath (path: string): string | null {
   const srcMatch = path.match(/^\/src\/([^/]+)\/?$/)
   const srcSlug = srcMatch?.[1] ?? null
   if (srcSlug && WASM_PROJECTS.some(p => p.slug === srcSlug)) { return srcSlug }
-
-  // Top-level /spot route maps to the spot project
-  if (path === '/spot' || path === '/spot/') { return 'spot' }
 
   return null
 }

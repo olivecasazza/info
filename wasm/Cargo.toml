@@ -4,7 +4,6 @@ members = [
     "bevy-core",
     "flock",
     "pipedream",
-    "spot",
     "ui-theme",
 ]
 

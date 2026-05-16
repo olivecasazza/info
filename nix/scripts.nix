@@ -11,20 +11,16 @@ let
     meta.description = "Sync WASM packages from Nix store (writable copies)";
     text = ''
       ROOT="$(git rev-parse --show-toplevel)"
-      cd "$ROOT"
-
-      for pkg in flock pipedream spot; do
-        echo "Syncing wasm/$pkg/pkg..."
-        rm -rf "wasm/$pkg/pkg"
-
-        case $pkg in
-          flock)     SRC="${wasmPkgs.flock}" ;;
-          pipedream) SRC="${wasmPkgs.pipedream}" ;;
-          spot)      SRC="${wasmPkgs.spot}" ;;
-        esac
-
-        mkdir -p "wasm/$pkg/pkg"
-        for f in "$SRC"/*; do
+     cd "$ROOT"
+      for pkg in flock pipedream; do
+       echo "Syncing wasm/$pkg/pkg..."
+      rm -rf "wasm/$pkg/pkg"
+      case "$pkg" in
+        flock)     SRC="${wasmPkgs.flock}" ;;
+        pipedream) SRC="${wasmPkgs.pipedream}" ;;
+      esac
+       mkdir -p "wasm/$pkg/pkg"
+       for f in "$SRC"/*; do
           fname=$(basename "$f")
           # Skip tar files and symlinks in source
           if [ ! -L "$f" ] && [[ ! "$fname" =~ \.tar\.zst ]]; then

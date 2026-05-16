@@ -51,8 +51,7 @@ const forcedSlug = computed(() => getWasmProjectSlugFromRoutePath(route.path))
 
 function pickRandomBackgroundSlug (): string {
   // Exclude any project-specific routes from randomness by selecting from registry.
-  // Also respect the allowRandomBackground flag (defaults to true).
-  const options = WASM_PROJECTS.filter(p => p.allowRandomBackground !== false).map(p => p.slug)
+  const options = WASM_PROJECTS.map(p => p.slug)
   return options[Math.floor(Math.random() * options.length)]
 }
 
@@ -69,8 +68,8 @@ const desiredSlug = computed(() => {
 })
 
 function isUiVisibleForSlug (slug: string, path: string): boolean {
-  // Show egui UI on the dedicated /src/<slug> route or on /spot (top-level gym page)
-  return path === `/src/${slug}` || (slug === 'spot' && (path === '/spot' || path === '/spot/'))
+  // Show egui UI on the dedicated /src/<slug> route
+  return path === `/src/${slug}`
 }
 
 async function loadWasmProject (slug: string): Promise<void> {

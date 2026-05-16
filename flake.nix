@@ -6,19 +6,9 @@
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
     crane.url = "github:ipetkov/crane";
-    # Canonical source for the spot-physics Rust crate (used by the WASM
-    # viewer and by rapier-gym's Python training). Lives in the skypilot-env
-    # repo so the training pipeline owns its source.
-    skypilot-env = {
-      url = "github:olivecasazza/skypilot-env";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
-      inputs.rust-overlay.follows = "rust-overlay";
-      inputs.crane.follows = "crane";
-    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay, crane, skypilot-env }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, crane }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
@@ -38,7 +28,6 @@
       # Import modules
       wasmPkgs = import ./nix/wasm.nix {
         inherit pkgs craneLib;
-        spotPhysicsSrc = skypilot-env.packages.${system}.spot-physics-src;
       };
       scripts = import ./nix/scripts.nix { inherit pkgs wasmPkgs; };
       devShell = import ./nix/devshell.nix { inherit pkgs rust; };
@@ -49,8 +38,7 @@
       packages = {
         flock-wasm-pkg = wasmPkgs.flock;
         pipedream-wasm-pkg = wasmPkgs.pipedream;
-        spot-wasm-pkg = wasmPkgs.spot;
-        inherit (scripts) sync-wasm build-pages dev generate-assets;
+        inherit (scripts) sync-wasm build-pages dev;
         default = scripts.build-pages;
       };
 
@@ -58,7 +46,6 @@
         sync-wasm = flake-utils.lib.mkApp { drv = scripts.sync-wasm; } // { meta = scripts.sync-wasm.meta or {}; };
         build-pages = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta or {}; };
         dev = flake-utils.lib.mkApp { drv = scripts.dev; } // { meta = scripts.dev.meta or {}; };
-        generate-assets = flake-utils.lib.mkApp { drv = scripts.generate-assets; } // { meta = scripts.generate-assets.meta or {}; };
         default = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta or {}; };
       };
     });
