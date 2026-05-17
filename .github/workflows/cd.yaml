@@ -40,7 +40,7 @@ jobs:
       - name: Build WASM packages
         run: |
           echo "Building WASM packages..."
-          nix build .#flock-wasm-pkg .#pipedream-wasm-pkg .#spot-wasm-pkg --no-link
+          nix build .#flock-wasm-pkg .#pipedream-wasm-pkg --no-link
           echo "WASM packages built successfully"
 
       # Sync WASM to wasm/*/pkg directories
