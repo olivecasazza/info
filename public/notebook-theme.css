@@ -11,7 +11,7 @@
   --notebook-secondary: #eba798;
   --notebook-border: rgba(209, 213, 219, 0.22);
   --notebook-code-bg: rgba(0, 0, 0, 0.28);
-  --notebook-width: 42rem;
+  --notebook-width: min(42rem, calc(100vw - 1rem));
   --notebook-gap: 1.25rem;
   --notebook-line-height: 1.625;
 }
@@ -126,13 +126,17 @@ body {
 }
 
 main,
+#root > div,
+[data-testid='app-container'],
 [data-testid='notebook-container'],
-[data-testid='read-mode-root'] {
+[data-testid='read-mode-root'],
+[data-testid='page'] {
   width: 100% !important;
   max-width: var(--notebook-width) !important;
   margin-left: auto !important;
   margin-right: auto !important;
-  padding: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
 body,
@@ -168,6 +172,11 @@ a {
 
 a:hover {
   cursor: pointer;
+}
+
+/* Hide "made with marimo" badge */
+a[href="https://marimo.io"] {
+  display: none !important;
 }
 
 .marimo-cell,
