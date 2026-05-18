@@ -1,47 +1,43 @@
 <template>
-  <div class="flex flex-col min-h-screen notebook-shell">
-    <header class="notebook-header shrink-0">
-      <NuxtLink to="/" class="notebook-link">/home</NuxtLink>
-      <span class="notebook-separator">›</span>
-      <span class="notebook-title">/{{ titleSlug }}</span>
-      <span v-if="!loaded && !errored" class="notebook-status">loading</span>
-      <span v-else-if="errored" class="notebook-status notebook-status-error">error</span>
+  <article class="notebook-page">
+    <header class="notebook-header">
+      <h1 class="notebook-heading">{{ title }}</h1>
       <a
         v-if="sourceUrl"
         :href="sourceUrl"
         target="_blank"
         rel="noopener noreferrer"
-        class="notebook-link ml-auto"
-      >source ↗</a>
+        class="link notebook-source"
+      >source</a>
     </header>
 
-    <main class="relative flex-1 flex flex-col items-center justify-center">
+    <section class="notebook-frame-section">
       <div v-if="!loaded && !errored" class="notebook-loading">
         <span class="notebook-loading-text">loading marimo wasm</span>
       </div>
 
       <div v-if="errored" class="notebook-loading">
         <span class="notebook-error-text">failed to load notebook</span>
-        <a :href="notebookPath" target="_blank" rel="noopener noreferrer" class="notebook-link">open directly ↗</a>
+        <a :href="notebookPath" target="_blank" rel="noopener noreferrer" class="link">open directly</a>
       </div>
 
       <iframe
         :src="notebookPath"
-        class="absolute inset-0 h-full w-full border-0 bg-transparent transition-opacity duration-200"
+        class="notebook-frame"
         :class="{ 'opacity-0': !loaded, 'opacity-100': loaded }"
         @load="loaded = true"
         @error="errored = true"
         title="Marimo Notebook"
         sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"
       />
-    </main>
-  </div>
+    </section>
+  </article>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 
-const props = defineProps<{
+defineProps<{
   notebookPath: string
   title?: string
   sourceUrl?: string
@@ -49,71 +45,53 @@ const props = defineProps<{
 
 const loaded = ref(false)
 const errored = ref(false)
-const titleSlug = computed(() => (props.title || 'notebook').toLowerCase().replaceAll(' ', '-'))
 </script>
 
 <style scoped>
-.notebook-shell {
+.notebook-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 42rem;
+  min-height: calc(100vh - 4.5rem);
+  padding-bottom: 1rem;
   background: transparent;
-  color: #d4d4d8;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  min-height: 100vh;
+  color: #d1d5db;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.875rem;
+  line-height: 1.625;
 }
 
 .notebook-header {
   display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  min-height: 2.25rem;
-  padding: 0.45rem 0.8rem;
-  border-bottom: 1px solid rgba(244, 114, 182, 0.14);
-  background: rgba(9, 9, 11, 0.86);
-  color: #a1a1aa;
-  font-size: 0.78rem;
-  letter-spacing: 0.01em;
-  backdrop-filter: blur(14px);
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
-.notebook-link {
-  color: #f9a8d4;
-  text-decoration: none;
-  transition: color 120ms ease;
+.notebook-heading {
+  color: #5dcdbe;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
 }
 
-.notebook-link:hover {
-  color: #67e8f9;
+.notebook-source {
+  width: fit-content;
+  font-size: 0.75rem;
 }
 
-.notebook-separator {
-  color: #52525b;
+.notebook-frame-section {
+  position: relative;
+  min-height: 70vh;
+  background: transparent;
 }
 
-.notebook-title {
-  color: #d4d4d8;
-}
-
-.notebook-status {
-  margin-left: 0.35rem;
-  color: #71717a;
-}
-
-.notebook-status::before {
-  content: '[';
-  color: #52525b;
-}
-
-.notebook-status::after {
-  content: ']';
-  color: #52525b;
-}
-
-.notebook-status-error,
-.notebook-error-text {
-  color: #fb7185;
+.notebook-frame {
+  display: block;
+  width: 100%;
+  min-height: 70vh;
+  border: 0;
+  background: transparent;
+  transition: opacity 200ms ease;
 }
 
 .notebook-loading {
@@ -122,13 +100,18 @@ const titleSlug = computed(() => (props.title || 'notebook').toLowerCase().repla
   z-index: 10;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: 0.75rem;
+  padding-top: 0.5rem;
   background: transparent;
-  color: #71717a;
-  font-size: 0.78rem;
+  color: #9ca3af;
+  font-size: 0.75rem;
   letter-spacing: 0.02em;
+}
+
+.notebook-error-text {
+  color: #eba798;
 }
 
 .notebook-loading-text::after {
