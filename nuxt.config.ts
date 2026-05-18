@@ -12,7 +12,7 @@ export default defineNuxtConfig({
   },
   vite: {
     plugins: [
-      wasmPack(['./wasm/flock', './wasm/pipedream', './wasm/spot'])
+      wasmPack(['./wasm/flock', './wasm/pipedream'])
     ],
     // Allow serving files from wasm/spot/assets during dev
     server: {
