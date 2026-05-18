@@ -107,27 +107,11 @@ const categories: Category[] = [
         ]
       },
       {
-        heading: 'Parallel Coordinates',
-        text: 'Interactive multidimensional data visualization using Wigglystuff.',
-        link: '/projects/notebooks/parallelcoords',
+        heading: 'Wigglystuff Demos',
+        text: 'Interactive Wigglystuff demos: parallel coordinates, hierarchical treemaps, and draggable polynomial phase portraits.',
+        link: '/projects/notebooks/wigglystuff',
         links: [
-          { label: 'source', url: 'https://github.com/olivecasazza/notebooks/blob/main/content/pyodide/wigglystuff/parallelcoords.ipynb' }
-        ]
-      },
-      {
-        heading: 'Treemap',
-        text: 'Zoomable hierarchical treemaps driven by Wigglystuff.',
-        link: '/projects/notebooks/treemap',
-        links: [
-          { label: 'source', url: 'https://github.com/olivecasazza/notebooks/blob/main/content/pyodide/wigglystuff/treemap.ipynb' }
-        ]
-      },
-      {
-        heading: 'Polynomials on Complex Plane',
-        text: 'Real-time phase singularities and complex roots visualization.',
-        link: '/projects/notebooks/polynomials',
-        links: [
-          { label: 'source', url: 'https://github.com/olivecasazza/notebooks/blob/main/content/pyodide/wigglystuff/polynomials.ipynb' }
+          { label: 'source', url: 'https://github.com/olivecasazza/notebooks/blob/main/content/pyodide/wigglystuff/wigglystuff_demos.py' }
         ]
       }
     ]

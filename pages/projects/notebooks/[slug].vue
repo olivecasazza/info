@@ -17,30 +17,34 @@ const slug = computed(() => {
   return Array.isArray(p) ? p[0] : p
 })
 
-// Derive title from slug (e.g. "parallelcoords" -> "Parallelcoords", "inverse-kinematic-approximations" -> "Inverse Kinematic Approximations")
+const legacyWigglystuffSlugs = new Set(['parallelcoords', 'treemap', 'polynomials'])
+const notebookSlug = computed(() => legacyWigglystuffSlugs.has(slug.value) ? 'wigglystuff' : slug.value)
+
+const titles: Record<string, string> = {
+  'wigglystuff': 'Wigglystuff Demos',
+  'kinematics': 'Kinematics',
+  'inverse-kinematic-approximations': 'Inverse Kinematics Approximation'
+}
+
 const title = computed(() => {
-  return slug.value
+  if (titles[notebookSlug.value]) return titles[notebookSlug.value]
+
+  return notebookSlug.value
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
 })
 
-// Map certain slugs back to their real source locations in the notebooks repo
 const sourceUrl = computed(() => {
-  const s = slug.value
+  const s = notebookSlug.value
   const base = 'https://github.com/olivecasazza/notebooks/blob/main/content'
-  
+
   if (s === 'kinematics') return `${base}/SDSU-CS556-Workspace/a4/p4.py`
   if (s === 'inverse-kinematic-approximations') return `${base}/SDSU-CS556-Workspace/a3/Assignment 3, Part 2.py`
-  
-  // Assume everything else is under pyodide/wigglystuff for these specific examples,
-  // or default to a generic guess. The original vue files had specific paths.
-  if (s === 'treemap' || s === 'parallelcoords' || s === 'polynomials') {
-    return `${base}/pyodide/wigglystuff/${s}.ipynb`
-  }
-  
+  if (s === 'wigglystuff') return `${base}/pyodide/wigglystuff/wigglystuff_demos.py`
+
   return `${base}/${s}.py`
 })
 
-const notebookPath = computed(() => `https://olivecasazza.github.io/notebooks/notebooks/${slug.value}.html`)
+const notebookPath = computed(() => `https://olivecasazza.github.io/notebooks/notebooks/${notebookSlug.value}.html`)
 </script>
