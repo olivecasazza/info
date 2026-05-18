@@ -1,6 +1,6 @@
 <template>
-  <div class="fixed inset-0 z-[100] flex flex-col overflow-hidden notebook-shell">
-    <header class="notebook-header">
+  <div class="flex flex-col min-h-screen notebook-shell">
+    <header class="notebook-header shrink-0">
       <NuxtLink to="/" class="notebook-link">/home</NuxtLink>
       <span class="notebook-separator">›</span>
       <span class="notebook-title">/{{ titleSlug }}</span>
@@ -15,7 +15,7 @@
       >source ↗</a>
     </header>
 
-    <main class="relative min-h-0 flex-1">
+    <main class="relative flex-1 flex flex-col items-center justify-center">
       <div v-if="!loaded && !errored" class="notebook-loading">
         <span class="notebook-loading-text">loading marimo wasm</span>
       </div>
@@ -54,12 +54,14 @@ const titleSlug = computed(() => (props.title || 'notebook').toLowerCase().repla
 
 <style scoped>
 .notebook-shell {
-  background:
-    radial-gradient(circle at 18% 12%, rgba(244, 114, 182, 0.10), transparent 28rem),
-    radial-gradient(circle at 78% 18%, rgba(103, 232, 249, 0.08), transparent 26rem),
-    #09090b;
+  background: transparent;
   color: #d4d4d8;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  min-height: 100vh;
 }
 
 .notebook-header {
