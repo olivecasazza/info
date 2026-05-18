@@ -29,7 +29,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--notebook-gap);
+  width: 100%;
   max-width: var(--notebook-width);
+  margin: 0 auto;
   min-height: calc(100vh - 4.5rem);
   padding-bottom: 1rem;
   background: var(--notebook-bg);
@@ -126,8 +128,10 @@ body {
 main,
 [data-testid='notebook-container'],
 [data-testid='read-mode-root'] {
+  width: 100% !important;
   max-width: var(--notebook-width) !important;
-  margin: 0 !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
   padding: 0 !important;
 }
 
