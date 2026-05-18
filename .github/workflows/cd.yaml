@@ -53,7 +53,7 @@ jobs:
           echo "=== Checking WASM pkg directories ==="
           ls -la wasm/flock/pkg/ || echo "flock/pkg missing!"
           ls -la wasm/pipedream/pkg/ || echo "pipedream/pkg missing!"
-          ls -la wasm/spot/pkg/ || echo "spot/pkg missing!"
+          echo "spot/pkg intentionally absent: spot assets are uploaded separately, not built via wasm-pack"
 
       # Install npm dependencies
       - name: Install npm dependencies
@@ -64,7 +64,7 @@ jobs:
       # Pre-copy WASM packages to node_modules (prevents vite-plugin-wasm-pack copy failures)
       - name: Pre-copy WASM to node_modules
         run: |
-          for pkg in flock pipedream spot; do
+          for pkg in flock pipedream; do
             echo "=== Pre-copying wasm/$pkg/pkg to node_modules/$pkg ==="
             rm -rf "node_modules/$pkg"
             mkdir -p "node_modules/$pkg"
@@ -79,7 +79,7 @@ jobs:
       - name: Verify pre-copy
         run: |
           echo "=== Verifying node_modules WASM packages ==="
-          for pkg in flock pipedream spot; do
+          for pkg in flock pipedream; do
             echo "--- $pkg ---"
             ls -la "node_modules/$pkg/" || echo "MISSING!"
             file "node_modules/$pkg"/*.js 2>/dev/null | head -2 || true
