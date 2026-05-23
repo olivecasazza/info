@@ -184,9 +184,13 @@ h5,
 h6,
 p,
 li,
-span,
-label,
-div {
+label {
+  color: var(--notebook-text) !important;
+  font-family: var(--notebook-font) !important;
+}
+
+span:not(.cm-editor *):not(.cm-editor),
+div:not(.cm-editor *):not(.cm-editor) {
   color: var(--notebook-text) !important;
   font-family: var(--notebook-font) !important;
 }
@@ -246,12 +250,16 @@ pre {
 pre,
 .cm-editor,
 .cm-scroller,
-.cm-content,
-[class*='cm-'] {
+.cm-content {
   max-width: 100% !important;
   overflow-x: auto !important;
   font-size: 0.8125rem !important;
   line-height: 1.45 !important;
+}
+
+[class*='cm-']:not(.cm-editor *) {
+  max-width: 100% !important;
+  overflow-x: auto !important;
 }
 
 marimo-tex {
