@@ -243,6 +243,17 @@ pre {
   font-family: var(--notebook-font) !important;
 }
 
+pre,
+.cm-editor,
+.cm-scroller,
+.cm-content,
+[class*='cm-'] {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+}
+
 ::-webkit-scrollbar {
   width: 1px;
   height: 1px;
