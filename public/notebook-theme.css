@@ -254,6 +254,12 @@ pre,
   line-height: 1.45 !important;
 }
 
+marimo-tex {
+  display: block !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  padding: 1rem 0 !important;
+}
 ::-webkit-scrollbar {
   width: 1px;
   height: 1px;
