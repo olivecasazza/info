@@ -56,7 +56,6 @@ export function isWasmProjectRoutePath (path: string): boolean {
 }
 
 // Routes where the NuxtPage content should be hidden so the wasm canvas fills the screen.
-// /spot has its own sidebar overlay rendered inside NuxtPage, so it is NOT a fullscreen-only route.
 export function isWasmFullscreenRoutePath (path: string): boolean {
   const match = path.match(/^\/src\/([^/]+)\/?$/)
   const slug = match?.[1] ?? null

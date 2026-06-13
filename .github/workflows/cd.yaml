@@ -53,8 +53,6 @@ jobs:
           echo "=== Checking WASM pkg directories ==="
           ls -la wasm/flock/pkg/ || echo "flock/pkg missing!"
           ls -la wasm/pipedream/pkg/ || echo "pipedream/pkg missing!"
-          echo "spot/pkg intentionally absent: spot assets are uploaded separately, not built via wasm-pack"
-
       # Install npm dependencies
       - name: Install npm dependencies
         run: |
@@ -145,32 +143,8 @@ jobs:
             npx wrangler r2 object put "${{ env.R2_BUCKET }}/_nuxt/$fname" --file "$wasm" --content-type application/wasm
           done
 
-      - name: Upload Spot GLB assets to R2
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          shopt -s nullglob
-          echo "Uploading Spot GLB assets to R2..."
-          for glb in wasm/spot/assets/glb/*.glb; do
-            fname=$(basename "$glb")
-            echo "  - $fname"
-            npx wrangler r2 object put "${{ env.R2_BUCKET }}/spot/glb/$fname" --file "$glb" --content-type model/gltf-binary
-          done
-          echo "GLB upload complete"
-
-      - name: Copy spot assets into Pages bundle
-        run: |
-          mkdir -p .output/public/spot-assets
-          cp -r wasm/spot/assets/* .output/public/spot-assets/
-          echo "Spot assets staged under .output/public/spot-assets/ ($(du -sh .output/public/spot-assets | cut -f1))"
-
       - name: Create _redirects
         run: |
-          # spot.casazza.io is a custom domain on this Pages project pointing at /spot.
-          # Redirect bare root to the gym page; everything else falls through to the SPA.
-          echo "/  /spot  302" >> .output/public/_redirects
-
           # SPA fallback: Cloudflare Pages serves real files first, so this only
           # catches client-side routes (e.g. /lib/<name>, /src/<name>). Without it,
           # deep links return HTTP 404 even though the Nuxt shell still hydrates.

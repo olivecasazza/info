@@ -23,8 +23,6 @@ export default defineNuxtConfig({
   },
   // Serve local WASM assets during development
   nitro: {
-    publicAssets: [
-      { dir: 'wasm/spot/assets', baseURL: '/spot-assets', maxAge: 0 }
-    ]
+    publicAssets: []
   }
 })
