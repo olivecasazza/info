@@ -130,6 +130,8 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::NotebookInverseKinematics,
     Panel::NotebookWigglystuff,
 ];
+const SIDEBAR_TILE_WIDTH: f64 = 33.333;
+const PROJECT_TILE_WIDTH: f64 = 100.0 - SIDEBAR_TILE_WIDTH;
 
 fn default_layout() -> Vec<PanelWin<Panel>> {
     let mut b = LayoutBuilder::new();
@@ -137,15 +139,17 @@ fn default_layout() -> Vec<PanelWin<Panel>> {
         b.at(Panel::Info, 16.0, 16.0, 360.0, 360.0)
             .with_tile(2, 2)
             .with_tile_flex(58.0, 1.0)
-            .with_tile_min(280.0, 240.0),
+            .with_tile_cross(SIDEBAR_TILE_WIDTH)
+            .with_tile_min(240.0, 240.0),
         b.at(Panel::Projects, 16.0, 392.0, 360.0, 260.0)
             .with_tile(2, 1)
             .with_tile_flex(42.0, 1.0)
-            .with_tile_min(280.0, 170.0),
+            .with_tile_cross(SIDEBAR_TILE_WIDTH)
+            .with_tile_min(220.0, 170.0),
     ]
 }
 
-const LAYOUT_KEY: &str = "info_layout_v7";
+const LAYOUT_KEY: &str = "info_layout_v8";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App
@@ -269,11 +273,13 @@ fn resource_panel_default(kind: Panel, index: usize, total: usize, z: i32) -> Pa
         tile_h: 2,
         tile_basis_pct: None,
         tile_grow: None,
+        tile_cross_pct: None,
         tile_min_w: None,
         tile_min_h: None,
     }
     .with_tile(tile_w, tile_h)
     .with_tile_flex(basis, grow)
+    .with_tile_cross(PROJECT_TILE_WIDTH)
     .with_tile_min(min_w, min_h)
 }
 
