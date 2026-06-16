@@ -799,10 +799,11 @@ inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
         article { class: "project-article",
             header {
                 h1 { "bird-nix" }
-                p { "Raymond Smullyan's To Mock a Mockingbird, in pure Nix." }
+                p { "Raymond Smullyan's To Mock a Mockingbird, expressed as a pure Nix combinator library." }
             }
             section { class: "article-section",
-                p { "The birds of combinatory logic - I, M, K, KI, B, C, L, W, S, V, Y - written as pure Nix expressions, with a DSL, AST compiler, pretty-printer, property-based tests, and a tvix-eval wasm playground." }
+                p { "The project implements the birds of combinatory logic - I, M, K, KI, B, C, L, W, S, V, and Y - as ordinary Nix lambdas. There are no builtins tricks or evaluator extensions; the combinators are one-line functions, and the rest of the library is built on top of them." }
+                p { "Around those primitives is a small language layer: a DSL, AST compiler, pretty-printer, property-based tests, and a tvix-eval WASM playground. The goal is to make the reduction rules inspectable while still proving that the Nix expressions behave like their combinatory logic counterparts." }
             }
             section { class: "article-section",
                 h2 { "the birds" }
@@ -813,25 +814,41 @@ inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
                                 th { "name" }
                                 th { "aka" }
                                 th { "rule" }
+                                th { "role" }
                             }
                         }
                         tbody {
-                            tr { td { "I" } td { "idiot" } td { code { "Ix = x" } } }
-                            tr { td { "M" } td { "mockingbird" } td { code { "Mx = xx" } } }
-                            tr { td { "K" } td { "kestrel" } td { code { "Kxy = x" } } }
-                            tr { td { "B" } td { "bluebird" } td { code { "Bxyz = x(yz)" } } }
-                            tr { td { "C" } td { "cardinal" } td { code { "Cxyz = xzy" } } }
-                            tr { td { "W" } td { "warbler" } td { code { "Wxy = xyy" } } }
-                            tr { td { "S" } td { "starling" } td { code { "Sxyz = xz(yz)" } } }
-                            tr { td { "V" } td { "vireo" } td { code { "Vxyz = zxy" } } }
-                            tr { td { "Y" } td { "sage bird" } td { code { "Yx = x(Yx)" } } }
+                            tr { td { "I" } td { "idiot" } td { code { "I x = x" } } td { "identity" } }
+                            tr { td { "M" } td { "mockingbird" } td { code { "M x = x x" } } td { "self application" } }
+                            tr { td { "K" } td { "kestrel" } td { code { "K x y = x" } } td { "constant / first selector" } }
+                            tr { td { "KI" } td { "kite" } td { code { "KI x y = y" } } td { "second selector" } }
+                            tr { td { "B" } td { "bluebird" } td { code { "B x y z = x (y z)" } } td { "composition" } }
+                            tr { td { "C" } td { "cardinal" } td { code { "C x y z = x z y" } } td { "argument swap" } }
+                            tr { td { "L" } td { "lark" } td { code { "L x y = x (y y)" } } td { "apply to self-application" } }
+                            tr { td { "W" } td { "warbler" } td { code { "W x y = x y y" } } td { "argument duplication" } }
+                            tr { td { "S" } td { "starling" } td { code { "S x y z = x z (y z)" } } td { "substitution / distribution" } }
+                            tr { td { "V" } td { "vireo" } td { code { "V x y z = z x y" } } td { "church pair" } }
+                            tr { td { "Y" } td { "sage bird" } td { code { "Y x = x (Y x)" } } td { "fixed point" } }
                         }
                     }
+                }
+                ul {
+                    li { "I returns its argument unchanged." }
+                    li { "K and KI select the first or second value from a pair-like call." }
+                    li { "B, C, W, and S are enough to express composition, reordering, duplication, and substitution." }
+                    li { "V encodes a pair by accepting a selector, which makes K and KI useful as projections." }
+                    li { "Y gives recursion without naming a recursive function." }
                 }
             }
             section { class: "article-section",
                 h2 { "a few laws" }
-                p { "Once the rules are in scope the identities fall out by reduction. S K K = I: Starling distributes to two Kestrels, each of which keeps only its first argument. W K = I: Warbler duplicates into Kestrel, and Kestrel throws the duplicate away." }
+                p { "Once the rules are in scope, several identities fall out by ordinary beta reduction. S K K = I: Starling distributes the final argument to two Kestrels, and each Kestrel keeps only its first argument, so the original value comes back unchanged." }
+                p { "W K = I takes a different path to the same result. Warbler duplicates its input into Kestrel, then Kestrel discards the duplicate. V x y K = x and V x y KI = y show how Vireo acts as a church-encoded pair: the selector you hand it decides which side of the pair is observed." }
+                p { "The Nix implementation keeps those laws testable. Property tests reduce generated expressions through the compiler and compare the result against the expected combinator behavior, which catches accidental changes in the DSL and pretty-printer." }
+            }
+            section { class: "article-section",
+                h2 { "play" }
+                p { "The separate bird-nix demo panel opens the full playground: real Nix compiled to WASM with tvix-eval, wired into a browser REPL. The page panel keeps the discussion and install notes available while the demo panel is used interactively." }
             }
             section { class: "article-section",
                 h2 { "install" }
@@ -853,49 +870,72 @@ fn consortium_page() -> Element {
     const INSTALL: &str = r#"nix run github:olivecasazza/consortium#claw -- -w 'node[01-16]' uptime
 cargo install consortium-cli
 pip install consortium"#;
-    const USAGE: &str = r#"# Node-set algebra
-pinch -e 'node[01-05,07]'
-pinch -f node1 node2 node3
-pinch -i 'node[1-5]' 'node[3-7]'
+    const USAGE: &str = r#"# Node-set algebra (no network)
+pinch -e 'node[01-05,07]'        # node01 node02 node03 node04 node05 node07
+pinch -f node1 node2 node3       # node[1-3]
+pinch -i 'node[1-5]' 'node[3-7]' # node[3-5]   (intersection)
 
 # Fan-out a command
 claw -w 'node[01-16]' -- uptime
 claw -w 'node[01-16]' -b -- 'uname -r'
 
+# Drive a Slurm allocation
+claw slurm --partition gpu --nodes 4 -- nvidia-smi
+
 # Coalesce piped output
 some_command | molt -b
 
 # Deploy a fleet of NixOS hosts
-cast deploy --on 'hp[01-03]' switch"#;
+cast deploy --on 'hp[01-03]' switch
+
+# Python - ClusterShell-compatible
+import consortium
+task = consortium.Task("hostname")
+task.run("node[01-16]")"#;
 
     rsx! {
         article { class: "project-article",
             header {
                 h1 { "consortium" }
-                p { "A Rust reimplementation of the ClusterShell toolchain. Tokio dispatch core, persistent SSH multiplexers, workspace crates, user-facing binaries, and PyO3 bindings for existing ClusterShell scripts." }
+                p { "A Rust reimplementation of the ClusterShell toolchain. The workspace includes a Tokio dispatch core with persistent SSH multiplexers, adapter crates, four user-facing binaries, and PyO3 bindings that can drop into existing ClusterShell scripts one import at a time." }
             }
             section { class: "article-section",
                 h2 { "scope" }
-                p { "Replaces clush, clubak, cluset/nodeset plus the Python library, and adds cast for NixOS fleet deployment. Adapter crates resolve node sets from Slurm, Ray, Ansible, SkyPilot, or Nix flakes while the dispatcher stays scheduler-agnostic." }
+                p { "Consortium replaces the four ClusterShell binaries - clush, clubak, cluset/nodeset - plus the Python library, and adds a cast deployment CLI for NixOS fleets. The intent is compatibility at the interface boundary while moving the transport, parser, and scheduler adapters into a typed Rust workspace." }
+                p { "Adapter crates resolve a node set from a Slurm allocation, a Ray placement group, an Ansible inventory, a SkyPilot cluster, or a Nix flake's nixosConfigurations. Once a node set is resolved, the dispatcher stays scheduler-agnostic: it just fans out commands, copies files, coalesces output, and returns structured results." }
             }
             section { class: "article-section",
                 h2 { "workspace" }
                 ul {
                     li { code { "consortium" } " - node-set parser, async dispatcher, SSH transport." }
-                    li { code { "consortium-py" } " - PyO3 ClusterShell-compatible API." }
-                    li { code { "consortium-cli" } " - claw, molt, pinch, cast." }
-                    li { code { "consortium-nix" } ", " code { "consortium-ansible" } ", " code { "consortium-slurm" } ", " code { "consortium-ray" } ", " code { "consortium-skypilot" } " - fleet and scheduler adapters." }
-                    li { code { "consortium-test-harness" } " - upstream ClusterShell parity suite." }
+                    li { code { "consortium-py" } " - PyO3 bindings exposing the ClusterShell-compatible API." }
+                    li { code { "consortium-cli" } " - ships claw, molt, pinch, and cast." }
+                    li { code { "consortium-nix" } " - fleet config and flake-derived node sets." }
+                    li { code { "consortium-ansible" } " - inventory parser." }
+                    li { code { "consortium-slurm" } " - resolves SLURM_JOB_ID and partition queries." }
+                    li { code { "consortium-ray" } " - placement-group to node-set adapter." }
+                    li { code { "consortium-skypilot" } " - SkyPilot cluster to node-set adapter." }
+                    li { code { "consortium-test-harness" } " - runs the upstream ClusterShell Python test suite against both backends." }
                 }
             }
             section { class: "article-section",
                 h2 { "binaries" }
                 ul {
-                    li { code { "claw -w 'node[01-16]' -- uptime" } " - fan-out command execution." }
-                    li { code { "some_command | molt -b" } " - grouped output aggregation." }
-                    li { code { "pinch -e 'node[1-5]'" } " - node-set algebra." }
-                    li { code { "cast deploy --on 'hp[01-03]' switch" } " - NixOS deployment orchestration." }
+                    li { code { "claw -w 'node[01-16]' -- uptime" } " - fan-out command execution. Replaces clush. Flags include -b for coalescing identical output, --copy for file transfer, and -l for remote user selection." }
+                    li { code { "some_command | molt -b" } " - aggregates node:line stdin into grouped output. Replaces clubak." }
+                    li { code { "pinch -e 'node[1-5]'" } " - node-set algebra. Replaces cluset/nodeset with expand, fold, count, intersection, and difference operations." }
+                    li { code { "cast deploy --on 'hp[01-03]' switch" } " - NixOS deployment orchestration. Reads fleet.json, builds closures, copies them to host groups, and activates them. Subcommands include build, eval, health, and status." }
                 }
+            }
+            section { class: "article-section",
+                h2 { "test-harness contract" }
+                p { "ClusterShell's upstream Python suite covers the node-set parser, the event loop, SSH transports, and the CLIs. consortium-test-harness runs that suite against both the original Python implementation and the consortium-py binding, asserting identical results." }
+                p { "That test harness is the compatibility contract. The Rust core can be refactored freely, but changes that break parser behavior, grouped output, or Python API parity are blocked at CI." }
+            }
+            section { class: "article-section",
+                h2 { "recording - nixlab Mac Mini fan-out" }
+                p { "The separate consortium recording panel shows pinch exercising the parser, claw fanning out uptime across mm01-mm05, molt -b coalescing a kernel-version sweep, cast health probing the NixOS build hosts, and cast eval printing the deployment plan without applying it." }
+                p { "Keeping the recording in its own panel lets the writeup remain readable while the terminal playback can be inspected beside it." }
             }
             section { class: "article-section",
                 h2 { "install" }
@@ -937,6 +977,14 @@ spec:
     address: ipmi://192.168.1.221
     protocol: Ipmi
     credentialsSecretRef: hp01-bmc
+  networkConfig:
+    address: 192.168.1.121/24
+    interface: bond0
+  hardware:
+    cpuCores: 16
+    memoryMib: 65536
+    gpu: { product: "NVIDIA RTX 5000", count: 1, vramMib: 16384 }
+  poolRef: ml-training
   online: true"#;
     const INSTALL: &str = r#"nix run github:casazza-info/hephaestus -- export-crds | kubectl apply -f -
 
@@ -949,29 +997,34 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
         article { class: "project-article",
             header {
                 h1 { "hephaestus" }
-                p { "A bare-metal lifecycle and autoscaling operator for Kubernetes, written in Rust against kube-rs. It reconciles CRDs into power events on physical hosts via IPMI, Redfish, or Wake-on-LAN." }
+                p { "A bare-metal lifecycle and autoscaling operator for Kubernetes, written in Rust against kube-rs. It reconciles two CRDs into power events on physical hosts through IPMI, Redfish, or Wake-on-LAN." }
             }
             section { class: "article-section",
                 h2 { "scope" }
-                p { "Pod autoscaling and cloud autoscaling are solved problems; bare metal is not. Hephaestus keeps a labelled pool of bare-metal hosts at a target replica count by power-cycling their BMCs." }
+                p { "Pod autoscaling and cloud autoscaling are solved problems; bare metal is not. Existing on-prem provisioners such as Metal3 and Tinkerbell target hyperscale provisioning pipelines and bring their own ecosystems. Hephaestus is intentionally smaller: it keeps a labelled pool of bare-metal hosts at a target replica count by power-cycling their BMCs." }
+                p { "The operator sits between Kubernetes scheduling intent and the physical machines in a lab or HPC fleet. Instead of treating bare-metal nodes as static inventory, it allows a pool to scale up for queued work and drain back down when the pool is no longer needed." }
             }
             section { class: "article-section",
                 h2 { "CRDs" }
-                p { "MetalMachine represents one host. MetalMachinePool represents a label-selected group with desired replicas, scaling strategy, scale-down policy, and cooldown guard." }
+                p { "MetalMachine represents one host. Its spec includes BMC address and protocol, credentials secret reference, network config, hardware profile, pool reference, desired online state, and Kubernetes node labels." }
+                p { "MetalMachine status tracks the lifecycle phase - Registering, Inspecting, Available, Provisioning, JoiningCluster, Ready, Deprovisioning, PoweringOff, or Error - along with BMC reachability, current power state, and the Kubernetes node name once the host has joined." }
+                p { "MetalMachinePool represents a label-selected group with desired replicas, scalingStrategy, scaleDownPolicy, and cooldownSeconds. The pool controller diffs Ready capacity against desired capacity and instructs per-machine controllers to power machines on or off." }
                 pre { class: "code-block", code { "{CRD}" } }
             }
             section { class: "article-section",
                 h2 { "workspace" }
                 ul {
-                    li { code { "hephaestus-api" } " - CRD types and OpenAPI." }
-                    li { code { "hephaestus" } " - controller binary, reconciler, BMC transports, Prometheus metrics." }
-                    li { code { "hephaestus-grpc" } " - external scheduler pool-state service." }
-                    li { code { "hephaestus-operator-lib" } " - telemetry and export-crds scaffolding." }
+                    li { code { "hephaestus-api" } " - CRD types and schemars-generated OpenAPI." }
+                    li { code { "hephaestus" } " - controller binary; kube reconciler, IPMI/Redfish/WoL transports, and Prometheus metrics on :8080/metrics." }
+                    li { code { "hephaestus-grpc" } " - gRPC service for external schedulers to query pool state." }
+                    li { code { "hephaestus-operator-lib" } " - shared telemetry and export-crds CLI scaffolding, reused by sibling operators." }
                 }
             }
             section { class: "article-section",
-                h2 { "production deployment" }
-                p { "Runs on a nixlab fleet managing ProLiant workers and Mac Mini agents. The ML training pool scales ProLiants up when SkyPilot tasks queue and drains them back down on cordon." }
+                h2 { "production deployment - nixlab fleet" }
+                p { "The production deployment runs on the nixlab cluster, managing three ProLiant workers via IPMI and five Mac Mini agents via Wake-on-LAN. The ML training pool scales from zero to three ProLiants when SkyPilot tasks queue, then drains back down on cordon." }
+                p { "End-to-end from kubectl patch metalmachinepool to a Ready node sits around 90 seconds, dominated by firmware POST and PXE. The controller reconcile path itself completes in tens of milliseconds and exposes counters for reconcile totals and ready replicas." }
+                p { "The separate Hephaestus recording panel preserves the scale-up tape source. The rendered GIF was referenced by the old page but is not present in the current repository, so the tape is shown as the recoverable artifact until the GIF is regenerated." }
             }
             section { class: "article-section",
                 h2 { "install" }
