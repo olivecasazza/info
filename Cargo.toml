@@ -1,0 +1,37 @@
+# Rust workspace for the info site (Dioxus + panel-kit).
+#
+# Includes:
+#   - app/ui: Dioxus web frontend
+#   - crates/info-core: renderer-agnostic content
+#   - crates/info-tui: terminal frontend (ratatui)
+#   - crates/flock, pipedream, bevy-core, ui-theme: Bevy demos (wasm-pack)
+[workspace]
+resolver = "2"
+members = [
+    "crates/info-core",
+    "crates/info-tui",
+    "crates/bevy-core",
+    "crates/ui-theme",
+    "crates/flock",
+    "crates/pipedream",
+    "app/ui",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+info-core = { path = "crates/info-core" }
+serde = { version = "1", features = ["derive"] }
+
+# Panel workspace library — local sibling checkout.
+# Nix builds recreate this path via prePatch; local dev just works.
+panel-kit = { path = "../panel-kit", features = ["bevy"] }
+panel-kit-core = { path = "../panel-kit/crates/panel-kit-core" }
+panel-kit-tui = { path = "../panel-kit/crates/panel-kit-tui" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1

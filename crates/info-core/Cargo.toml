@@ -1,0 +1,10 @@
+[package]
+name = "info-core"
+version = "0.1.0"
+edition = "2021"
+description = "Renderer-agnostic content + view-model for the info site (projects, experience). Target-agnostic: compiles to wasm (Dioxus/ratzilla) and native (crossterm TUI)."
+
+# Deliberately dependency-free and target-agnostic — no tokio, no web-sys, no
+# crossterm. The content is `&'static` const data so every renderer (Dioxus
+# web, ratatui terminal, ratzilla browser) reads the same source of truth.
+[dependencies]

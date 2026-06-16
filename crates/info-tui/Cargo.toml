@@ -1,0 +1,37 @@
+[package]
+name = "info-tui"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Terminal frontend for the info site — the same panel-kit workspace + info-core content rendered with ratatui, native (crossterm) and in-browser (ratzilla)."
+
+[lib]
+name = "info_tui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "info-tui"
+path = "src/main.rs"
+
+[dependencies]
+panel-kit-core = { workspace = true }
+panel-kit-tui = { workspace = true }
+info-core = { workspace = true }
+serde = { workspace = true }
+# Backend-agnostic ratatui (no terminal backend pulled in by default); each
+# target adds its own backend below.
+ratatui = { version = "0.30.1", default-features = false, features = ["all-widgets", "layout-cache"] }
+
+# Native terminal: crossterm backend + event source.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+crossterm = "0.29"
+ratatui = { version = "0.30.1", features = ["crossterm"] }
+
+# In-browser terminal: ratzilla renders ratatui cells to the DOM.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ratzilla = "0.3.1"
+console_error_panic_hook = "0.1"
+
+[[example]]
+name = "browser_tui"
+path = "examples/browser_tui.rs"

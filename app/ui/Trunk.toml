@@ -1,0 +1,11 @@
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/"
+
+[serve]
+# LAN-reachable so the dev build is viewable from other devices; pick the port
+# at run time with `trunk serve --port <n>` (a firewall-open one).
+address = "0.0.0.0"
+
+# Static assets in public/ are copied to dist/ automatically

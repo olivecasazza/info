@@ -1,0 +1,6 @@
+[target.wasm32-unknown-unknown]
+# Pre-allocate 128 MB of linear memory to avoid expensive memory.grow calls at runtime.
+# Stack size: 2 MB (default is 1 MB, larger helps with deep recursion in KdTree).
+rustflags = [
+    "-C", "link-args=--initial-memory=134217728 -zstack-size=2097152",
+]

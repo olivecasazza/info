@@ -1,52 +1,89 @@
 {
-  description = "Nuxt 3 + Tailwind + Rust/WASM dev environment (Cloudflare Pages build)";
+  description = "Info site — Dioxus panel-kit workspace";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
     crane.url = "github:ipetkov/crane";
+
+    # Panel workspace library — source only, not a flake.
+    # Cargo.toml uses path = "../panel-kit"; prePatch recreates this in Nix builds.
+    panel-kit = {
+      url = "github:olivecasazza/panel-kit";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay, crane }:
-    flake-utils.lib.eachDefaultSystem (system: let
-      pkgs = import nixpkgs {
-        inherit system;
-        overlays = [ (import rust-overlay) ];
-        config.allowUnfree = true;
-      };
-
-      rustToolchainFor = p:
-        p.rust-bin.stable.latest.default.override {
-          extensions = [ "rust-src" "rustfmt" "clippy" ];
-          targets = [ "wasm32-unknown-unknown" ];
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, crane, panel-kit }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ (import rust-overlay) ];
         };
 
-      rust = rustToolchainFor pkgs;
-      craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchainFor;
+        rustToolchain = p:
+          p.rust-bin.stable.latest.default.override {
+            extensions = [ "rust-src" "rustfmt" "clippy" ];
+            targets = [ "wasm32-unknown-unknown" ];
+          };
 
-      # Import modules
-      wasmPkgs = import ./nix/wasm.nix {
-        inherit pkgs craneLib;
-      };
-      scripts = import ./nix/scripts.nix { inherit pkgs wasmPkgs; };
-      devShell = import ./nix/devshell.nix { inherit pkgs rust; };
+        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-    in {
-      devShells.default = devShell;
+        # Stitch the repo into the expected layout for crane builds.
+        # Cargo.toml uses "../panel-kit" — we recreate that via prePatch.
+        src = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter = path: type:
+            (craneLib.filterCargoSources path type)
+            || builtins.match ".*\\.(html|css|json)$" path != null;
+        };
 
-      packages = {
-        flock-wasm-pkg = wasmPkgs.flock;
-        pipedream-wasm-pkg = wasmPkgs.pipedream;
-        inherit (scripts) sync-wasm build-pages dev;
-        default = scripts.build-pages;
-      };
+        commonArgs = {
+          inherit src;
+          pname = "info-ui";
+          version = "0.1.0";
+          strictDeps = true;
+          CARGO_BUILD_TARGET = "wasm32-unknown-unknown";
+          cargoToml = ./app/ui/Cargo.toml;
+          cargoLock = ./Cargo.lock;
+          sourceRoot = "source/app/ui";
 
-      apps = {
-        sync-wasm = flake-utils.lib.mkApp { drv = scripts.sync-wasm; } // { meta = scripts.sync-wasm.meta or {}; };
-        build-pages = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta or {}; };
-        dev = flake-utils.lib.mkApp { drv = scripts.dev; } // { meta = scripts.dev.meta or {}; };
-        default = flake-utils.lib.mkApp { drv = scripts.build-pages; } // { meta = scripts.build-pages.meta or {}; };
-      };
-    });
+          # Recreate panel-kit as sibling so path = "../panel-kit" resolves.
+          prePatch = ''
+            cp -rL ${panel-kit.outPath} ../../panel-kit
+            chmod -R u+w ../../panel-kit
+          '';
+        };
+
+        cargoArtifacts = craneLib.buildDepsOnly (commonArgs // { doCheck = false; });
+
+        info-ui = craneLib.buildTrunkPackage (commonArgs // {
+          inherit cargoArtifacts;
+          wasm-bindgen-cli = pkgs.wasm-bindgen-cli;
+        });
+
+        # GitHub Pages build with public URL prefix
+        pages = craneLib.buildTrunkPackage (commonArgs // {
+          inherit cargoArtifacts;
+          wasm-bindgen-cli = pkgs.wasm-bindgen-cli;
+          trunkExtraBuildArgs = "--public-url /info/";
+        });
+
+        devShell = import ./nix/devshell.nix {
+          inherit pkgs;
+          rust = rustToolchain pkgs;
+        };
+
+      in
+      {
+        packages = {
+          inherit info-ui pages;
+          default = info-ui;
+        };
+
+        devShells.default = devShell;
+      }
+    );
 }
