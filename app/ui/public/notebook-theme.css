@@ -1,0 +1,330 @@
+/* Shared notebook theme for olive.casazza.info and embedded Marimo exports.
+   The notebook HTML loads this file from https://olive.casazza.info. Keep the
+   first rules broad and early so exported iframes do not flash white while
+   Marimo boots. */
+
+:root,
+.dark,
+.dark-theme,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --notebook-bg: #0a0a0a;
+  --notebook-panel: #0d0d0d;
+  --notebook-font: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+  --notebook-text: #ededed;
+  --notebook-muted: #7a7a7a;
+  --notebook-primary: #5dcdbe;
+  --notebook-highlight: #d9b94c;
+  --notebook-secondary: #e4786a;
+  --notebook-border: #262626;
+  --notebook-border-strong: #3a3a3a;
+  --notebook-code-bg: #111111;
+  --notebook-width: min(65rem, calc(100vw - 2rem));
+  --notebook-gap: 1.25rem;
+  --notebook-line-height: 1.625;
+
+  --background: var(--notebook-bg);
+  --foreground: var(--notebook-text);
+  --card: var(--notebook-panel);
+  --card-foreground: var(--notebook-text);
+  --popover: var(--notebook-panel);
+  --popover-foreground: var(--notebook-text);
+  --primary: var(--notebook-primary);
+  --primary-foreground: #0a0a0a;
+  --secondary: #151515;
+  --secondary-foreground: var(--notebook-text);
+  --muted: #141414;
+  --muted-foreground: var(--notebook-muted);
+  --accent: #1a1a1a;
+  --accent-foreground: var(--notebook-text);
+  --border: var(--notebook-border-strong);
+  --input: var(--notebook-border-strong);
+  --ring: var(--notebook-primary);
+  --cm-background: var(--notebook-code-bg);
+  --color-white: var(--notebook-text);
+  --color-black: var(--notebook-bg);
+  --tw-ring-offset-color: var(--notebook-bg);
+}
+
+html,
+body,
+#root,
+#App,
+main,
+[data-testid="app-container"],
+[data-testid="read-mode-root"],
+[data-testid="notebook-container"],
+[data-testid="page"],
+[data-testid="output-area"],
+[data-testid="cell-output"] {
+  background: var(--notebook-bg) !important;
+  color: var(--notebook-text) !important;
+}
+
+html,
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 100%;
+  font-family: var(--notebook-font) !important;
+  font-size: 0.875rem;
+  line-height: var(--notebook-line-height);
+}
+
+.notebook-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--notebook-gap);
+  width: 100%;
+  max-width: var(--notebook-width);
+  min-height: calc(100vh - 4.5rem);
+  margin: 0 auto;
+  padding: clamp(0.75rem, 1.5vw, 1.25rem) clamp(0.75rem, 2vw, 1.5rem) 1rem;
+  box-sizing: border-box;
+  background: var(--notebook-bg);
+  color: var(--notebook-text);
+  font-family: var(--notebook-font);
+  font-size: 0.875rem;
+  line-height: var(--notebook-line-height);
+}
+
+.notebook-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.notebook-heading {
+  color: var(--notebook-primary);
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+
+.notebook-source {
+  width: fit-content;
+  font-size: 0.75rem;
+}
+
+.notebook-frame-section {
+  position: relative;
+  min-height: calc(100vh - 8rem);
+  background: var(--notebook-bg);
+}
+
+.notebook-frame {
+  display: block;
+  width: 100%;
+  min-height: calc(100vh - 8rem);
+  border: 0;
+  background: var(--notebook-bg);
+  color-scheme: dark;
+  transition: opacity 200ms ease;
+}
+
+.notebook-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: var(--notebook-bg);
+}
+
+.notebook-loading-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.notebook-loading-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  pointer-events: auto;
+  background: var(--notebook-bg);
+  color: var(--notebook-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.notebook-error-text {
+  color: var(--notebook-secondary);
+}
+
+main,
+#root > div,
+#App,
+[data-testid="app-container"],
+[data-testid="notebook-container"],
+[data-testid="read-mode-root"],
+[data-testid="page"] {
+  width: 100% !important;
+  max-width: var(--notebook-width) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: clamp(0.5rem, 1.5vw, 1.25rem) !important;
+  padding-right: clamp(0.5rem, 1.5vw, 1.25rem) !important;
+  box-sizing: border-box !important;
+}
+
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+li,
+label,
+span:not(.cm-editor *):not(.cm-editor),
+div:not(.cm-editor *):not(.cm-editor) {
+  color: var(--notebook-text) !important;
+  font-family: var(--notebook-font) !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--notebook-primary) !important;
+  font-weight: 400 !important;
+}
+
+a {
+  color: var(--notebook-highlight) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 0.125rem !important;
+}
+
+a[href="https://marimo.io"] {
+  display: none !important;
+}
+
+.marimo-cell,
+[data-testid="cell"],
+.marimo-cell-output,
+.output-area,
+[data-testid="output-area"],
+[data-testid="cell-output"],
+.rounded-md,
+.border,
+.shadow,
+.bg-background,
+.bg-card,
+.bg-popover,
+.bg-muted,
+.bg-white {
+  background-color: var(--notebook-bg) !important;
+  color: var(--notebook-text) !important;
+  border-color: var(--notebook-border) !important;
+  box-shadow: none !important;
+}
+
+button,
+input,
+select,
+textarea {
+  background-color: var(--notebook-code-bg) !important;
+  color: var(--notebook-text) !important;
+  border-color: var(--notebook-border-strong) !important;
+  font-family: var(--notebook-font) !important;
+}
+
+button {
+  border-radius: 3px !important;
+}
+
+code,
+pre,
+.cm-editor,
+.cm-scroller,
+.cm-content,
+.cm-gutters,
+.cm-line {
+  background: var(--notebook-code-bg) !important;
+  color: var(--notebook-text) !important;
+  font-family: var(--notebook-font) !important;
+}
+
+pre,
+.cm-editor,
+.cm-scroller,
+.cm-content,
+.marimo-cell-output,
+.output-area,
+[data-testid="output-area"],
+[data-testid="cell-output"] {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+
+pre,
+.cm-editor,
+.cm-scroller,
+.cm-content {
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+}
+
+svg,
+canvas,
+img,
+.js-plotly-plot,
+.plot-container,
+.plotly,
+.vega-embed {
+  max-width: 100% !important;
+}
+
+svg,
+canvas,
+img {
+  height: auto;
+}
+
+marimo-tex {
+  display: block !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  padding: 1rem 0 !important;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--notebook-border-strong);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--notebook-primary);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --notebook-width: calc(100vw - 0.75rem);
+    --notebook-gap: 0.875rem;
+  }
+
+  .notebook-page {
+    padding: 0.5rem 0.375rem 0.75rem;
+  }
+
+  .notebook-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+  }
+}

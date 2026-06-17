@@ -777,7 +777,7 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
     rsx! {
         iframe {
             src: "{url}",
-            class: "featured-iframe",
+            class: "featured-iframe notebook-iframe",
             title: "{title}",
         }
     }
@@ -785,7 +785,7 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
 
 fn consortium_demo() -> Element {
     rsx! {
-        figure { class: "project-figure",
+        figure { class: "project-figure recording-figure",
             img { src: "/projects-media/consortium-fan-out.gif", alt: "consortium fan-out terminal recording" }
             figcaption { "claw / molt / pinch / cast against mm01-mm05." }
         }
@@ -903,25 +903,20 @@ task.run("node[01-16]")"#;
         article { class: "project-article",
             header {
                 h1 { "consortium" }
-                p { "A Rust reimplementation of the ClusterShell toolchain. The workspace includes a Tokio dispatch core with persistent SSH multiplexers, adapter crates, four user-facing binaries, and PyO3 bindings that can drop into existing ClusterShell scripts one import at a time." }
+                p { "A Rust reimplementation of the ClusterShell toolchain. Tokio dispatch core, persistent SSH multiplexers, workspace crates, user-facing binaries, and PyO3 bindings for existing ClusterShell scripts." }
             }
             section { class: "article-section",
                 h2 { "scope" }
-                p { "Consortium replaces the four ClusterShell binaries - clush, clubak, cluset/nodeset - plus the Python library, and adds a cast deployment CLI for NixOS fleets. The intent is compatibility at the interface boundary while moving the transport, parser, and scheduler adapters into a typed Rust workspace." }
-                p { "Adapter crates resolve a node set from a Slurm allocation, a Ray placement group, an Ansible inventory, a SkyPilot cluster, or a Nix flake's nixosConfigurations. Once a node set is resolved, the dispatcher stays scheduler-agnostic: it just fans out commands, copies files, coalesces output, and returns structured results." }
+                p { "Replaces clush, clubak, cluset/nodeset plus the Python library, and adds cast for NixOS fleet deployment. Adapter crates resolve node sets from Slurm, Ray, Ansible, SkyPilot, or Nix flakes while the dispatcher stays scheduler-agnostic." }
             }
             section { class: "article-section",
                 h2 { "workspace" }
                 ul {
                     li { code { "consortium" } " - node-set parser, async dispatcher, SSH transport." }
-                    li { code { "consortium-py" } " - PyO3 bindings exposing the ClusterShell-compatible API." }
-                    li { code { "consortium-cli" } " - ships claw, molt, pinch, and cast." }
-                    li { code { "consortium-nix" } " - fleet config and flake-derived node sets." }
-                    li { code { "consortium-ansible" } " - inventory parser." }
-                    li { code { "consortium-slurm" } " - resolves SLURM_JOB_ID and partition queries." }
-                    li { code { "consortium-ray" } " - placement-group to node-set adapter." }
-                    li { code { "consortium-skypilot" } " - SkyPilot cluster to node-set adapter." }
-                    li { code { "consortium-test-harness" } " - runs the upstream ClusterShell Python test suite against both backends." }
+                    li { code { "consortium-py" } " - PyO3 ClusterShell-compatible API." }
+                    li { code { "consortium-cli" } " - claw, molt, pinch, cast." }
+                    li { code { "consortium-nix" } ", " code { "consortium-ansible" } ", " code { "consortium-slurm" } ", " code { "consortium-ray" } ", " code { "consortium-skypilot" } " - fleet and scheduler adapters." }
+                    li { code { "consortium-test-harness" } " - upstream ClusterShell parity suite." }
                 }
             }
             section { class: "article-section",
@@ -991,7 +986,7 @@ spec:
     memoryMib: 65536
     gpu: { product: "NVIDIA RTX 5000", count: 1, vramMib: 16384 }
   poolRef: ml-training
-  online: true"#;
+    online: true"#;
     const INSTALL: &str = r#"nix run github:casazza-info/hephaestus -- export-crds | kubectl apply -f -
 
 helm install hephaestus ./charts/hephaestus -n heph-system --create-namespace
@@ -1003,34 +998,35 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
         article { class: "project-article",
             header {
                 h1 { "hephaestus" }
-                p { "A bare-metal lifecycle and autoscaling operator for Kubernetes, written in Rust against kube-rs. It reconciles two CRDs into power events on physical hosts through IPMI, Redfish, or Wake-on-LAN." }
+                p { "A bare-metal lifecycle and autoscaling operator for Kubernetes, written in Rust against kube-rs. Treats physical hosts as first-class K8s objects and reconciles power + pool size through their BMCs." }
             }
             section { class: "article-section",
-                h2 { "scope" }
-                p { "Pod autoscaling and cloud autoscaling are solved problems; bare metal is not. Existing on-prem provisioners such as Metal3 and Tinkerbell target hyperscale provisioning pipelines and bring their own ecosystems. Hephaestus is intentionally smaller: it keeps a labelled pool of bare-metal hosts at a target replica count by power-cycling their BMCs." }
+                h2 { "why" }
+                p { "Kubernetes scales pods. Cluster-autoscaler scales cloud instances. Neither does anything for the bare-metal host: a saturated on-prem pool means someone in the rack or clicking a vendor BMC web UI. Existing tools (Metal3, Tinkerbell) target hyperscale provisioning pipelines and pull in their own CRD ecosystems. Hephaestus is intentionally smaller: it keeps a labelled host pool at a target replica count by power-cycling the underlying BMCs." }
                 p { "The operator sits between Kubernetes scheduling intent and the physical machines in a lab or HPC fleet. Instead of treating bare-metal nodes as static inventory, it allows a pool to scale up for queued work and drain back down when the pool is no longer needed." }
             }
             section { class: "article-section",
                 h2 { "CRDs" }
-                p { "MetalMachine represents one host. Its spec includes BMC address and protocol, credentials secret reference, network config, hardware profile, pool reference, desired online state, and Kubernetes node labels." }
-                p { "MetalMachine status tracks the lifecycle phase - Registering, Inspecting, Available, Provisioning, JoiningCluster, Ready, Deprovisioning, PoweringOff, or Error - along with BMC reachability, current power state, and the Kubernetes node name once the host has joined." }
-                p { "MetalMachinePool represents a label-selected group with desired replicas, scalingStrategy, scaleDownPolicy, and cooldownSeconds. The pool controller diffs Ready capacity against desired capacity and instructs per-machine controllers to power machines on or off." }
+                p { "MetalMachine describes one host: BMC address + protocol (IPMI / Redfish / WakeOnLAN), credentials secret, network config, hardware profile (CPU/memory/GPU), and a pool reference. Status tracks phase (Registering | Inspecting | Available | Provisioning | JoiningCluster | Ready | Deprovisioning | PoweringOff | Error), BMC reachability, current power state, and the K8s node name once the host has joined." }
+                p { "MetalMachinePool is a label-selected group of MetalMachines with desired replicas, a scalingStrategy (PowerCycle for warm hosts, PxeProvision for clean re-installs), and a scaleDownPolicy (LeastUtilized | Newest). The pool controller diffs Ready vs desired and instructs the per-machine controller to power on or off, with a configurable cooldown to avoid thrash." }
                 pre { class: "code-block", code { "{CRD}" } }
             }
             section { class: "article-section",
-                h2 { "workspace" }
+                h2 { "workspace shape" }
                 ul {
-                    li { code { "hephaestus-api" } " - CRD types and schemars-generated OpenAPI." }
+                    li { code { "hephaestus-api" } " - CRD types, schemars-generated OpenAPI." }
                     li { code { "hephaestus" } " - controller binary; kube reconciler, IPMI/Redfish/WoL transports, and Prometheus metrics on :8080/metrics." }
                     li { code { "hephaestus-grpc" } " - gRPC service for external schedulers to query pool state." }
                     li { code { "hephaestus-operator-lib" } " - shared telemetry and export-crds CLI scaffolding, reused by sibling operators." }
                 }
             }
             section { class: "article-section",
-                h2 { "production deployment - nixlab fleet" }
-                p { "The production deployment runs on the nixlab cluster, managing three ProLiant workers via IPMI and five Mac Mini agents via Wake-on-LAN. The ML training pool scales from zero to three ProLiants when SkyPilot tasks queue, then drains back down on cordon." }
-                p { "End-to-end from kubectl patch metalmachinepool to a Ready node sits around 90 seconds, dominated by firmware POST and PXE. The controller reconcile path itself completes in tens of milliseconds and exposes counters for reconcile totals and ready replicas." }
-                p { "The separate Hephaestus recording panel preserves the scale-up tape source. The rendered GIF was referenced by the old page but is not present in the current repository, so the tape is shown as the recoverable artifact until the GIF is regenerated." }
+                h2 { "case study - nixlab fleet" }
+                p { "Live in production on the nixlab cluster. Manages three ProLiant workers (hp01-03) plus five Mac Mini agents (mm01-05). Power events flow through IPMI for the ProLiants and Wake-on-LAN for the Macs (no BMC). The ML training pool scales 0 → 3 ProLiants when SkyPilot tasks queue up, and the edge pool stays cold until a request drives it back up. End-to-end from kubectl patch metalmachinepool to a Ready node sits around 90 s, dominated by firmware POST + PXE — the controller itself reconciles in tens of milliseconds." }
+                figure { class: "project-figure",
+                    img { src: "/projects-media/hephaestus-scale-up.gif", alt: "hephaestus scale-up recording" }
+                    figcaption { "Pool scaling 2 → 16 (kubectl get metalmachine -w against a Ray-driven scale-up)." }
+                }
             }
             section { class: "article-section",
                 h2 { "install" }
@@ -1050,21 +1046,13 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
 }
 
 fn hephaestus_demo() -> Element {
-    const TAPE: &str = r#"# charmbracelet/vhs tape
-# Render with: vhs hephaestus-scale-up.tape
-# Produces:   hephaestus-scale-up.gif
-
-kubectl get metalmachinepool edge -o yaml | tail -8
-kubectl patch metalmachinepool edge --type=merge -p '{"spec":{"minReplicas":16}}'
-kubectl get metalmachine -l site=edge -w
-kubectl get metalmachine -l site=edge --no-headers | awk '{print $2}' | sort | uniq -c
-curl -s localhost:8080/metrics | grep -E 'hephaestus_(reconcile_total|pool_ready_replicas)' | head"#;
+    const TAPE: &str = include_str!("../public/projects-media/tapes/hephaestus-scale-up.tape");
 
     rsx! {
         article { class: "project-article recording-panel",
             header {
                 h1 { "hephaestus recording" }
-                p { "The original page referenced a rendered scale-up GIF, but the repository currently contains the VHS source tape rather than the generated GIF asset." }
+                p { "The recording is generated from the VHS tape that lives in the repo alongside the page assets." }
             }
             section { class: "article-section",
                 h2 { "scale-up tape" }
@@ -1168,7 +1156,11 @@ const APP_CSS: &str = r#"
   flex: 1;
   min-height: 0;
   border: none;
-  background: #fff;
+  background: var(--bg);
+  color-scheme: dark;
+}
+.notebook-iframe {
+  background: #0a0a0a;
 }
 
 .featured-info {
@@ -1282,10 +1274,19 @@ const APP_CSS: &str = r#"
   flex-direction: column;
   gap: 8px;
 }
+.ws-root:not(.mobile) .panel-consortium-demo,
+.ws-root:not(.mobile) .panel-hephaestus-recording {
+  --panel-min-h: 50vh;
+}
+.recording-figure {
+  min-height: calc(50vh - 1.95rem);
+}
 .project-figure img {
   flex: 1;
   min-height: 0;
-  width: 100%;
+  width: min(100%, 1100px);
+  max-width: 100%;
+  align-self: center;
   object-fit: contain;
   background: #000;
   border: 1px solid var(--line);
