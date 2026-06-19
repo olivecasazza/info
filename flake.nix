@@ -10,7 +10,7 @@
     # Panel workspace library — source only, not a flake.
     # Cargo.toml uses path = "../panel-kit"; prePatch recreates this in Nix builds.
     panel-kit = {
-      url = "github:olivecasazza/panel-kit";
+      url = "github:olivecasazza/panel-kit/feat/snap-grid-toggles";
       flake = false;
     };
   };
@@ -92,6 +92,10 @@
         packages = {
           inherit info-ui pages;
           default = info-ui;
+        };
+
+        hydraJobs = {
+          inherit info-ui pages;
         };
 
         devShells.default = devShell;
