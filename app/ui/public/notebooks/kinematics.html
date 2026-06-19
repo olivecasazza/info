@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="favicon.ico" />
+    <!-- Preload is necessary because we show these images when we disconnect from the server,
+    but at that point we cannot load these images from the server -->
+    <link rel="preload" href="assets/gradient-yHQUC_QB.png" as="image" />
+    <link rel="preload" href="assets/noise-60BoTA8O.png" as="image" />
+    <!-- Preload the fonts -->
+    <link rel="preload" href="assets/Lora-VariableFont_wght-CZceb_kH.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/PTSans-Regular-Bam3NpBI.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/PTSans-Bold-C_DwAp7Z.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/FiraMono-Regular-CEsLFVD9.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/FiraMono-Medium-D5MAsWEG.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/FiraMono-Bold-C6PDArdf.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="a marimo app" />
+    <link rel="apple-touch-icon" href="https://olivecasazza.github.io/notebooks/notebooks/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.json" />
+
+    <script data-marimo="true">
+      function __resizeIframe(obj) {
+        const scrollbarHeight = 20; // Max between windows, mac, and linux
+
+        function setHeight() {
+          // Guard against race condition where iframe isn't ready
+          if (!obj.contentWindow?.document?.documentElement) {
+            return;
+          }
+          const element = obj.contentWindow.document.documentElement;
+          // If there is no vertical scrollbar, we don't need to resize the iframe
+          if (element.scrollHeight === element.clientHeight) {
+            return;
+          }
+
+          // Create a new height that includes the scrollbar height if it's visible
+          const hasHorizontalScrollbar = element.scrollWidth > element.clientWidth;
+          const newHeight = element.scrollHeight + (hasHorizontalScrollbar ? scrollbarHeight : 0);
+
+          // Only update the height if it's different from the current height
+          if (obj.style.height !== `${newHeight}px`) {
+            obj.style.height = `${newHeight}px`;
+          }
+        }
+
+        // Resize the iframe to the height of the content and bottom scrollbar height
+        setHeight();
+
+        // Resize the iframe when the content changes
+        const resizeObserver = new ResizeObserver((_entries) => {
+          setHeight();
+        });
+        // Only observe if iframe content is ready
+        if (obj.contentWindow?.document?.body) {
+          resizeObserver.observe(obj.contentWindow.document.body);
+        }
+      }
+    </script>
+    <marimo-filename hidden>notebook.py</marimo-filename>
+    <!-- TODO(Trevor): Legacy, required by VS Code plugin. Remove when plugin is updated (see marimo/server/_templates/template.py) -->
+    <marimo-version data-version="{{ version }}" hidden></marimo-version>
+    <marimo-user-config data-config="{{ user_config }}" hidden></marimo-user-config>
+    <marimo-server-token data-token="{{ server_token }}" hidden></marimo-server-token>
+    <!-- /TODO -->
+    <title>Kinematics</title>
+    <script type="module" crossorigin src="assets/index-CA2sQKnW.js"></script>
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/preload-helper-DdZsAcJe.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/chunk-LvLJmgfZ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/react-Bj1aDYRI.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/compiler-runtime-B3qBwwSJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/jsx-runtime-BqBOg78p.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useEventListener-DvoEXWke.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/defaultLocale-DPBdGRrH.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/precisionRound-NX56vp6K.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/defaultLocale-Lfi0pexn.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/vega-loader.browser-xq8miGHn.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/utils-DQRuLEof.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/clsx-Dz_KRrWq.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/cn-DCUzRj2J.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/badge-DOX1Xxa9.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/button-BbCh-29a.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/react-dom-CSu739Rf.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/fullscreen-eipL3i3Y.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/menu-items-DcP01QzW.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-BdyjRhEt.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/createLucideIcon-D5guW7EU.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/check-BH35Ndha.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/x-C-6liIBr.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/select-DZcFyKFQ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/tooltip-DTV9tlSr.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/use-toast-ERM44-k9.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useEvent-D91BmmQi.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/invariant-BUdrueMv.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/isObject-DvLSfCY5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/_baseFor-DKD1r8uL.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/merge-_9WLTEyt.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/zod-H_cgTO0M.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/utils-Wvjk_Y4h.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/Deferred-DWBqOhWa.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/uuid-D_zLHhNi.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/DeferredRequestRegistry-CzVJLtsG.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/constants-DMpttj8Q.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/session-DGdfs0bJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/config-C2lTvbuU.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/requests-DIwGYs0l.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useLifecycle-DieWOfXE.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useNonce-DfoVjkkH.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useTheme-Kwyx4PvL.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/arrays-DYDL-3-i.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/strings-wdPMRf6Z.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/once-DRroIaBz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/capabilities-A_KhFcGV.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/createReducer-CI9qeK_X.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/paths-SFhaqGlE.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-BrR4M-k3.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-HlsDto3K.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-CHcznzB-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-BU26XwgJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-COs9gIu5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-BZr6MMV-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-DCqxOggh.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-DkA__6UI.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-C9ZB41s2.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/stex-lcoTi-7o.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/toDate-B5A0DFEz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/purify.es-DvRMX74T.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/cjs-BRGiG41H.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/isSymbol-BT6B8Bon.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/now-CsYTPAhW.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/debounce-DhnxH9Rh.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/database-zap-kIkTfzTX.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/main-B0OX4z33.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/cells-Dnu4nDoy.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/ErrorBoundary-DyYDV0HI.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/kbd-BJB2rf7K.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useInstallPackage-hKfTes-m.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/alert-dialog-BqFLkbUc.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dialog-DqOQT_n4.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useDebounce-_BZcy6gx.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/numbers-mY4EY0yG.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/SSRProvider-BIDQNg9Q.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/context-C1Tm_47t.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useNumberFormatter-CW4V-fpE.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/usePress-jH2RfcUG.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/input-CVE-gIjt.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/ImperativeModal-DEC1mXgV.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/cell-link-PQYiMZw1.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/multi-map-CUuNtzHt.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/alert-DrHguQlr.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/chevron-right-CG5QYXYk.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dropdown-menu-CR7cnzLX.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/links-B8WzCnbo.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useRunCells-C0BPo9m1.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/copy-Ch48HVPK.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/copy-BwrPA9zQ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/copy-icon-BdZPgXgo.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/RenderHTML-B5r25cP5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/datasource-I-LOgxeP.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/state-D9EoHCkz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/package-B8oXOUM-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/sparkles-CC9Bko6a.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/MarimoErrorOutput-XWqnhvJ6.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/spinner-UuZAUjoP.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/html-to-image-D6SgvARi.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/focus-BaOnnMs-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useAsyncData-C5i0IRVM.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/LazyAnyLanguageCodeMirror-GdhQ07zA.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/micromark-factory-space-BUQpMdx2.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/chunk-5FQGJX7Z-BSzccEgu.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/markdown-renderer-BQ-BQLiJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/command-2NPJCYDa.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/field-DNlzfMKW.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/popover-Bz_0Vkyf.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/errors-iwK4b4VF.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/download-B1QFVDP-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/table-DQE9hQzM.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useIframeCapabilities-DPVTppnD.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/error-banner-CLO6LFll.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/formats-BRq458WH.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/en-US-C7vnqfgk.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/isValid-DdlR4-BY.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dates-DI1TvEEK.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/maps-n3GaPJwv.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/extends-Dqvpuc10.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/emotion-is-prop-valid.esm-Dangy3Bv.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useDateFormatter-d3yglQmW.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/react-icons.esm--O4lBTlZ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/RSPContexts-Bk1r00gJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/table-6NxtGaCm.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/ellipsis-KAhMaCIV.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/external-link-BTNxSavU.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/message-circle-1YLdnr8A.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/trash-2-BJLYnZpG.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/react-resizable-panels.browser.esm-Ce2ksurd.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/JsonOutput-05-R3eil.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/chart-no-axes-column-nqk474t8.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/square-function-blYaQso8.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/spec-D1ptWKg6.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/ellipsis-vertical-CkwWkOQL.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/refresh-cw-a_9k9BK7.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/tree-actions-DY8FUp3V.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/components-zB5yT_R8.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/column-preview-BLIWbdOX.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/icons-8tfAri2V.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/radio-group-rsi1ibXY.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/floating-outline-DbOtUfo-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/objectWithoutPropertiesLoose-DoKw85w0.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/esm-Cb2bnV6o.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/eye-off-BT-KOYV5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/plus-CxkHs8QM.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/readonly-python-code-BKYj8PNf.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/file-headphone-B3fuktN0.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/file-HTLbeC2b.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/image-BIibSXT6.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/file-icons-B6DaZdP0.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/switch-BtkQp293.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/events-CBm-hwqS.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/globals-CpVAcN9Z.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/share-oorMPghT.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/blob-3_FN0u9S.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/memoize-Tp7rARFe.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/get-C-qh_et5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/_baseSet-CxV9N1bc.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/state-BXNNuw9g.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/label-xHqFtfdz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/textarea-BBTcSr-i.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/refresh-ccw-DLc784Sj.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/form-BjUJP6PJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/renderShortcut-DK-VjfaX.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useBoolean-B8LMGUHl.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useDeepCompareMemoize-CWcgQCbT.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/types-BYwxXaSY.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/semaphore-X3ApuO41.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/fileToBase64-BeYUTUzO.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/pathUtils-vgBYIo5B.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/prop-types-DVDiRdwc.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/es-au8YY-8E.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/hasIn-DiS_ryrS.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/flatten-Dl4V1ub3.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/pick-DqWUNly1.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/code-xml-CZN6vNxu.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/house-D2ldnAB9.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/square-rACnnz-q.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/triangle-alert-CJ0ZIqcz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/bundle.esm-BXIlAZ6T.js">
+    <link rel="stylesheet" crossorigin href="assets/cells-jmgGt1lS.css">
+    <link rel="stylesheet" crossorigin href="assets/markdown-renderer-DdDKmWlR.css">
+    <link rel="stylesheet" crossorigin href="assets/JsonOutput-B7vuddcd.css">
+    <link rel="stylesheet" crossorigin href="assets/index-DH00kbhV.css">
+  <marimo-wasm hidden=""></marimo-wasm>
+    <script>
+        if (window.location.protocol === 'file:') {
+            alert('Warning: This file must be served by an HTTP server to function correctly.');
+        }
+    </script>
+    
+    <style>
+        #save-button {
+            display: none !important;
+        }
+        #filename-input {
+            display: none !important;
+        }
+    </style>
+    
+<script data-marimo="true">
+    Object.defineProperty(window, "__MARIMO_EXPORT_CONTEXT__", {
+        value: Object.freeze({
+            trusted: true,
+            notebookCode: "import marimo\n\n__generated_with = \"0.23.8\"\napp = marimo.App(width=\"full\", app_title=\"Kinematics\")\n\n\n@app.cell\ndef _():\n    import marimo as mo\n\n    return (mo,)\n\n\n@app.cell(hide_code=True)\ndef _(mo):\n    intro = mo.md(r\"\"\"\n    # Kinematics\n\n    This notebook compares two joint-space trajectory generators for a single revolute joint:\n\n    1. a two-segment cubic polynomial that passes through a via point, and\n    2. a cycloid trajectory between the same start and finish angles.\n\n    Move the controls and the plots recompute in-browser. The goal is to see how the via-point velocity and segment duration change position, velocity, and acceleration continuity.\n    \"\"\")\n    return\n\n\n@app.cell(hide_code=True)\nasync def _():\n    import micropip\n\n    await micropip.install([\"plotly\", \"numpy\"])\n\n    import math\n    import numpy as np\n    import plotly.graph_objects as go\n\n    return go, np\n\n\n@app.cell(hide_code=True)\ndef _(mo):\n    theta_start = mo.ui.slider(0, 30, value=5, step=1, label=\"initial angle \u03b8\u2080 (deg)\")\n    theta_via = mo.ui.slider(5, 45, value=15, step=1, label=\"via-point angle \u03b8\u1d65 (deg)\")\n    theta_final = mo.ui.slider(20, 80, value=40, step=1, label=\"final angle \u03b8f (deg)\")\n    segment_duration = mo.ui.slider(0.5, 3.0, value=1.0, step=0.25, label=\"segment duration (sec)\")\n    via_velocity = mo.ui.slider(-20, 50, value=17.5, step=0.5, label=\"via-point velocity (deg/sec)\")\n\n    controls = mo.vstack([\n        mo.md(\"## Parameters\"),\n        mo.hstack([theta_start, theta_via, theta_final], justify=\"start\"),\n        mo.hstack([segment_duration, via_velocity], justify=\"start\"),\n    ])\n    return (\n        controls,\n        segment_duration,\n        theta_final,\n        theta_start,\n        theta_via,\n        via_velocity,\n    )\n\n\n@app.cell(hide_code=True)\ndef _(np, segment_duration, theta_final, theta_start, theta_via, via_velocity):\n    q0 = float(theta_start.value)\n    qv = float(theta_via.value)\n    qf = float(theta_final.value)\n    T = float(segment_duration.value)\n    vv = float(via_velocity.value)\n\n    def cubic_coefficients(q_start, q_end, v_start, v_end, duration):\n        a0 = q_start\n        a1 = v_start\n        a2 = (3 * (q_end - q_start) / duration**2) - ((2 * v_start + v_end) / duration)\n        a3 = (-2 * (q_end - q_start) / duration**3) + ((v_start + v_end) / duration**2)\n        return a0, a1, a2, a3\n\n    first_segment = cubic_coefficients(q0, qv, 0.0, vv, T)\n    second_segment = cubic_coefficients(qv, qf, vv, 0.0, T)\n\n    sample_count = 180\n    t_first = np.linspace(0, T, sample_count)\n    t_second_local = np.linspace(0, T, sample_count)\n    t_second = t_second_local + T\n    t_all = np.concatenate([t_first, t_second])\n\n    def cubic_values(coefficients, t_values):\n        a0, a1, a2, a3 = coefficients\n        position = a0 + a1 * t_values + a2 * t_values**2 + a3 * t_values**3\n        velocity = a1 + 2 * a2 * t_values + 3 * a3 * t_values**2\n        acceleration = 2 * a2 + 6 * a3 * t_values\n        return position, velocity, acceleration\n\n    p1, v1, a1 = cubic_values(first_segment, t_first)\n    p2, v2, a2 = cubic_values(second_segment, t_second_local)\n    cubic_position = np.concatenate([p1, p2])\n    cubic_velocity = np.concatenate([v1, v2])\n    cubic_acceleration = np.concatenate([a1, a2])\n\n    total_duration = 2 * T\n    t_cycloid = np.linspace(0, total_duration, sample_count * 2)\n    delta = qf - q0\n    cycloid_position = q0 + ((t_cycloid / total_duration) - np.sin(2 * np.pi * t_cycloid / total_duration) / (2 * np.pi)) * delta\n    cycloid_velocity = ((1 / total_duration) - np.cos(2 * np.pi * t_cycloid / total_duration) / total_duration) * delta\n    cycloid_acceleration = (np.sin(2 * np.pi * t_cycloid / total_duration) * 2 * np.pi / total_duration**2) * delta\n\n    trajectory_data = {\n        \"q0\": q0,\n        \"qv\": qv,\n        \"qf\": qf,\n        \"T\": T,\n        \"vv\": vv,\n        \"t_all\": t_all,\n        \"t_cycloid\": t_cycloid,\n        \"cubic_position\": cubic_position,\n        \"cubic_velocity\": cubic_velocity,\n        \"cubic_acceleration\": cubic_acceleration,\n        \"cycloid_position\": cycloid_position,\n        \"cycloid_velocity\": cycloid_velocity,\n        \"cycloid_acceleration\": cycloid_acceleration,\n        \"first_segment\": first_segment,\n        \"second_segment\": second_segment,\n    }\n    return (trajectory_data,)\n\n\n@app.cell(hide_code=True)\ndef _(go):\n    def dark_figure(title, y_title):\n        fig = go.Figure()\n        fig.update_layout(\n            template=\"plotly_dark\",\n            title=title,\n            xaxis_title=\"time (sec)\",\n            yaxis_title=y_title,\n            paper_bgcolor=\"rgba(0,0,0,0)\",\n            plot_bgcolor=\"rgba(0,0,0,0)\",\n            legend=dict(orientation=\"h\", yanchor=\"bottom\", y=1.02, xanchor=\"left\", x=0),\n            margin=dict(l=40, r=20, t=70, b=40),\n        )\n        return fig\n\n    return (dark_figure,)\n\n\n@app.cell(hide_code=True)\ndef _(dark_figure, go, mo, trajectory_data):\n    position_plot = dark_figure(\"Position\", \"joint angle (deg)\")\n    position_plot.add_trace(go.Scatter(x=trajectory_data[\"t_all\"], y=trajectory_data[\"cubic_position\"], mode=\"lines\", name=\"two-segment cubic\"))\n    position_plot.add_trace(go.Scatter(x=trajectory_data[\"t_cycloid\"], y=trajectory_data[\"cycloid_position\"], mode=\"lines\", name=\"cycloid\"))\n    position_plot.add_vline(x=trajectory_data[\"T\"], line_dash=\"dot\", line_color=\"#9ca3af\")\n\n    velocity_plot = dark_figure(\"Velocity\", \"joint velocity (deg/sec)\")\n    velocity_plot.add_trace(go.Scatter(x=trajectory_data[\"t_all\"], y=trajectory_data[\"cubic_velocity\"], mode=\"lines\", name=\"two-segment cubic\"))\n    velocity_plot.add_trace(go.Scatter(x=trajectory_data[\"t_cycloid\"], y=trajectory_data[\"cycloid_velocity\"], mode=\"lines\", name=\"cycloid\"))\n    velocity_plot.add_vline(x=trajectory_data[\"T\"], line_dash=\"dot\", line_color=\"#9ca3af\")\n\n    acceleration_plot = dark_figure(\"Acceleration\", \"joint acceleration (deg/sec\u00b2)\")\n    acceleration_plot.add_trace(go.Scatter(x=trajectory_data[\"t_all\"], y=trajectory_data[\"cubic_acceleration\"], mode=\"lines\", name=\"two-segment cubic\"))\n    acceleration_plot.add_trace(go.Scatter(x=trajectory_data[\"t_cycloid\"], y=trajectory_data[\"cycloid_acceleration\"], mode=\"lines\", name=\"cycloid\"))\n    acceleration_plot.add_vline(x=trajectory_data[\"T\"], line_dash=\"dot\", line_color=\"#9ca3af\")\n\n    plots = mo.vstack([\n        mo.md(\"## Trajectory comparison\"),\n        mo.md(\"The dotted vertical line marks the via point between cubic segments.\"),\n        position_plot,\n        velocity_plot,\n        acceleration_plot,\n    ])\n    return (plots,)\n\n\n@app.cell(hide_code=True)\ndef _(mo, np, trajectory_data):\n    max_cubic_velocity = float(np.max(np.abs(trajectory_data[\"cubic_velocity\"])))\n    max_cubic_acceleration = float(np.max(np.abs(trajectory_data[\"cubic_acceleration\"])))\n    max_cycloid_velocity = float(np.max(np.abs(trajectory_data[\"cycloid_velocity\"])))\n    max_cycloid_acceleration = float(np.max(np.abs(trajectory_data[\"cycloid_acceleration\"])))\n\n    comparison = mo.md(f\"\"\"\n    ## What changes?\n\n    | trajectory | max velocity | max acceleration |\n    | --- | ---: | ---: |\n    | two-segment cubic | `{max_cubic_velocity:.2f}` deg/sec | `{max_cubic_acceleration:.2f}` deg/sec\u00b2 |\n    | cycloid | `{max_cycloid_velocity:.2f}` deg/sec | `{max_cycloid_acceleration:.2f}` deg/sec\u00b2 |\n\n    The cubic trajectory is useful when a via-point and via-point velocity are required, but acceleration can jump at the segment boundary. The cycloid trajectory is smoother between the start and final angle because velocity and acceleration vary continuously over the full motion.\n    \"\"\")\n    return (comparison,)\n\n\n@app.cell(hide_code=True)\ndef _(mo, trajectory_data):\n    first = trajectory_data[\"first_segment\"]\n    second = trajectory_data[\"second_segment\"]\n    equations = mo.md(f\"\"\"\n    ## Cubic coefficients\n\n    First segment coefficients `(a0, a1, a2, a3)`:\n    ```text\n    ({first[0]:.3f}, {first[1]:.3f}, {first[2]:.3f}, {first[3]:.3f})\n    ```\n\n    Second segment coefficients `(a0, a1, a2, a3)`:\n    ```text\n    ({second[0]:.3f}, {second[1]:.3f}, {second[2]:.3f}, {second[3]:.3f})\n    ```\n    \"\"\")\n    return (equations,)\n\n\n@app.cell(hide_code=True)\ndef _(comparison, controls, equations, mo, plots):\n    app_ui = mo.vstack([\n        controls, plots, comparison, equations\n    ])\n    mo.output.append(app_ui)\n    return\n\n\nif __name__ == \"__main__\":\n    app.run()\n",
+        }),
+        writable: false,
+        configurable: false,
+    });
+</script>
+<marimo-code hidden="">import%20marimo%0A%0A__generated_with%20%3D%20%220.23.8%22%0Aapp%20%3D%20marimo.App(width%3D%22full%22%2C%20app_title%3D%22Kinematics%22)%0A%0A%0A%40app.cell%0Adef%20_()%3A%0A%20%20%20%20import%20marimo%20as%20mo%0A%0A%20%20%20%20return%20(mo%2C)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(mo)%3A%0A%20%20%20%20intro%20%3D%20mo.md(r%22%22%22%0A%20%20%20%20%23%20Kinematics%0A%0A%20%20%20%20This%20notebook%20compares%20two%20joint-space%20trajectory%20generators%20for%20a%20single%20revolute%20joint%3A%0A%0A%20%20%20%201.%20a%20two-segment%20cubic%20polynomial%20that%20passes%20through%20a%20via%20point%2C%20and%0A%20%20%20%202.%20a%20cycloid%20trajectory%20between%20the%20same%20start%20and%20finish%20angles.%0A%0A%20%20%20%20Move%20the%20controls%20and%20the%20plots%20recompute%20in-browser.%20The%20goal%20is%20to%20see%20how%20the%20via-point%20velocity%20and%20segment%20duration%20change%20position%2C%20velocity%2C%20and%20acceleration%20continuity.%0A%20%20%20%20%22%22%22)%0A%20%20%20%20return%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Aasync%20def%20_()%3A%0A%20%20%20%20import%20micropip%0A%0A%20%20%20%20await%20micropip.install(%5B%22plotly%22%2C%20%22numpy%22%5D)%0A%0A%20%20%20%20import%20math%0A%20%20%20%20import%20numpy%20as%20np%0A%20%20%20%20import%20plotly.graph_objects%20as%20go%0A%0A%20%20%20%20return%20go%2C%20np%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(mo)%3A%0A%20%20%20%20theta_start%20%3D%20mo.ui.slider(0%2C%2030%2C%20value%3D5%2C%20step%3D1%2C%20label%3D%22initial%20angle%20%CE%B8%E2%82%80%20(deg)%22)%0A%20%20%20%20theta_via%20%3D%20mo.ui.slider(5%2C%2045%2C%20value%3D15%2C%20step%3D1%2C%20label%3D%22via-point%20angle%20%CE%B8%E1%B5%A5%20(deg)%22)%0A%20%20%20%20theta_final%20%3D%20mo.ui.slider(20%2C%2080%2C%20value%3D40%2C%20step%3D1%2C%20label%3D%22final%20angle%20%CE%B8f%20(deg)%22)%0A%20%20%20%20segment_duration%20%3D%20mo.ui.slider(0.5%2C%203.0%2C%20value%3D1.0%2C%20step%3D0.25%2C%20label%3D%22segment%20duration%20(sec)%22)%0A%20%20%20%20via_velocity%20%3D%20mo.ui.slider(-20%2C%2050%2C%20value%3D17.5%2C%20step%3D0.5%2C%20label%3D%22via-point%20velocity%20(deg%2Fsec)%22)%0A%0A%20%20%20%20controls%20%3D%20mo.vstack(%5B%0A%20%20%20%20%20%20%20%20mo.md(%22%23%23%20Parameters%22)%2C%0A%20%20%20%20%20%20%20%20mo.hstack(%5Btheta_start%2C%20theta_via%2C%20theta_final%5D%2C%20justify%3D%22start%22)%2C%0A%20%20%20%20%20%20%20%20mo.hstack(%5Bsegment_duration%2C%20via_velocity%5D%2C%20justify%3D%22start%22)%2C%0A%20%20%20%20%5D)%0A%20%20%20%20return%20(%0A%20%20%20%20%20%20%20%20controls%2C%0A%20%20%20%20%20%20%20%20segment_duration%2C%0A%20%20%20%20%20%20%20%20theta_final%2C%0A%20%20%20%20%20%20%20%20theta_start%2C%0A%20%20%20%20%20%20%20%20theta_via%2C%0A%20%20%20%20%20%20%20%20via_velocity%2C%0A%20%20%20%20)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(np%2C%20segment_duration%2C%20theta_final%2C%20theta_start%2C%20theta_via%2C%20via_velocity)%3A%0A%20%20%20%20q0%20%3D%20float(theta_start.value)%0A%20%20%20%20qv%20%3D%20float(theta_via.value)%0A%20%20%20%20qf%20%3D%20float(theta_final.value)%0A%20%20%20%20T%20%3D%20float(segment_duration.value)%0A%20%20%20%20vv%20%3D%20float(via_velocity.value)%0A%0A%20%20%20%20def%20cubic_coefficients(q_start%2C%20q_end%2C%20v_start%2C%20v_end%2C%20duration)%3A%0A%20%20%20%20%20%20%20%20a0%20%3D%20q_start%0A%20%20%20%20%20%20%20%20a1%20%3D%20v_start%0A%20%20%20%20%20%20%20%20a2%20%3D%20(3%20*%20(q_end%20-%20q_start)%20%2F%20duration**2)%20-%20((2%20*%20v_start%20%2B%20v_end)%20%2F%20duration)%0A%20%20%20%20%20%20%20%20a3%20%3D%20(-2%20*%20(q_end%20-%20q_start)%20%2F%20duration**3)%20%2B%20((v_start%20%2B%20v_end)%20%2F%20duration**2)%0A%20%20%20%20%20%20%20%20return%20a0%2C%20a1%2C%20a2%2C%20a3%0A%0A%20%20%20%20first_segment%20%3D%20cubic_coefficients(q0%2C%20qv%2C%200.0%2C%20vv%2C%20T)%0A%20%20%20%20second_segment%20%3D%20cubic_coefficients(qv%2C%20qf%2C%20vv%2C%200.0%2C%20T)%0A%0A%20%20%20%20sample_count%20%3D%20180%0A%20%20%20%20t_first%20%3D%20np.linspace(0%2C%20T%2C%20sample_count)%0A%20%20%20%20t_second_local%20%3D%20np.linspace(0%2C%20T%2C%20sample_count)%0A%20%20%20%20t_second%20%3D%20t_second_local%20%2B%20T%0A%20%20%20%20t_all%20%3D%20np.concatenate(%5Bt_first%2C%20t_second%5D)%0A%0A%20%20%20%20def%20cubic_values(coefficients%2C%20t_values)%3A%0A%20%20%20%20%20%20%20%20a0%2C%20a1%2C%20a2%2C%20a3%20%3D%20coefficients%0A%20%20%20%20%20%20%20%20position%20%3D%20a0%20%2B%20a1%20*%20t_values%20%2B%20a2%20*%20t_values**2%20%2B%20a3%20*%20t_values**3%0A%20%20%20%20%20%20%20%20velocity%20%3D%20a1%20%2B%202%20*%20a2%20*%20t_values%20%2B%203%20*%20a3%20*%20t_values**2%0A%20%20%20%20%20%20%20%20acceleration%20%3D%202%20*%20a2%20%2B%206%20*%20a3%20*%20t_values%0A%20%20%20%20%20%20%20%20return%20position%2C%20velocity%2C%20acceleration%0A%0A%20%20%20%20p1%2C%20v1%2C%20a1%20%3D%20cubic_values(first_segment%2C%20t_first)%0A%20%20%20%20p2%2C%20v2%2C%20a2%20%3D%20cubic_values(second_segment%2C%20t_second_local)%0A%20%20%20%20cubic_position%20%3D%20np.concatenate(%5Bp1%2C%20p2%5D)%0A%20%20%20%20cubic_velocity%20%3D%20np.concatenate(%5Bv1%2C%20v2%5D)%0A%20%20%20%20cubic_acceleration%20%3D%20np.concatenate(%5Ba1%2C%20a2%5D)%0A%0A%20%20%20%20total_duration%20%3D%202%20*%20T%0A%20%20%20%20t_cycloid%20%3D%20np.linspace(0%2C%20total_duration%2C%20sample_count%20*%202)%0A%20%20%20%20delta%20%3D%20qf%20-%20q0%0A%20%20%20%20cycloid_position%20%3D%20q0%20%2B%20((t_cycloid%20%2F%20total_duration)%20-%20np.sin(2%20*%20np.pi%20*%20t_cycloid%20%2F%20total_duration)%20%2F%20(2%20*%20np.pi))%20*%20delta%0A%20%20%20%20cycloid_velocity%20%3D%20((1%20%2F%20total_duration)%20-%20np.cos(2%20*%20np.pi%20*%20t_cycloid%20%2F%20total_duration)%20%2F%20total_duration)%20*%20delta%0A%20%20%20%20cycloid_acceleration%20%3D%20(np.sin(2%20*%20np.pi%20*%20t_cycloid%20%2F%20total_duration)%20*%202%20*%20np.pi%20%2F%20total_duration**2)%20*%20delta%0A%0A%20%20%20%20trajectory_data%20%3D%20%7B%0A%20%20%20%20%20%20%20%20%22q0%22%3A%20q0%2C%0A%20%20%20%20%20%20%20%20%22qv%22%3A%20qv%2C%0A%20%20%20%20%20%20%20%20%22qf%22%3A%20qf%2C%0A%20%20%20%20%20%20%20%20%22T%22%3A%20T%2C%0A%20%20%20%20%20%20%20%20%22vv%22%3A%20vv%2C%0A%20%20%20%20%20%20%20%20%22t_all%22%3A%20t_all%2C%0A%20%20%20%20%20%20%20%20%22t_cycloid%22%3A%20t_cycloid%2C%0A%20%20%20%20%20%20%20%20%22cubic_position%22%3A%20cubic_position%2C%0A%20%20%20%20%20%20%20%20%22cubic_velocity%22%3A%20cubic_velocity%2C%0A%20%20%20%20%20%20%20%20%22cubic_acceleration%22%3A%20cubic_acceleration%2C%0A%20%20%20%20%20%20%20%20%22cycloid_position%22%3A%20cycloid_position%2C%0A%20%20%20%20%20%20%20%20%22cycloid_velocity%22%3A%20cycloid_velocity%2C%0A%20%20%20%20%20%20%20%20%22cycloid_acceleration%22%3A%20cycloid_acceleration%2C%0A%20%20%20%20%20%20%20%20%22first_segment%22%3A%20first_segment%2C%0A%20%20%20%20%20%20%20%20%22second_segment%22%3A%20second_segment%2C%0A%20%20%20%20%7D%0A%20%20%20%20return%20(trajectory_data%2C)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(go)%3A%0A%20%20%20%20def%20dark_figure(title%2C%20y_title)%3A%0A%20%20%20%20%20%20%20%20fig%20%3D%20go.Figure()%0A%20%20%20%20%20%20%20%20fig.update_layout(%0A%20%20%20%20%20%20%20%20%20%20%20%20template%3D%22plotly_dark%22%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20title%3Dtitle%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20xaxis_title%3D%22time%20(sec)%22%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20yaxis_title%3Dy_title%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20paper_bgcolor%3D%22rgba(0%2C0%2C0%2C0)%22%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20plot_bgcolor%3D%22rgba(0%2C0%2C0%2C0)%22%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20legend%3Ddict(orientation%3D%22h%22%2C%20yanchor%3D%22bottom%22%2C%20y%3D1.02%2C%20xanchor%3D%22left%22%2C%20x%3D0)%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20margin%3Ddict(l%3D40%2C%20r%3D20%2C%20t%3D70%2C%20b%3D40)%2C%0A%20%20%20%20%20%20%20%20)%0A%20%20%20%20%20%20%20%20return%20fig%0A%0A%20%20%20%20return%20(dark_figure%2C)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(dark_figure%2C%20go%2C%20mo%2C%20trajectory_data)%3A%0A%20%20%20%20position_plot%20%3D%20dark_figure(%22Position%22%2C%20%22joint%20angle%20(deg)%22)%0A%20%20%20%20position_plot.add_trace(go.Scatter(x%3Dtrajectory_data%5B%22t_all%22%5D%2C%20y%3Dtrajectory_data%5B%22cubic_position%22%5D%2C%20mode%3D%22lines%22%2C%20name%3D%22two-segment%20cubic%22))%0A%20%20%20%20position_plot.add_trace(go.Scatter(x%3Dtrajectory_data%5B%22t_cycloid%22%5D%2C%20y%3Dtrajectory_data%5B%22cycloid_position%22%5D%2C%20mode%3D%22lines%22%2C%20name%3D%22cycloid%22))%0A%20%20%20%20position_plot.add_vline(x%3Dtrajectory_data%5B%22T%22%5D%2C%20line_dash%3D%22dot%22%2C%20line_color%3D%22%239ca3af%22)%0A%0A%20%20%20%20velocity_plot%20%3D%20dark_figure(%22Velocity%22%2C%20%22joint%20velocity%20(deg%2Fsec)%22)%0A%20%20%20%20velocity_plot.add_trace(go.Scatter(x%3Dtrajectory_data%5B%22t_all%22%5D%2C%20y%3Dtrajectory_data%5B%22cubic_velocity%22%5D%2C%20mode%3D%22lines%22%2C%20name%3D%22two-segment%20cubic%22))%0A%20%20%20%20velocity_plot.add_trace(go.Scatter(x%3Dtrajectory_data%5B%22t_cycloid%22%5D%2C%20y%3Dtrajectory_data%5B%22cycloid_velocity%22%5D%2C%20mode%3D%22lines%22%2C%20name%3D%22cycloid%22))%0A%20%20%20%20velocity_plot.add_vline(x%3Dtrajectory_data%5B%22T%22%5D%2C%20line_dash%3D%22dot%22%2C%20line_color%3D%22%239ca3af%22)%0A%0A%20%20%20%20acceleration_plot%20%3D%20dark_figure(%22Acceleration%22%2C%20%22joint%20acceleration%20(deg%2Fsec%C2%B2)%22)%0A%20%20%20%20acceleration_plot.add_trace(go.Scatter(x%3Dtrajectory_data%5B%22t_all%22%5D%2C%20y%3Dtrajectory_data%5B%22cubic_acceleration%22%5D%2C%20mode%3D%22lines%22%2C%20name%3D%22two-segment%20cubic%22))%0A%20%20%20%20acceleration_plot.add_trace(go.Scatter(x%3Dtrajectory_data%5B%22t_cycloid%22%5D%2C%20y%3Dtrajectory_data%5B%22cycloid_acceleration%22%5D%2C%20mode%3D%22lines%22%2C%20name%3D%22cycloid%22))%0A%20%20%20%20acceleration_plot.add_vline(x%3Dtrajectory_data%5B%22T%22%5D%2C%20line_dash%3D%22dot%22%2C%20line_color%3D%22%239ca3af%22)%0A%0A%20%20%20%20plots%20%3D%20mo.vstack(%5B%0A%20%20%20%20%20%20%20%20mo.md(%22%23%23%20Trajectory%20comparison%22)%2C%0A%20%20%20%20%20%20%20%20mo.md(%22The%20dotted%20vertical%20line%20marks%20the%20via%20point%20between%20cubic%20segments.%22)%2C%0A%20%20%20%20%20%20%20%20position_plot%2C%0A%20%20%20%20%20%20%20%20velocity_plot%2C%0A%20%20%20%20%20%20%20%20acceleration_plot%2C%0A%20%20%20%20%5D)%0A%20%20%20%20return%20(plots%2C)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(mo%2C%20np%2C%20trajectory_data)%3A%0A%20%20%20%20max_cubic_velocity%20%3D%20float(np.max(np.abs(trajectory_data%5B%22cubic_velocity%22%5D)))%0A%20%20%20%20max_cubic_acceleration%20%3D%20float(np.max(np.abs(trajectory_data%5B%22cubic_acceleration%22%5D)))%0A%20%20%20%20max_cycloid_velocity%20%3D%20float(np.max(np.abs(trajectory_data%5B%22cycloid_velocity%22%5D)))%0A%20%20%20%20max_cycloid_acceleration%20%3D%20float(np.max(np.abs(trajectory_data%5B%22cycloid_acceleration%22%5D)))%0A%0A%20%20%20%20comparison%20%3D%20mo.md(f%22%22%22%0A%20%20%20%20%23%23%20What%20changes%3F%0A%0A%20%20%20%20%7C%20trajectory%20%7C%20max%20velocity%20%7C%20max%20acceleration%20%7C%0A%20%20%20%20%7C%20---%20%7C%20---%3A%20%7C%20---%3A%20%7C%0A%20%20%20%20%7C%20two-segment%20cubic%20%7C%20%60%7Bmax_cubic_velocity%3A.2f%7D%60%20deg%2Fsec%20%7C%20%60%7Bmax_cubic_acceleration%3A.2f%7D%60%20deg%2Fsec%C2%B2%20%7C%0A%20%20%20%20%7C%20cycloid%20%7C%20%60%7Bmax_cycloid_velocity%3A.2f%7D%60%20deg%2Fsec%20%7C%20%60%7Bmax_cycloid_acceleration%3A.2f%7D%60%20deg%2Fsec%C2%B2%20%7C%0A%0A%20%20%20%20The%20cubic%20trajectory%20is%20useful%20when%20a%20via-point%20and%20via-point%20velocity%20are%20required%2C%20but%20acceleration%20can%20jump%20at%20the%20segment%20boundary.%20The%20cycloid%20trajectory%20is%20smoother%20between%20the%20start%20and%20final%20angle%20because%20velocity%20and%20acceleration%20vary%20continuously%20over%20the%20full%20motion.%0A%20%20%20%20%22%22%22)%0A%20%20%20%20return%20(comparison%2C)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(mo%2C%20trajectory_data)%3A%0A%20%20%20%20first%20%3D%20trajectory_data%5B%22first_segment%22%5D%0A%20%20%20%20second%20%3D%20trajectory_data%5B%22second_segment%22%5D%0A%20%20%20%20equations%20%3D%20mo.md(f%22%22%22%0A%20%20%20%20%23%23%20Cubic%20coefficients%0A%0A%20%20%20%20First%20segment%20coefficients%20%60(a0%2C%20a1%2C%20a2%2C%20a3)%60%3A%0A%20%20%20%20%60%60%60text%0A%20%20%20%20(%7Bfirst%5B0%5D%3A.3f%7D%2C%20%7Bfirst%5B1%5D%3A.3f%7D%2C%20%7Bfirst%5B2%5D%3A.3f%7D%2C%20%7Bfirst%5B3%5D%3A.3f%7D)%0A%20%20%20%20%60%60%60%0A%0A%20%20%20%20Second%20segment%20coefficients%20%60(a0%2C%20a1%2C%20a2%2C%20a3)%60%3A%0A%20%20%20%20%60%60%60text%0A%20%20%20%20(%7Bsecond%5B0%5D%3A.3f%7D%2C%20%7Bsecond%5B1%5D%3A.3f%7D%2C%20%7Bsecond%5B2%5D%3A.3f%7D%2C%20%7Bsecond%5B3%5D%3A.3f%7D)%0A%20%20%20%20%60%60%60%0A%20%20%20%20%22%22%22)%0A%20%20%20%20return%20(equations%2C)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(comparison%2C%20controls%2C%20equations%2C%20mo%2C%20plots)%3A%0A%20%20%20%20app_ui%20%3D%20mo.vstack(%5B%0A%20%20%20%20%20%20%20%20controls%2C%20plots%2C%20comparison%2C%20equations%0A%20%20%20%20%5D)%0A%20%20%20%20mo.output.append(app_ui)%0A%20%20%20%20return%0A%0A%0Aif%20__name__%20%3D%3D%20%22__main__%22%3A%0A%20%20%20%20app.run()%0A</marimo-code>
+<link rel="stylesheet" href="https://olive.casazza.info/notebook-theme.css">
+
+</head>
+  <body>
+    <div id="root"></div>
+    <!-- This is a portal for the data editor to render in -->
+    <div id="portal" data-testid="glide-portal" style="position: fixed; left: 0; top: 0; z-index: 9999"></div>
+    <script data-marimo="true">
+      Object.defineProperty(window, "__MARIMO_MOUNT_CONFIG__", {
+        value: Object.freeze({
+            "filename": "notebook.py",
+            "cwd": "",
+            "lspWorkspace": null,
+            "mode": "read",
+            "version": "0.23.8",
+            "serverToken": "unused",
+            "config": {"ai": {"custom_providers": {}, "models": {"custom_models": [], "displayed_models": []}}, "completion": {"activate_on_typing": true, "copilot": false, "signature_hint_on_typing": false}, "diagnostics": {"sql_linter": true}, "display": {"cell_output": "below", "code_editor_font_size": 14, "dataframes": "rich", "default_table_max_columns": 50, "default_table_page_size": 10, "default_width": "medium", "reference_highlighting": true, "theme": "dark"}, "formatting": {"line_length": 79}, "keymap": {"overrides": {}, "preset": "default"}, "language_servers": {"pylsp": {"enable_flake8": false, "enable_mypy": true, "enable_pydocstyle": false, "enable_pyflakes": false, "enable_pylint": false, "enable_ruff": true, "enabled": false}}, "mcp": {"mcpServers": {}, "presets": []}, "package_management": {"manager": "pip"}, "runtime": {"auto_instantiate": false, "auto_reload": "off", "default_csv_encoding": "utf-8", "default_sql_output": "auto", "on_cell_change": "autorun", "output_max_bytes": 8000000, "reactive_tests": true, "show_tracebacks": false, "std_stream_max_bytes": 1000000, "watcher_on_save": "lazy"}, "save": {"autosave": "off", "autosave_delay": 1000, "format_on_save": false}, "server": {"browser": "default", "follow_symlink": false}, "snippets": {"custom_paths": [], "include_default_snippets": true}},
+            "configOverrides": {},
+            "appConfig": {"app_title": "Kinematics", "sql_output": "auto", "width": "full"},
+            "view": {"showAppCode": true},
+            "notebook": null,
+            "session": null,
+            "runtimeConfig": null,
+        }),
+        writable: false,
+        configurable: false,
+      });
+    </script>
+  </body>
+</html>

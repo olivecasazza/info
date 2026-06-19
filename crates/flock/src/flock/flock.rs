@@ -79,10 +79,9 @@ impl Flock {
             acceleration,
             config_id,
         });
-        let num_birds = self.birds.len();
-        // if oversized remove one from front of the vector
-        if num_birds > usize::from(self.max_flock_size) {
-            let idx = self.rng.rand_range(0..self.birds.len() as u32);
+        // if oversized remove one from the vector
+        if new_birds.len() > self.max_flock_size {
+            let idx = self.rng.rand_range(0..new_birds.len() as u32);
             new_birds.remove(idx as usize);
         }
         // rebuild tree

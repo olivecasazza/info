@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="favicon.ico" />
+    <!-- Preload is necessary because we show these images when we disconnect from the server,
+    but at that point we cannot load these images from the server -->
+    <link rel="preload" href="assets/gradient-yHQUC_QB.png" as="image" />
+    <link rel="preload" href="assets/noise-60BoTA8O.png" as="image" />
+    <!-- Preload the fonts -->
+    <link rel="preload" href="assets/Lora-VariableFont_wght-CZceb_kH.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/PTSans-Regular-Bam3NpBI.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/PTSans-Bold-C_DwAp7Z.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/FiraMono-Regular-CEsLFVD9.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/FiraMono-Medium-D5MAsWEG.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/FiraMono-Bold-C6PDArdf.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="a marimo app" />
+    <link rel="apple-touch-icon" href="https://olivecasazza.github.io/notebooks/notebooks/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.json" />
+
+    <script data-marimo="true">
+      function __resizeIframe(obj) {
+        const scrollbarHeight = 20; // Max between windows, mac, and linux
+
+        function setHeight() {
+          // Guard against race condition where iframe isn't ready
+          if (!obj.contentWindow?.document?.documentElement) {
+            return;
+          }
+          const element = obj.contentWindow.document.documentElement;
+          // If there is no vertical scrollbar, we don't need to resize the iframe
+          if (element.scrollHeight === element.clientHeight) {
+            return;
+          }
+
+          // Create a new height that includes the scrollbar height if it's visible
+          const hasHorizontalScrollbar = element.scrollWidth > element.clientWidth;
+          const newHeight = element.scrollHeight + (hasHorizontalScrollbar ? scrollbarHeight : 0);
+
+          // Only update the height if it's different from the current height
+          if (obj.style.height !== `${newHeight}px`) {
+            obj.style.height = `${newHeight}px`;
+          }
+        }
+
+        // Resize the iframe to the height of the content and bottom scrollbar height
+        setHeight();
+
+        // Resize the iframe when the content changes
+        const resizeObserver = new ResizeObserver((_entries) => {
+          setHeight();
+        });
+        // Only observe if iframe content is ready
+        if (obj.contentWindow?.document?.body) {
+          resizeObserver.observe(obj.contentWindow.document.body);
+        }
+      }
+    </script>
+    <marimo-filename hidden>notebook.py</marimo-filename>
+    <!-- TODO(Trevor): Legacy, required by VS Code plugin. Remove when plugin is updated (see marimo/server/_templates/template.py) -->
+    <marimo-version data-version="{{ version }}" hidden></marimo-version>
+    <marimo-user-config data-config="{{ user_config }}" hidden></marimo-user-config>
+    <marimo-server-token data-token="{{ server_token }}" hidden></marimo-server-token>
+    <!-- /TODO -->
+    <title>Inverse Kinematics Approximation</title>
+    <script type="module" crossorigin src="assets/index-CA2sQKnW.js"></script>
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/preload-helper-DdZsAcJe.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/chunk-LvLJmgfZ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/react-Bj1aDYRI.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/compiler-runtime-B3qBwwSJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/jsx-runtime-BqBOg78p.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useEventListener-DvoEXWke.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/defaultLocale-DPBdGRrH.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/precisionRound-NX56vp6K.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/defaultLocale-Lfi0pexn.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/vega-loader.browser-xq8miGHn.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/utils-DQRuLEof.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/clsx-Dz_KRrWq.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/cn-DCUzRj2J.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/badge-DOX1Xxa9.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/button-BbCh-29a.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/react-dom-CSu739Rf.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/fullscreen-eipL3i3Y.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/menu-items-DcP01QzW.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-BdyjRhEt.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/createLucideIcon-D5guW7EU.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/check-BH35Ndha.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/x-C-6liIBr.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/select-DZcFyKFQ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/tooltip-DTV9tlSr.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/use-toast-ERM44-k9.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useEvent-D91BmmQi.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/invariant-BUdrueMv.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/isObject-DvLSfCY5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/_baseFor-DKD1r8uL.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/merge-_9WLTEyt.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/zod-H_cgTO0M.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/utils-Wvjk_Y4h.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/Deferred-DWBqOhWa.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/uuid-D_zLHhNi.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/DeferredRequestRegistry-CzVJLtsG.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/constants-DMpttj8Q.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/session-DGdfs0bJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/config-C2lTvbuU.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/requests-DIwGYs0l.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useLifecycle-DieWOfXE.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useNonce-DfoVjkkH.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useTheme-Kwyx4PvL.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/arrays-DYDL-3-i.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/strings-wdPMRf6Z.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/once-DRroIaBz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/capabilities-A_KhFcGV.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/createReducer-CI9qeK_X.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/paths-SFhaqGlE.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-BrR4M-k3.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-HlsDto3K.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-CHcznzB-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-BU26XwgJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-COs9gIu5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-BZr6MMV-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-DCqxOggh.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-DkA__6UI.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dist-C9ZB41s2.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/stex-lcoTi-7o.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/toDate-B5A0DFEz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/purify.es-DvRMX74T.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/cjs-BRGiG41H.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/isSymbol-BT6B8Bon.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/now-CsYTPAhW.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/debounce-DhnxH9Rh.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/database-zap-kIkTfzTX.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/main-B0OX4z33.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/cells-Dnu4nDoy.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/ErrorBoundary-DyYDV0HI.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/kbd-BJB2rf7K.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useInstallPackage-hKfTes-m.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/alert-dialog-BqFLkbUc.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dialog-DqOQT_n4.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useDebounce-_BZcy6gx.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/numbers-mY4EY0yG.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/SSRProvider-BIDQNg9Q.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/context-C1Tm_47t.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useNumberFormatter-CW4V-fpE.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/usePress-jH2RfcUG.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/input-CVE-gIjt.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/ImperativeModal-DEC1mXgV.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/cell-link-PQYiMZw1.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/multi-map-CUuNtzHt.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/alert-DrHguQlr.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/chevron-right-CG5QYXYk.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dropdown-menu-CR7cnzLX.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/links-B8WzCnbo.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useRunCells-C0BPo9m1.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/copy-Ch48HVPK.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/copy-BwrPA9zQ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/copy-icon-BdZPgXgo.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/RenderHTML-B5r25cP5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/datasource-I-LOgxeP.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/state-D9EoHCkz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/package-B8oXOUM-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/sparkles-CC9Bko6a.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/MarimoErrorOutput-XWqnhvJ6.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/spinner-UuZAUjoP.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/html-to-image-D6SgvARi.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/focus-BaOnnMs-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useAsyncData-C5i0IRVM.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/LazyAnyLanguageCodeMirror-GdhQ07zA.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/micromark-factory-space-BUQpMdx2.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/chunk-5FQGJX7Z-BSzccEgu.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/markdown-renderer-BQ-BQLiJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/command-2NPJCYDa.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/field-DNlzfMKW.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/popover-Bz_0Vkyf.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/errors-iwK4b4VF.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/download-B1QFVDP-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/table-DQE9hQzM.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useIframeCapabilities-DPVTppnD.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/error-banner-CLO6LFll.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/formats-BRq458WH.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/en-US-C7vnqfgk.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/isValid-DdlR4-BY.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/dates-DI1TvEEK.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/maps-n3GaPJwv.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/extends-Dqvpuc10.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/emotion-is-prop-valid.esm-Dangy3Bv.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useDateFormatter-d3yglQmW.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/react-icons.esm--O4lBTlZ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/RSPContexts-Bk1r00gJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/table-6NxtGaCm.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/ellipsis-KAhMaCIV.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/external-link-BTNxSavU.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/message-circle-1YLdnr8A.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/trash-2-BJLYnZpG.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/react-resizable-panels.browser.esm-Ce2ksurd.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/JsonOutput-05-R3eil.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/chart-no-axes-column-nqk474t8.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/square-function-blYaQso8.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/spec-D1ptWKg6.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/ellipsis-vertical-CkwWkOQL.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/refresh-cw-a_9k9BK7.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/tree-actions-DY8FUp3V.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/components-zB5yT_R8.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/column-preview-BLIWbdOX.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/icons-8tfAri2V.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/radio-group-rsi1ibXY.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/floating-outline-DbOtUfo-.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/objectWithoutPropertiesLoose-DoKw85w0.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/esm-Cb2bnV6o.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/eye-off-BT-KOYV5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/plus-CxkHs8QM.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/readonly-python-code-BKYj8PNf.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/file-headphone-B3fuktN0.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/file-HTLbeC2b.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/image-BIibSXT6.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/file-icons-B6DaZdP0.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/switch-BtkQp293.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/events-CBm-hwqS.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/globals-CpVAcN9Z.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/share-oorMPghT.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/blob-3_FN0u9S.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/memoize-Tp7rARFe.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/get-C-qh_et5.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/_baseSet-CxV9N1bc.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/state-BXNNuw9g.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/label-xHqFtfdz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/textarea-BBTcSr-i.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/refresh-ccw-DLc784Sj.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/form-BjUJP6PJ.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/renderShortcut-DK-VjfaX.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useBoolean-B8LMGUHl.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/useDeepCompareMemoize-CWcgQCbT.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/types-BYwxXaSY.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/semaphore-X3ApuO41.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/fileToBase64-BeYUTUzO.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/pathUtils-vgBYIo5B.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/prop-types-DVDiRdwc.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/es-au8YY-8E.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/hasIn-DiS_ryrS.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/flatten-Dl4V1ub3.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/pick-DqWUNly1.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/code-xml-CZN6vNxu.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/house-D2ldnAB9.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/square-rACnnz-q.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/triangle-alert-CJ0ZIqcz.js">
+    <link rel="modulepreload" crossorigin href="https://olivecasazza.github.io/notebooks/notebooks/assets/bundle.esm-BXIlAZ6T.js">
+    <link rel="stylesheet" crossorigin href="assets/cells-jmgGt1lS.css">
+    <link rel="stylesheet" crossorigin href="assets/markdown-renderer-DdDKmWlR.css">
+    <link rel="stylesheet" crossorigin href="assets/JsonOutput-B7vuddcd.css">
+    <link rel="stylesheet" crossorigin href="assets/index-DH00kbhV.css">
+  <marimo-wasm hidden=""></marimo-wasm>
+    <script>
+        if (window.location.protocol === 'file:') {
+            alert('Warning: This file must be served by an HTTP server to function correctly.');
+        }
+    </script>
+    
+    <style>
+        #save-button {
+            display: none !important;
+        }
+        #filename-input {
+            display: none !important;
+        }
+    </style>
+    
+<script data-marimo="true">
+    Object.defineProperty(window, "__MARIMO_EXPORT_CONTEXT__", {
+        value: Object.freeze({
+            trusted: true,
+            notebookCode: "import marimo\n\n__generated_with = \"0.23.8\"\napp = marimo.App(width=\"full\", app_title=\"Inverse Kinematics Approximation\")\n\n\n@app.cell(hide_code=True)\ndef _():\n    import marimo as mo\n\n    return (mo,)\n\n\n@app.cell(hide_code=True)\ndef _(mo):\n    intro = mo.md(r\"\"\"\n    # Inverse Kinematics Approximation\n\n    This notebook explores finding the inverse kinematics of a 2PR manipulator arm using decomposition and linear approximation. Instead of solving the exact inverse kinematics globally, we:\n\n    1. Discretize the workspace into a grid.\n    2. Generate thousands of random joint angles (forward kinematics).\n    3. Use K-Means clustering inside each cell to split the two possible elbow configurations.\n    4. Fit a local linear regression to approximate the inverse kinematics in that region.\n\n    Below, you can adjust the arm parameters and approximation density.\n    \"\"\")\n    return\n\n\n@app.cell(hide_code=True)\nasync def _():\n    import micropip\n\n    await micropip.install([\n        \"matplotlib\",\n        \"numpy\",\n        \"sympy\",\n        \"pandas\",\n        \"plotly\",\n        \"scikit-learn\",\n    ])\n\n    import math\n    import random\n    import numpy as np\n    import sympy as sp\n    import pandas as pd\n    from sympy.physics.mechanics import dynamicsymbols\n    import plotly.graph_objects as go\n    from sklearn.cluster import KMeans\n    from sklearn.linear_model import LinearRegression\n\n    return (\n        KMeans,\n        LinearRegression,\n        dynamicsymbols,\n        go,\n        math,\n        np,\n        pd,\n        random,\n        sp,\n    )\n\n\n@app.cell(hide_code=True)\ndef _(mo):\n    mo.output.append(mo.image(src=\"fig/img1.png\", width=300))\n    return\n\n\n@app.cell(hide_code=True)\ndef _(mo):\n    l1_len = mo.ui.slider(50, 150, value=100, step=10, label=\"link 1 length (cm)\")\n    l2_len = mo.ui.slider(50, 150, value=100, step=10, label=\"link 2 length (cm)\")\n    trials = mo.ui.slider(5000, 50000, value=10000, step=5000, label=\"random samples\")\n    grid_size = mo.ui.slider(10, 100, value=40, step=5, label=\"grid dimension (N x N)\")\n\n    controls = mo.vstack([\n        mo.md(\"## Arm and simulation parameters\"),\n        mo.hstack([l1_len, l2_len], justify=\"start\"),\n        mo.hstack([trials, grid_size], justify=\"start\"),\n    ])\n    mo.output.append(controls)\n    return grid_size, l1_len, l2_len, trials\n\n\n@app.cell(hide_code=True)\ndef _(dynamicsymbols, mo, sp):\n    theta1, theta2, l1, l2, theta, alpha, a, d = dynamicsymbols(\n        \"theta1 theta2 l1 l2 theta alpha a d\"\n    )\n\n    rotation_matrix = sp.Matrix(\n        [\n            [sp.cos(theta), -sp.sin(theta) * sp.cos(alpha), sp.sin(theta) * sp.sin(alpha)],\n            [sp.sin(theta), sp.cos(theta) * sp.cos(alpha), -sp.cos(theta) * sp.sin(alpha)],\n            [0, sp.sin(alpha), sp.cos(alpha)],\n        ]\n    )\n\n    transformation_matrix = sp.Matrix([a * sp.cos(theta), a * sp.sin(theta), d])\n    last_row = sp.Matrix([[0, 0, 0, 1]])\n\n    t = sp.Matrix.vstack(sp.Matrix.hstack(rotation_matrix, transformation_matrix), last_row)\n    t_02 = t.subs({alpha: 0, a: l1, theta: theta1, d: 0}) * t.subs({alpha: 0, a: l2, theta: theta2, d: 0})\n    t_02.simplify()\n\n    derivation = mo.vstack([\n        mo.md(\"## Forward kinematics transformation matrix\"),\n        mo.md(\"Using the DH parameters, we derive the exact forward kinematics for the end-effector:\"),\n        mo.md(f\"$$\\n{sp.latex(t_02)}\\n$$\"),\n    ])\n    mo.output.append(derivation)\n    return l1, l2, t_02, theta1, theta2\n\n\n@app.cell(hide_code=True)\ndef _(l1, l1_len, l2, l2_len, math, sp, t_02, theta1, theta2):\n    x_position = t_02[0, 3]\n    y_position = t_02[1, 3]\n    fk_x = sp.lambdify((l1, l2, theta1, theta2), x_position, \"numpy\")\n    fk_y = sp.lambdify((l1, l2, theta1, theta2), y_position, \"numpy\")\n\n    def fk(t1, t2):\n        return (\n            fk_x(l1_len.value, l2_len.value, t1, t2),\n            fk_y(l1_len.value, l2_len.value, t1, t2),\n        )\n\n    def exact_ik(x, y):\n        try:\n            L1 = l1_len.value\n            L2 = l2_len.value\n            a = x**2 + y**2 - L1**2 - L2**2\n            b = 2 * L1 * L2\n            t2_pos = math.acos(a / b)\n            t2_neg = -1 * t2_pos\n\n            t1_pos = math.atan2(y, x) - math.atan2(L1 * math.sin(t2_pos), L1 + L2 * math.cos(t2_pos))\n            t1_neg = math.atan2(y, x) - math.atan2(L1 * math.sin(t2_neg), L1 + L2 * math.cos(t2_neg))\n            return [(t1_pos, t2_pos), (t1_neg, t2_neg)]\n        except ValueError:\n            return None\n\n    return exact_ik, fk\n\n\n@app.cell(hide_code=True)\ndef _(fk, go, grid_size, math, mo, np, random, trials):\n    trial_data = []\n    for _ in range(trials.value):\n        t1 = np.deg2rad(random.uniform(0, 170))\n        t2 = np.deg2rad(random.uniform(-90, 90))\n        trial_data.append({\n            \"angles\": (t1, t2),\n            \"pos\": fk(t1, t2)\n        })\n\n    x_cords = [d[\"pos\"][0] for d in trial_data]\n    y_cords = [d[\"pos\"][1] for d in trial_data]\n\n    fig_fuzzed = go.Figure(data=go.Scattergl(x=x_cords, y=y_cords, mode='markers', marker=dict(size=2)))\n    fig_fuzzed.update_layout(template=\"plotly_dark\", paper_bgcolor=\"rgba(0,0,0,0)\", plot_bgcolor=\"rgba(0,0,0,0)\", margin=dict(t=0))\n\n    x_min, y_min = math.floor(min(x_cords)), math.floor(min(y_cords))\n    x_max, y_max = math.ceil(max(x_cords)), math.ceil(max(y_cords))\n    w_width, w_height = x_max - x_min, y_max - y_min\n\n    cols = grid_size.value\n    rows = grid_size.value\n    cell_w = w_width / cols\n    cell_h = w_height / rows\n    gw = math.ceil(w_width / cell_w)\n    gh = math.ceil(w_height / cell_h)\n\n    def get_grid(x, y):\n        _x = math.floor(((x - x_min) / w_width) * gw)\n        _y = math.floor(((y - y_min) / w_height) * gh)\n        return _x, _y\n\n    fuzz_section = mo.vstack([\n        mo.md(\"## Fuzzed workspace\"),\n        mo.md(\"Random joint angles mapped through forward kinematics to show the reachable workspace:\"),\n        fig_fuzzed,\n    ])\n    mo.output.append(fuzz_section)\n    return get_grid, gh, gw, trial_data, x_max, x_min, y_max, y_min\n\n\n@app.cell(hide_code=True)\ndef _(KMeans, LinearRegression, get_grid, gh, gw, pd, trial_data):\n    grid = [[[] for _ in range(gw)] for _ in range(gh)]\n    for pt in trial_data:\n        _gx, _gy = get_grid(pt[\"pos\"][0], pt[\"pos\"][1])\n        if 0 \u003C= _gx \u003C gw and 0 \u003C= _gy \u003C gh:\n            grid[_gy][_gx].append(pt)\n\n    def split_and_fit(cell):\n        if not cell or len(cell) \u003C 2:\n            return None\n        t_pairs = [pt[\"angles\"] for pt in cell]\n        xy_pairs = [pt[\"pos\"] for pt in cell]\n        kmeans = KMeans(n_clusters=2, n_init=1)\n        clusters = kmeans.fit_predict(t_pairs)\n\n        c0_t = [t_pairs[i] for i, c in enumerate(clusters) if c == 0]\n        c0_xy = [xy_pairs[i] for i, c in enumerate(clusters) if c == 0]\n        c1_t = [t_pairs[i] for i, c in enumerate(clusters) if c == 1]\n        c1_xy = [xy_pairs[i] for i, c in enumerate(clusters) if c == 1]\n\n        models = []\n        if c0_t:\n            models.append(LinearRegression().fit(c0_xy, c0_t))\n        if c1_t:\n            models.append(LinearRegression().fit(c1_xy, c1_t))\n        return models if len(models) == 2 else None\n\n    grid_df = pd.DataFrame(grid)\n    model_grid = grid_df.map(split_and_fit)\n    return (model_grid,)\n\n\n@app.cell(hide_code=True)\ndef _(\n    exact_ik,\n    fk,\n    get_grid,\n    go,\n    math,\n    mo,\n    model_grid,\n    random,\n    x_max,\n    x_min,\n    y_max,\n    y_min,\n):\n    test_inputs = []\n    trial_errors = []\n\n    attempts = 0\n    while len(trial_errors) \u003C 1000 and attempts \u003C 10000:\n        attempts += 1\n        px, py = random.uniform(x_min, x_max), random.uniform(y_min, y_max)\n        _gx, _gy = get_grid(px, py)\n        ik_res = exact_ik(px, py)\n\n        try:\n            models = model_grid[_gx][_gy]\n        except (KeyError, IndexError):\n            continue\n\n        if models is None or ik_res is None:\n            continue\n\n        test_inputs.append((px, py))\n        m1, m2 = models\n        sol1 = m1.predict([[px, py]])[-1]\n        sol2 = m2.predict([[px, py]])[-1]\n\n        fk1 = fk(*sol1)\n        fk2 = fk(*sol2)\n\n        err1 = abs(math.hypot(px - fk1[0], py - fk1[1]))\n        err2 = abs(math.hypot(px - fk2[0], py - fk2[1]))\n\n        trial_errors.append(min(err1, err2))\n\n    avg_error = sum(trial_errors) / len(trial_errors) if trial_errors else 0\n\n    x_test = [p[0] for p in test_inputs]\n    y_test = [p[1] for p in test_inputs]\n    size_test = [e + 3 for e in trial_errors]\n\n    fig_err = go.Figure(data=go.Scattergl(\n        x=x_test, y=y_test, mode='markers',\n        marker=dict(size=size_test, color=trial_errors, colorscale='Viridis', showscale=True)\n    ))\n    fig_err.update_layout(template=\"plotly_dark\", paper_bgcolor=\"rgba(0,0,0,0)\", plot_bgcolor=\"rgba(0,0,0,0)\", margin=dict(t=0))\n\n    fig_err_3d = go.Figure(data=go.Scatter3d(\n        x=x_test, y=y_test, z=trial_errors, mode='markers',\n        marker=dict(size=2, color=trial_errors, colorscale='Viridis', showscale=True)\n    ))\n    fig_err_3d.update_layout(\n        template=\"plotly_dark\",\n        paper_bgcolor=\"rgba(0,0,0,0)\",\n        plot_bgcolor=\"rgba(0,0,0,0)\",\n        margin=dict(l=0, r=0, b=0, t=0),\n        scene=dict(xaxis_title='X Position', yaxis_title='Y Position', zaxis_title='Error (cm)')\n    )\n\n    err_section = mo.vstack([\n        mo.md(f\"## Approximation Error\\nAverage error over 1000 samples: `{avg_error:.3f}` cm\"),\n        mo.md(\"The 2D and 3D scatter plots below highlight regions where the local linear approximation struggles (higher Z-axis / lighter color means higher error, usually around workspace boundaries and singularities).\"),\n        mo.hstack([fig_err, fig_err_3d])\n    ])\n    mo.output.append(err_section)\n    return\n\n\nif __name__ == \"__main__\":\n    app.run()\n",
+        }),
+        writable: false,
+        configurable: false,
+    });
+</script>
+<marimo-code hidden="">import%20marimo%0A%0A__generated_with%20%3D%20%220.23.8%22%0Aapp%20%3D%20marimo.App(width%3D%22full%22%2C%20app_title%3D%22Inverse%20Kinematics%20Approximation%22)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_()%3A%0A%20%20%20%20import%20marimo%20as%20mo%0A%0A%20%20%20%20return%20(mo%2C)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(mo)%3A%0A%20%20%20%20intro%20%3D%20mo.md(r%22%22%22%0A%20%20%20%20%23%20Inverse%20Kinematics%20Approximation%0A%0A%20%20%20%20This%20notebook%20explores%20finding%20the%20inverse%20kinematics%20of%20a%202PR%20manipulator%20arm%20using%20decomposition%20and%20linear%20approximation.%20Instead%20of%20solving%20the%20exact%20inverse%20kinematics%20globally%2C%20we%3A%0A%0A%20%20%20%201.%20Discretize%20the%20workspace%20into%20a%20grid.%0A%20%20%20%202.%20Generate%20thousands%20of%20random%20joint%20angles%20(forward%20kinematics).%0A%20%20%20%203.%20Use%20K-Means%20clustering%20inside%20each%20cell%20to%20split%20the%20two%20possible%20elbow%20configurations.%0A%20%20%20%204.%20Fit%20a%20local%20linear%20regression%20to%20approximate%20the%20inverse%20kinematics%20in%20that%20region.%0A%0A%20%20%20%20Below%2C%20you%20can%20adjust%20the%20arm%20parameters%20and%20approximation%20density.%0A%20%20%20%20%22%22%22)%0A%20%20%20%20return%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Aasync%20def%20_()%3A%0A%20%20%20%20import%20micropip%0A%0A%20%20%20%20await%20micropip.install(%5B%0A%20%20%20%20%20%20%20%20%22matplotlib%22%2C%0A%20%20%20%20%20%20%20%20%22numpy%22%2C%0A%20%20%20%20%20%20%20%20%22sympy%22%2C%0A%20%20%20%20%20%20%20%20%22pandas%22%2C%0A%20%20%20%20%20%20%20%20%22plotly%22%2C%0A%20%20%20%20%20%20%20%20%22scikit-learn%22%2C%0A%20%20%20%20%5D)%0A%0A%20%20%20%20import%20math%0A%20%20%20%20import%20random%0A%20%20%20%20import%20numpy%20as%20np%0A%20%20%20%20import%20sympy%20as%20sp%0A%20%20%20%20import%20pandas%20as%20pd%0A%20%20%20%20from%20sympy.physics.mechanics%20import%20dynamicsymbols%0A%20%20%20%20import%20plotly.graph_objects%20as%20go%0A%20%20%20%20from%20sklearn.cluster%20import%20KMeans%0A%20%20%20%20from%20sklearn.linear_model%20import%20LinearRegression%0A%0A%20%20%20%20return%20(%0A%20%20%20%20%20%20%20%20KMeans%2C%0A%20%20%20%20%20%20%20%20LinearRegression%2C%0A%20%20%20%20%20%20%20%20dynamicsymbols%2C%0A%20%20%20%20%20%20%20%20go%2C%0A%20%20%20%20%20%20%20%20math%2C%0A%20%20%20%20%20%20%20%20np%2C%0A%20%20%20%20%20%20%20%20pd%2C%0A%20%20%20%20%20%20%20%20random%2C%0A%20%20%20%20%20%20%20%20sp%2C%0A%20%20%20%20)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(mo)%3A%0A%20%20%20%20mo.output.append(mo.image(src%3D%22fig%2Fimg1.png%22%2C%20width%3D300))%0A%20%20%20%20return%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(mo)%3A%0A%20%20%20%20l1_len%20%3D%20mo.ui.slider(50%2C%20150%2C%20value%3D100%2C%20step%3D10%2C%20label%3D%22link%201%20length%20(cm)%22)%0A%20%20%20%20l2_len%20%3D%20mo.ui.slider(50%2C%20150%2C%20value%3D100%2C%20step%3D10%2C%20label%3D%22link%202%20length%20(cm)%22)%0A%20%20%20%20trials%20%3D%20mo.ui.slider(5000%2C%2050000%2C%20value%3D10000%2C%20step%3D5000%2C%20label%3D%22random%20samples%22)%0A%20%20%20%20grid_size%20%3D%20mo.ui.slider(10%2C%20100%2C%20value%3D40%2C%20step%3D5%2C%20label%3D%22grid%20dimension%20(N%20x%20N)%22)%0A%0A%20%20%20%20controls%20%3D%20mo.vstack(%5B%0A%20%20%20%20%20%20%20%20mo.md(%22%23%23%20Arm%20and%20simulation%20parameters%22)%2C%0A%20%20%20%20%20%20%20%20mo.hstack(%5Bl1_len%2C%20l2_len%5D%2C%20justify%3D%22start%22)%2C%0A%20%20%20%20%20%20%20%20mo.hstack(%5Btrials%2C%20grid_size%5D%2C%20justify%3D%22start%22)%2C%0A%20%20%20%20%5D)%0A%20%20%20%20mo.output.append(controls)%0A%20%20%20%20return%20grid_size%2C%20l1_len%2C%20l2_len%2C%20trials%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(dynamicsymbols%2C%20mo%2C%20sp)%3A%0A%20%20%20%20theta1%2C%20theta2%2C%20l1%2C%20l2%2C%20theta%2C%20alpha%2C%20a%2C%20d%20%3D%20dynamicsymbols(%0A%20%20%20%20%20%20%20%20%22theta1%20theta2%20l1%20l2%20theta%20alpha%20a%20d%22%0A%20%20%20%20)%0A%0A%20%20%20%20rotation_matrix%20%3D%20sp.Matrix(%0A%20%20%20%20%20%20%20%20%5B%0A%20%20%20%20%20%20%20%20%20%20%20%20%5Bsp.cos(theta)%2C%20-sp.sin(theta)%20*%20sp.cos(alpha)%2C%20sp.sin(theta)%20*%20sp.sin(alpha)%5D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%5Bsp.sin(theta)%2C%20sp.cos(theta)%20*%20sp.cos(alpha)%2C%20-sp.cos(theta)%20*%20sp.sin(alpha)%5D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%5B0%2C%20sp.sin(alpha)%2C%20sp.cos(alpha)%5D%2C%0A%20%20%20%20%20%20%20%20%5D%0A%20%20%20%20)%0A%0A%20%20%20%20transformation_matrix%20%3D%20sp.Matrix(%5Ba%20*%20sp.cos(theta)%2C%20a%20*%20sp.sin(theta)%2C%20d%5D)%0A%20%20%20%20last_row%20%3D%20sp.Matrix(%5B%5B0%2C%200%2C%200%2C%201%5D%5D)%0A%0A%20%20%20%20t%20%3D%20sp.Matrix.vstack(sp.Matrix.hstack(rotation_matrix%2C%20transformation_matrix)%2C%20last_row)%0A%20%20%20%20t_02%20%3D%20t.subs(%7Balpha%3A%200%2C%20a%3A%20l1%2C%20theta%3A%20theta1%2C%20d%3A%200%7D)%20*%20t.subs(%7Balpha%3A%200%2C%20a%3A%20l2%2C%20theta%3A%20theta2%2C%20d%3A%200%7D)%0A%20%20%20%20t_02.simplify()%0A%0A%20%20%20%20derivation%20%3D%20mo.vstack(%5B%0A%20%20%20%20%20%20%20%20mo.md(%22%23%23%20Forward%20kinematics%20transformation%20matrix%22)%2C%0A%20%20%20%20%20%20%20%20mo.md(%22Using%20the%20DH%20parameters%2C%20we%20derive%20the%20exact%20forward%20kinematics%20for%20the%20end-effector%3A%22)%2C%0A%20%20%20%20%20%20%20%20mo.md(f%22%24%24%5Cn%7Bsp.latex(t_02)%7D%5Cn%24%24%22)%2C%0A%20%20%20%20%5D)%0A%20%20%20%20mo.output.append(derivation)%0A%20%20%20%20return%20l1%2C%20l2%2C%20t_02%2C%20theta1%2C%20theta2%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(l1%2C%20l1_len%2C%20l2%2C%20l2_len%2C%20math%2C%20sp%2C%20t_02%2C%20theta1%2C%20theta2)%3A%0A%20%20%20%20x_position%20%3D%20t_02%5B0%2C%203%5D%0A%20%20%20%20y_position%20%3D%20t_02%5B1%2C%203%5D%0A%20%20%20%20fk_x%20%3D%20sp.lambdify((l1%2C%20l2%2C%20theta1%2C%20theta2)%2C%20x_position%2C%20%22numpy%22)%0A%20%20%20%20fk_y%20%3D%20sp.lambdify((l1%2C%20l2%2C%20theta1%2C%20theta2)%2C%20y_position%2C%20%22numpy%22)%0A%0A%20%20%20%20def%20fk(t1%2C%20t2)%3A%0A%20%20%20%20%20%20%20%20return%20(%0A%20%20%20%20%20%20%20%20%20%20%20%20fk_x(l1_len.value%2C%20l2_len.value%2C%20t1%2C%20t2)%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20fk_y(l1_len.value%2C%20l2_len.value%2C%20t1%2C%20t2)%2C%0A%20%20%20%20%20%20%20%20)%0A%0A%20%20%20%20def%20exact_ik(x%2C%20y)%3A%0A%20%20%20%20%20%20%20%20try%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20L1%20%3D%20l1_len.value%0A%20%20%20%20%20%20%20%20%20%20%20%20L2%20%3D%20l2_len.value%0A%20%20%20%20%20%20%20%20%20%20%20%20a%20%3D%20x**2%20%2B%20y**2%20-%20L1**2%20-%20L2**2%0A%20%20%20%20%20%20%20%20%20%20%20%20b%20%3D%202%20*%20L1%20*%20L2%0A%20%20%20%20%20%20%20%20%20%20%20%20t2_pos%20%3D%20math.acos(a%20%2F%20b)%0A%20%20%20%20%20%20%20%20%20%20%20%20t2_neg%20%3D%20-1%20*%20t2_pos%0A%0A%20%20%20%20%20%20%20%20%20%20%20%20t1_pos%20%3D%20math.atan2(y%2C%20x)%20-%20math.atan2(L1%20*%20math.sin(t2_pos)%2C%20L1%20%2B%20L2%20*%20math.cos(t2_pos))%0A%20%20%20%20%20%20%20%20%20%20%20%20t1_neg%20%3D%20math.atan2(y%2C%20x)%20-%20math.atan2(L1%20*%20math.sin(t2_neg)%2C%20L1%20%2B%20L2%20*%20math.cos(t2_neg))%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%5B(t1_pos%2C%20t2_pos)%2C%20(t1_neg%2C%20t2_neg)%5D%0A%20%20%20%20%20%20%20%20except%20ValueError%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20None%0A%0A%20%20%20%20return%20exact_ik%2C%20fk%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(fk%2C%20go%2C%20grid_size%2C%20math%2C%20mo%2C%20np%2C%20random%2C%20trials)%3A%0A%20%20%20%20trial_data%20%3D%20%5B%5D%0A%20%20%20%20for%20_%20in%20range(trials.value)%3A%0A%20%20%20%20%20%20%20%20t1%20%3D%20np.deg2rad(random.uniform(0%2C%20170))%0A%20%20%20%20%20%20%20%20t2%20%3D%20np.deg2rad(random.uniform(-90%2C%2090))%0A%20%20%20%20%20%20%20%20trial_data.append(%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20%22angles%22%3A%20(t1%2C%20t2)%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%22pos%22%3A%20fk(t1%2C%20t2)%0A%20%20%20%20%20%20%20%20%7D)%0A%0A%20%20%20%20x_cords%20%3D%20%5Bd%5B%22pos%22%5D%5B0%5D%20for%20d%20in%20trial_data%5D%0A%20%20%20%20y_cords%20%3D%20%5Bd%5B%22pos%22%5D%5B1%5D%20for%20d%20in%20trial_data%5D%0A%0A%20%20%20%20fig_fuzzed%20%3D%20go.Figure(data%3Dgo.Scattergl(x%3Dx_cords%2C%20y%3Dy_cords%2C%20mode%3D'markers'%2C%20marker%3Ddict(size%3D2)))%0A%20%20%20%20fig_fuzzed.update_layout(template%3D%22plotly_dark%22%2C%20paper_bgcolor%3D%22rgba(0%2C0%2C0%2C0)%22%2C%20plot_bgcolor%3D%22rgba(0%2C0%2C0%2C0)%22%2C%20margin%3Ddict(t%3D0))%0A%0A%20%20%20%20x_min%2C%20y_min%20%3D%20math.floor(min(x_cords))%2C%20math.floor(min(y_cords))%0A%20%20%20%20x_max%2C%20y_max%20%3D%20math.ceil(max(x_cords))%2C%20math.ceil(max(y_cords))%0A%20%20%20%20w_width%2C%20w_height%20%3D%20x_max%20-%20x_min%2C%20y_max%20-%20y_min%0A%0A%20%20%20%20cols%20%3D%20grid_size.value%0A%20%20%20%20rows%20%3D%20grid_size.value%0A%20%20%20%20cell_w%20%3D%20w_width%20%2F%20cols%0A%20%20%20%20cell_h%20%3D%20w_height%20%2F%20rows%0A%20%20%20%20gw%20%3D%20math.ceil(w_width%20%2F%20cell_w)%0A%20%20%20%20gh%20%3D%20math.ceil(w_height%20%2F%20cell_h)%0A%0A%20%20%20%20def%20get_grid(x%2C%20y)%3A%0A%20%20%20%20%20%20%20%20_x%20%3D%20math.floor(((x%20-%20x_min)%20%2F%20w_width)%20*%20gw)%0A%20%20%20%20%20%20%20%20_y%20%3D%20math.floor(((y%20-%20y_min)%20%2F%20w_height)%20*%20gh)%0A%20%20%20%20%20%20%20%20return%20_x%2C%20_y%0A%0A%20%20%20%20fuzz_section%20%3D%20mo.vstack(%5B%0A%20%20%20%20%20%20%20%20mo.md(%22%23%23%20Fuzzed%20workspace%22)%2C%0A%20%20%20%20%20%20%20%20mo.md(%22Random%20joint%20angles%20mapped%20through%20forward%20kinematics%20to%20show%20the%20reachable%20workspace%3A%22)%2C%0A%20%20%20%20%20%20%20%20fig_fuzzed%2C%0A%20%20%20%20%5D)%0A%20%20%20%20mo.output.append(fuzz_section)%0A%20%20%20%20return%20get_grid%2C%20gh%2C%20gw%2C%20trial_data%2C%20x_max%2C%20x_min%2C%20y_max%2C%20y_min%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(KMeans%2C%20LinearRegression%2C%20get_grid%2C%20gh%2C%20gw%2C%20pd%2C%20trial_data)%3A%0A%20%20%20%20grid%20%3D%20%5B%5B%5B%5D%20for%20_%20in%20range(gw)%5D%20for%20_%20in%20range(gh)%5D%0A%20%20%20%20for%20pt%20in%20trial_data%3A%0A%20%20%20%20%20%20%20%20_gx%2C%20_gy%20%3D%20get_grid(pt%5B%22pos%22%5D%5B0%5D%2C%20pt%5B%22pos%22%5D%5B1%5D)%0A%20%20%20%20%20%20%20%20if%200%20%3C%3D%20_gx%20%3C%20gw%20and%200%20%3C%3D%20_gy%20%3C%20gh%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20grid%5B_gy%5D%5B_gx%5D.append(pt)%0A%0A%20%20%20%20def%20split_and_fit(cell)%3A%0A%20%20%20%20%20%20%20%20if%20not%20cell%20or%20len(cell)%20%3C%202%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20None%0A%20%20%20%20%20%20%20%20t_pairs%20%3D%20%5Bpt%5B%22angles%22%5D%20for%20pt%20in%20cell%5D%0A%20%20%20%20%20%20%20%20xy_pairs%20%3D%20%5Bpt%5B%22pos%22%5D%20for%20pt%20in%20cell%5D%0A%20%20%20%20%20%20%20%20kmeans%20%3D%20KMeans(n_clusters%3D2%2C%20n_init%3D1)%0A%20%20%20%20%20%20%20%20clusters%20%3D%20kmeans.fit_predict(t_pairs)%0A%0A%20%20%20%20%20%20%20%20c0_t%20%3D%20%5Bt_pairs%5Bi%5D%20for%20i%2C%20c%20in%20enumerate(clusters)%20if%20c%20%3D%3D%200%5D%0A%20%20%20%20%20%20%20%20c0_xy%20%3D%20%5Bxy_pairs%5Bi%5D%20for%20i%2C%20c%20in%20enumerate(clusters)%20if%20c%20%3D%3D%200%5D%0A%20%20%20%20%20%20%20%20c1_t%20%3D%20%5Bt_pairs%5Bi%5D%20for%20i%2C%20c%20in%20enumerate(clusters)%20if%20c%20%3D%3D%201%5D%0A%20%20%20%20%20%20%20%20c1_xy%20%3D%20%5Bxy_pairs%5Bi%5D%20for%20i%2C%20c%20in%20enumerate(clusters)%20if%20c%20%3D%3D%201%5D%0A%0A%20%20%20%20%20%20%20%20models%20%3D%20%5B%5D%0A%20%20%20%20%20%20%20%20if%20c0_t%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20models.append(LinearRegression().fit(c0_xy%2C%20c0_t))%0A%20%20%20%20%20%20%20%20if%20c1_t%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20models.append(LinearRegression().fit(c1_xy%2C%20c1_t))%0A%20%20%20%20%20%20%20%20return%20models%20if%20len(models)%20%3D%3D%202%20else%20None%0A%0A%20%20%20%20grid_df%20%3D%20pd.DataFrame(grid)%0A%20%20%20%20model_grid%20%3D%20grid_df.map(split_and_fit)%0A%20%20%20%20return%20(model_grid%2C)%0A%0A%0A%40app.cell(hide_code%3DTrue)%0Adef%20_(%0A%20%20%20%20exact_ik%2C%0A%20%20%20%20fk%2C%0A%20%20%20%20get_grid%2C%0A%20%20%20%20go%2C%0A%20%20%20%20math%2C%0A%20%20%20%20mo%2C%0A%20%20%20%20model_grid%2C%0A%20%20%20%20random%2C%0A%20%20%20%20x_max%2C%0A%20%20%20%20x_min%2C%0A%20%20%20%20y_max%2C%0A%20%20%20%20y_min%2C%0A)%3A%0A%20%20%20%20test_inputs%20%3D%20%5B%5D%0A%20%20%20%20trial_errors%20%3D%20%5B%5D%0A%0A%20%20%20%20attempts%20%3D%200%0A%20%20%20%20while%20len(trial_errors)%20%3C%201000%20and%20attempts%20%3C%2010000%3A%0A%20%20%20%20%20%20%20%20attempts%20%2B%3D%201%0A%20%20%20%20%20%20%20%20px%2C%20py%20%3D%20random.uniform(x_min%2C%20x_max)%2C%20random.uniform(y_min%2C%20y_max)%0A%20%20%20%20%20%20%20%20_gx%2C%20_gy%20%3D%20get_grid(px%2C%20py)%0A%20%20%20%20%20%20%20%20ik_res%20%3D%20exact_ik(px%2C%20py)%0A%0A%20%20%20%20%20%20%20%20try%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20models%20%3D%20model_grid%5B_gx%5D%5B_gy%5D%0A%20%20%20%20%20%20%20%20except%20(KeyError%2C%20IndexError)%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20continue%0A%0A%20%20%20%20%20%20%20%20if%20models%20is%20None%20or%20ik_res%20is%20None%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20continue%0A%0A%20%20%20%20%20%20%20%20test_inputs.append((px%2C%20py))%0A%20%20%20%20%20%20%20%20m1%2C%20m2%20%3D%20models%0A%20%20%20%20%20%20%20%20sol1%20%3D%20m1.predict(%5B%5Bpx%2C%20py%5D%5D)%5B-1%5D%0A%20%20%20%20%20%20%20%20sol2%20%3D%20m2.predict(%5B%5Bpx%2C%20py%5D%5D)%5B-1%5D%0A%0A%20%20%20%20%20%20%20%20fk1%20%3D%20fk(*sol1)%0A%20%20%20%20%20%20%20%20fk2%20%3D%20fk(*sol2)%0A%0A%20%20%20%20%20%20%20%20err1%20%3D%20abs(math.hypot(px%20-%20fk1%5B0%5D%2C%20py%20-%20fk1%5B1%5D))%0A%20%20%20%20%20%20%20%20err2%20%3D%20abs(math.hypot(px%20-%20fk2%5B0%5D%2C%20py%20-%20fk2%5B1%5D))%0A%0A%20%20%20%20%20%20%20%20trial_errors.append(min(err1%2C%20err2))%0A%0A%20%20%20%20avg_error%20%3D%20sum(trial_errors)%20%2F%20len(trial_errors)%20if%20trial_errors%20else%200%0A%0A%20%20%20%20x_test%20%3D%20%5Bp%5B0%5D%20for%20p%20in%20test_inputs%5D%0A%20%20%20%20y_test%20%3D%20%5Bp%5B1%5D%20for%20p%20in%20test_inputs%5D%0A%20%20%20%20size_test%20%3D%20%5Be%20%2B%203%20for%20e%20in%20trial_errors%5D%0A%0A%20%20%20%20fig_err%20%3D%20go.Figure(data%3Dgo.Scattergl(%0A%20%20%20%20%20%20%20%20x%3Dx_test%2C%20y%3Dy_test%2C%20mode%3D'markers'%2C%0A%20%20%20%20%20%20%20%20marker%3Ddict(size%3Dsize_test%2C%20color%3Dtrial_errors%2C%20colorscale%3D'Viridis'%2C%20showscale%3DTrue)%0A%20%20%20%20))%0A%20%20%20%20fig_err.update_layout(template%3D%22plotly_dark%22%2C%20paper_bgcolor%3D%22rgba(0%2C0%2C0%2C0)%22%2C%20plot_bgcolor%3D%22rgba(0%2C0%2C0%2C0)%22%2C%20margin%3Ddict(t%3D0))%0A%0A%20%20%20%20fig_err_3d%20%3D%20go.Figure(data%3Dgo.Scatter3d(%0A%20%20%20%20%20%20%20%20x%3Dx_test%2C%20y%3Dy_test%2C%20z%3Dtrial_errors%2C%20mode%3D'markers'%2C%0A%20%20%20%20%20%20%20%20marker%3Ddict(size%3D2%2C%20color%3Dtrial_errors%2C%20colorscale%3D'Viridis'%2C%20showscale%3DTrue)%0A%20%20%20%20))%0A%20%20%20%20fig_err_3d.update_layout(%0A%20%20%20%20%20%20%20%20template%3D%22plotly_dark%22%2C%0A%20%20%20%20%20%20%20%20paper_bgcolor%3D%22rgba(0%2C0%2C0%2C0)%22%2C%0A%20%20%20%20%20%20%20%20plot_bgcolor%3D%22rgba(0%2C0%2C0%2C0)%22%2C%0A%20%20%20%20%20%20%20%20margin%3Ddict(l%3D0%2C%20r%3D0%2C%20b%3D0%2C%20t%3D0)%2C%0A%20%20%20%20%20%20%20%20scene%3Ddict(xaxis_title%3D'X%20Position'%2C%20yaxis_title%3D'Y%20Position'%2C%20zaxis_title%3D'Error%20(cm)')%0A%20%20%20%20)%0A%0A%20%20%20%20err_section%20%3D%20mo.vstack(%5B%0A%20%20%20%20%20%20%20%20mo.md(f%22%23%23%20Approximation%20Error%5CnAverage%20error%20over%201000%20samples%3A%20%60%7Bavg_error%3A.3f%7D%60%20cm%22)%2C%0A%20%20%20%20%20%20%20%20mo.md(%22The%202D%20and%203D%20scatter%20plots%20below%20highlight%20regions%20where%20the%20local%20linear%20approximation%20struggles%20(higher%20Z-axis%20%2F%20lighter%20color%20means%20higher%20error%2C%20usually%20around%20workspace%20boundaries%20and%20singularities).%22)%2C%0A%20%20%20%20%20%20%20%20mo.hstack(%5Bfig_err%2C%20fig_err_3d%5D)%0A%20%20%20%20%5D)%0A%20%20%20%20mo.output.append(err_section)%0A%20%20%20%20return%0A%0A%0Aif%20__name__%20%3D%3D%20%22__main__%22%3A%0A%20%20%20%20app.run()%0A</marimo-code>
+<link rel="stylesheet" href="https://olive.casazza.info/notebook-theme.css">
+
+</head>
+  <body>
+    <div id="root"></div>
+    <!-- This is a portal for the data editor to render in -->
+    <div id="portal" data-testid="glide-portal" style="position: fixed; left: 0; top: 0; z-index: 9999"></div>
+    <script data-marimo="true">
+      Object.defineProperty(window, "__MARIMO_MOUNT_CONFIG__", {
+        value: Object.freeze({
+            "filename": "notebook.py",
+            "cwd": "",
+            "lspWorkspace": null,
+            "mode": "read",
+            "version": "0.23.8",
+            "serverToken": "unused",
+            "config": {"ai": {"custom_providers": {}, "models": {"custom_models": [], "displayed_models": []}}, "completion": {"activate_on_typing": true, "copilot": false, "signature_hint_on_typing": false}, "diagnostics": {"sql_linter": true}, "display": {"cell_output": "below", "code_editor_font_size": 14, "dataframes": "rich", "default_table_max_columns": 50, "default_table_page_size": 10, "default_width": "medium", "reference_highlighting": true, "theme": "dark"}, "formatting": {"line_length": 79}, "keymap": {"overrides": {}, "preset": "default"}, "language_servers": {"pylsp": {"enable_flake8": false, "enable_mypy": true, "enable_pydocstyle": false, "enable_pyflakes": false, "enable_pylint": false, "enable_ruff": true, "enabled": false}}, "mcp": {"mcpServers": {}, "presets": []}, "package_management": {"manager": "pip"}, "runtime": {"auto_instantiate": false, "auto_reload": "off", "default_csv_encoding": "utf-8", "default_sql_output": "auto", "on_cell_change": "autorun", "output_max_bytes": 8000000, "reactive_tests": true, "show_tracebacks": false, "std_stream_max_bytes": 1000000, "watcher_on_save": "lazy"}, "save": {"autosave": "off", "autosave_delay": 1000, "format_on_save": false}, "server": {"browser": "default", "follow_symlink": false}, "snippets": {"custom_paths": [], "include_default_snippets": true}},
+            "configOverrides": {},
+            "appConfig": {"app_title": "Inverse Kinematics Approximation", "sql_output": "auto", "width": "full"},
+            "view": {"showAppCode": true},
+            "notebook": null,
+            "session": null,
+            "runtimeConfig": null,
+        }),
+        writable: false,
+        configurable: false,
+      });
+    </script>
+  </body>
+</html>

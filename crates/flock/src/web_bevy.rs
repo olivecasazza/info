@@ -25,11 +25,18 @@ pub struct ExternalConfig {
     pub show_ui: bool,
 }
 
+#[derive(Clone)]
+struct SpeciesUpdate {
+    id: String,
+    field: String,
+    value: f32,
+}
+
 impl Default for ExternalConfig {
     fn default() -> Self {
         Self {
             timestep: 1.0,
-            max_flock_size: 2400,
+            max_flock_size: 2000,
             enable_randomization: true,
             show_ui: false, // Hide egui by default when controlled externally
         }
@@ -39,6 +46,99 @@ impl Default for ExternalConfig {
 thread_local! {
     static EXTERNAL_CONFIG: RefCell<ExternalConfig> = RefCell::new(ExternalConfig::default());
     static CONFIG_DIRTY: RefCell<bool> = RefCell::new(false);
+    static SPECIES_CONFIGS: RefCell<HashMap<String, BirdConfig>> = RefCell::new(default_bird_configs());
+    static SPECIES_UPDATES: RefCell<Vec<SpeciesUpdate>> = RefCell::new(Vec::new());
+    static SPECIES_REMOVALS: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    static RANDOM_SPECIES_REQUESTED: RefCell<bool> = RefCell::new(false);
+    static CURRENT_FLOCK_SIZE: RefCell<usize> = RefCell::new(0);
+}
+
+fn mk_bird_config(id: &str, prob: i32, c: [f32; 3]) -> BirdConfig {
+    BirdConfig::new(
+        id.to_string(),
+        prob,
+        35.0,
+        25.0,
+        1.2,
+        0.5,
+        0.3,
+        5.0,
+        0.33,
+        3.5,
+        c[0],
+        c[1],
+        c[2],
+    )
+}
+
+fn default_bird_configs() -> HashMap<String, BirdConfig> {
+    let mut configs = HashMap::new();
+    for (id, cfg) in [
+        (
+            "primary",
+            mk_bird_config("primary", 30, [0.596, 0.906, 0.882]),
+        ),
+        (
+            "secondary",
+            mk_bird_config("secondary", 30, [0.969, 0.827, 0.776]),
+        ),
+        (
+            "tertiary",
+            mk_bird_config("tertiary", 20, [0.761, 0.882, 0.925]),
+        ),
+        (
+            "highlight",
+            mk_bird_config("highlight", 20, [0.941, 0.867, 0.490]),
+        ),
+    ] {
+        configs.insert(id.to_string(), cfg);
+    }
+    configs
+}
+
+fn escape_json(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn config_json(id: &str, cfg: &BirdConfig) -> String {
+    format!(
+        r#"{{"id":"{}","probability":{},"neighbor_distance":{},"desired_separation":{},"separation_multiplier":{},"alignment_multiplier":{},"cohesion_multiplier":{},"max_speed":{},"max_force":{},"bird_size":{},"color_r":{},"color_g":{},"color_b":{}}}"#,
+        escape_json(id),
+        cfg.probability,
+        cfg.neighbor_distance,
+        cfg.desired_separation,
+        cfg.separation_multiplier,
+        cfg.alignment_multiplier,
+        cfg.cohesion_multiplier,
+        cfg.max_speed,
+        cfg.max_force,
+        cfg.bird_size,
+        cfg.color_r,
+        cfg.color_g,
+        cfg.color_b,
+    )
+}
+
+fn update_species_config(id: &str, field: &str, value: f32) {
+    SPECIES_CONFIGS.with(|configs| {
+        if let Some(cfg) = configs.borrow_mut().get_mut(id) {
+            match field {
+                "probability" => cfg.probability = value.round().clamp(0.0, 100.0) as i32,
+                "neighbor_distance" => cfg.neighbor_distance = value.clamp(0.0, 250.0),
+                "desired_separation" => cfg.desired_separation = value.clamp(0.0, 250.0),
+                "separation_multiplier" => cfg.separation_multiplier = value.clamp(0.0, 10.0),
+                "alignment_multiplier" => cfg.alignment_multiplier = value.clamp(0.0, 10.0),
+                "cohesion_multiplier" => cfg.cohesion_multiplier = value.clamp(0.0, 10.0),
+                "max_speed" => cfg.max_speed = value.clamp(0.0, 10.0),
+                "max_force" => cfg.max_force = value.clamp(0.0, 10.0),
+                "bird_size" => cfg.bird_size = value.clamp(0.1, 5.0),
+                "color_r" => cfg.color_r = value.clamp(0.0, 1.0),
+                "color_g" => cfg.color_g = value.clamp(0.0, 1.0),
+                "color_b" => cfg.color_b = value.clamp(0.0, 1.0),
+                _ => {}
+            }
+        }
+    });
 }
 
 fn get_external_config() -> ExternalConfig {
@@ -122,6 +222,24 @@ impl WebHandle {
         EXTERNAL_CONFIG.with(|c| c.borrow().show_ui)
     }
 
+    #[wasm_bindgen(getter)]
+    pub fn current_flock_size(&self) -> usize {
+        CURRENT_FLOCK_SIZE.with(|s| *s.borrow())
+    }
+
+    #[wasm_bindgen]
+    pub fn species_json(&self) -> String {
+        SPECIES_CONFIGS.with(|configs| {
+            let mut entries: Vec<_> = configs
+                .borrow()
+                .iter()
+                .map(|(id, cfg)| config_json(id, cfg))
+                .collect();
+            entries.sort();
+            format!("[{}]", entries.join(","))
+        })
+    }
+
     // ─── Setters ───
 
     #[wasm_bindgen(setter)]
@@ -132,7 +250,7 @@ impl WebHandle {
 
     #[wasm_bindgen(setter)]
     pub fn set_max_flock_size(&self, v: u32) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().max_flock_size = v.clamp(0, 5000));
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().max_flock_size = v.clamp(0, 2000));
         mark_config_dirty();
     }
 
@@ -145,6 +263,32 @@ impl WebHandle {
     #[wasm_bindgen(setter)]
     pub fn set_show_ui(&self, v: bool) {
         EXTERNAL_CONFIG.with(|c| c.borrow_mut().show_ui = v);
+        mark_config_dirty();
+    }
+
+    #[wasm_bindgen]
+    pub fn set_species_value(&self, id: String, field: String, value: f32) {
+        update_species_config(&id, &field, value);
+        SPECIES_UPDATES.with(|updates| {
+            updates
+                .borrow_mut()
+                .push(SpeciesUpdate { id, field, value })
+        });
+        mark_config_dirty();
+    }
+
+    #[wasm_bindgen]
+    pub fn generate_random_species(&self) {
+        RANDOM_SPECIES_REQUESTED.with(|requested| *requested.borrow_mut() = true);
+        mark_config_dirty();
+    }
+
+    #[wasm_bindgen]
+    pub fn remove_species(&self, id: String) {
+        SPECIES_CONFIGS.with(|configs| {
+            configs.borrow_mut().remove(&id);
+        });
+        SPECIES_REMOVALS.with(|removals| removals.borrow_mut().push(id));
         mark_config_dirty();
     }
 
@@ -210,46 +354,11 @@ impl Default for FlockState {
         let ext = get_external_config();
         let max_flock_size = ext.max_flock_size as usize;
         let mut flock = Flock::new(max_flock_size, seed);
-        let mut configs = HashMap::new();
         let mut rng = oorandom::Rand32::new(seed);
 
-        // Theme colors
-        let primary = [0.596, 0.906, 0.882]; // #98e7e1
-        let secondary = [0.969, 0.827, 0.776]; // #f7d3c6
-        let tertiary = [0.761, 0.882, 0.925]; // #c2e1ec
-        let highlight = [0.941, 0.867, 0.490]; // #f0dd7d
-
-        let mk_cfg = |id: &str, prob: i32, c: [f32; 3]| {
-            BirdConfig::new(
-                id.to_string(),
-                prob,
-                35.0,
-                25.0,
-                1.2,
-                0.5,
-                0.3,
-                5.0,
-                0.33,
-                3.5,
-                c[0],
-                c[1],
-                c[2],
-            )
-        };
-
-        let cfg_primary = mk_cfg("primary", 30, primary);
-        let cfg_secondary = mk_cfg("secondary", 30, secondary);
-        let cfg_tertiary = mk_cfg("tertiary", 20, tertiary);
-        let cfg_highlight = mk_cfg("highlight", 20, highlight);
-
-        for (id, cfg) in [
-            ("primary", &cfg_primary),
-            ("secondary", &cfg_secondary),
-            ("tertiary", &cfg_tertiary),
-            ("highlight", &cfg_highlight),
-        ] {
-            flock.insert_bird_config(id.to_string(), cfg.clone());
-            configs.insert(id.to_string(), cfg.clone());
+        let configs = SPECIES_CONFIGS.with(|stored| stored.borrow().clone());
+        for (id, cfg) in configs.iter() {
+            flock.insert_bird_config(id.clone(), cfg.clone());
         }
 
         // Pre-spawn birds
@@ -297,6 +406,60 @@ fn sync_external_config(mut state: ResMut<FlockState>) {
     if new_max != state.max_flock_size {
         state.max_flock_size = new_max;
         state.flock.set_max_flock_size(new_max);
+    }
+
+    let removals =
+        SPECIES_REMOVALS.with(|pending| pending.borrow_mut().drain(..).collect::<Vec<_>>());
+    for id in removals {
+        state.configs.remove(&id);
+        state.flock.remove_bird_config(id);
+    }
+
+    let updates =
+        SPECIES_UPDATES.with(|pending| pending.borrow_mut().drain(..).collect::<Vec<_>>());
+    for update in updates {
+        let updated_cfg = if let Some(cfg) = state.configs.get_mut(&update.id) {
+            match update.field.as_str() {
+                "probability" => cfg.probability = update.value.round().clamp(0.0, 100.0) as i32,
+                "neighbor_distance" => cfg.neighbor_distance = update.value.clamp(0.0, 250.0),
+                "desired_separation" => cfg.desired_separation = update.value.clamp(0.0, 250.0),
+                "separation_multiplier" => {
+                    cfg.separation_multiplier = update.value.clamp(0.0, 10.0)
+                }
+                "alignment_multiplier" => cfg.alignment_multiplier = update.value.clamp(0.0, 10.0),
+                "cohesion_multiplier" => cfg.cohesion_multiplier = update.value.clamp(0.0, 10.0),
+                "max_speed" => cfg.max_speed = update.value.clamp(0.0, 10.0),
+                "max_force" => cfg.max_force = update.value.clamp(0.0, 10.0),
+                "bird_size" => cfg.bird_size = update.value.clamp(0.1, 5.0),
+                "color_r" => cfg.color_r = update.value.clamp(0.0, 1.0),
+                "color_g" => cfg.color_g = update.value.clamp(0.0, 1.0),
+                "color_b" => cfg.color_b = update.value.clamp(0.0, 1.0),
+                _ => {}
+            }
+            Some(cfg.clone())
+        } else {
+            None
+        };
+        if let Some(cfg) = updated_cfg {
+            state.flock.insert_bird_config(update.id.clone(), cfg);
+        }
+    }
+
+    let random_requested = RANDOM_SPECIES_REQUESTED.with(|requested| {
+        let value = *requested.borrow();
+        *requested.borrow_mut() = false;
+        value
+    });
+    if random_requested {
+        let id = format!("random-{}", state.configs.len() + 1);
+        let target = BirdConfigTarget::random(&mut state.rng);
+        let mut cfg = mk_bird_config(&id, target.probability, target.color);
+        target.apply_to_cfg(&mut cfg);
+        state.configs.insert(id.clone(), cfg.clone());
+        state.flock.insert_bird_config(id.clone(), cfg.clone());
+        SPECIES_CONFIGS.with(|configs| {
+            configs.borrow_mut().insert(id, cfg);
+        });
     }
 }
 
@@ -578,6 +741,7 @@ fn render_birds(
     };
 
     let num_birds = vertices.len() / 9;
+    CURRENT_FLOCK_SIZE.with(|size| *size.borrow_mut() = num_birds);
     let total_verts = num_birds * 18;
     let mut positions: Vec<[f32; 3]> = Vec::with_capacity(total_verts);
     let mut vertex_colors: Vec<[f32; 4]> = Vec::with_capacity(total_verts);

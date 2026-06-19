@@ -66,6 +66,81 @@ fn js_call_method(obj: &JsValue, method: &str) {
     }
 }
 
+fn js_call_string(obj: &JsValue, method: &str) -> Option<String> {
+    let func = js_sys::Reflect::get(obj, &JsValue::from_str(method)).ok()?;
+    let f = func.dyn_into::<js_sys::Function>().ok()?;
+    f.call0(obj).ok()?.as_string()
+}
+
+fn js_call_species_value(obj: &JsValue, id: &str, field: &str, value: f32) {
+    if let Ok(func) = js_sys::Reflect::get(obj, &JsValue::from_str("set_species_value")) {
+        if let Ok(f) = func.dyn_into::<js_sys::Function>() {
+            let _ = f.call3(
+                obj,
+                &JsValue::from_str(id),
+                &JsValue::from_str(field),
+                &JsValue::from_f64(value as f64),
+            );
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct SpeciesConfigUi {
+    id: String,
+    probability: f32,
+    neighbor_distance: f32,
+    desired_separation: f32,
+    separation_multiplier: f32,
+    alignment_multiplier: f32,
+    cohesion_multiplier: f32,
+    max_speed: f32,
+    max_force: f32,
+    bird_size: f32,
+    color_r: f32,
+    color_g: f32,
+    color_b: f32,
+}
+
+fn reflect_f32(obj: &JsValue, field: &str) -> f32 {
+    js_sys::Reflect::get(obj, &JsValue::from_str(field))
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as f32
+}
+
+fn reflect_string(obj: &JsValue, field: &str) -> String {
+    js_sys::Reflect::get(obj, &JsValue::from_str(field))
+        .ok()
+        .and_then(|v| v.as_string())
+        .unwrap_or_default()
+}
+
+fn parse_species_json(json: &str) -> Vec<SpeciesConfigUi> {
+    let Ok(parsed) = js_sys::JSON::parse(json) else {
+        return Vec::new();
+    };
+    let array = js_sys::Array::from(&parsed);
+    array
+        .iter()
+        .map(|item| SpeciesConfigUi {
+            id: reflect_string(&item, "id"),
+            probability: reflect_f32(&item, "probability"),
+            neighbor_distance: reflect_f32(&item, "neighbor_distance"),
+            desired_separation: reflect_f32(&item, "desired_separation"),
+            separation_multiplier: reflect_f32(&item, "separation_multiplier"),
+            alignment_multiplier: reflect_f32(&item, "alignment_multiplier"),
+            cohesion_multiplier: reflect_f32(&item, "cohesion_multiplier"),
+            max_speed: reflect_f32(&item, "max_speed"),
+            max_force: reflect_f32(&item, "max_force"),
+            bird_size: reflect_f32(&item, "bird_size"),
+            color_r: reflect_f32(&item, "color_r"),
+            color_g: reflect_f32(&item, "color_g"),
+            color_b: reflect_f32(&item, "color_b"),
+        })
+        .collect()
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Panels
 // ─────────────────────────────────────────────────────────────────────────────
@@ -132,24 +207,26 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
 ];
 const SIDEBAR_TILE_WIDTH: f64 = 33.333;
 const PROJECT_TILE_WIDTH: f64 = 100.0 - SIDEBAR_TILE_WIDTH;
+const TOP_ROW_TILE_BASIS: f64 = 58.0;
+const BOTTOM_ROW_TILE_BASIS: f64 = 100.0 - TOP_ROW_TILE_BASIS;
 
 fn default_layout() -> Vec<PanelWin<Panel>> {
     let mut b = LayoutBuilder::new();
     vec![
         b.at(Panel::Info, 16.0, 16.0, 360.0, 360.0)
             .with_tile(2, 2)
-            .with_tile_flex(58.0, 1.0)
+            .with_tile_flex(TOP_ROW_TILE_BASIS, 1.0)
             .with_tile_cross(SIDEBAR_TILE_WIDTH)
             .with_tile_min(240.0, 240.0),
         b.at(Panel::Projects, 16.0, 392.0, 360.0, 260.0)
             .with_tile(2, 1)
-            .with_tile_flex(42.0, 1.0)
+            .with_tile_flex(BOTTOM_ROW_TILE_BASIS, 1.0)
             .with_tile_cross(SIDEBAR_TILE_WIDTH)
             .with_tile_min(220.0, 170.0),
     ]
 }
 
-const LAYOUT_KEY: &str = "info_layout_v8";
+const LAYOUT_KEY: &str = "info_layout_v9";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App
@@ -247,12 +324,12 @@ fn random_project() -> Option<(&'static str, &'static info_core::Project)> {
 fn resource_panel_default(kind: Panel, index: usize, total: usize, z: i32) -> PanelWin<Panel> {
     let total = total.max(1);
     let primary = index == 0;
-    let primary_basis = if total > 2 { 56.0 } else { 62.0 };
-    let secondary_basis = if total > 1 {
-        (100.0 - primary_basis) / (total - 1) as f64
-    } else {
-        100.0
-    };
+    let secondary_count = total.saturating_sub(1).max(1);
+    // Keep the right-hand project column's row heights aligned with the
+    // left-hand info/projects column. Row 1 is the featured/opened resource;
+    // row 2 is shared by any additional resources for that project.
+    let primary_basis = TOP_ROW_TILE_BASIS;
+    let secondary_basis = BOTTOM_ROW_TILE_BASIS / secondary_count as f64;
     let (basis, grow, min_w, min_h, tile_w, tile_h) = if total == 1 {
         (100.0, 1.0, 280.0, 220.0, 4, 3)
     } else if primary {
@@ -400,40 +477,51 @@ fn info_body() -> Element {
 fn FlockControls(canvas_id: String) -> Element {
     let mut controls_visible = use_signal(|| false);
     let mut timestep = use_signal(|| 1.0_f32);
-    let mut max_flock_size = use_signal(|| 2400_u32);
+    let mut max_flock_size = use_signal(|| 2000_u32);
     let mut enable_randomization = use_signal(|| true);
+    let mut current_flock_size = use_signal(|| 0_usize);
+    let mut species = use_signal(Vec::<SpeciesConfigUi>::new);
 
-    // Clone canvas_id for all closures
-    let canvas_id_effect = canvas_id.clone();
-    let canvas_id_timestep = canvas_id.clone();
-    let canvas_id_flock = canvas_id.clone();
-    let canvas_id_rand = canvas_id.clone();
-
-    // Sync from handle on mount and periodically
-    use_effect(move || {
-        let canvas_id = canvas_id_effect.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            gloo_timers::future::TimeoutFuture::new(500).await;
+    let mut refresh_species = {
+        let canvas_id = canvas_id.clone();
+        move || {
             if let Some(handle) = get_bevy_handle(&canvas_id) {
-                if let Some(v) = js_get_f32(&handle, "timestep") {
-                    timestep.set(v);
-                }
-                if let Some(v) = js_get_u32(&handle, "max_flock_size") {
-                    max_flock_size.set(v);
-                }
-                if let Some(v) = js_get_bool(&handle, "enable_randomization") {
-                    enable_randomization.set(v);
+                if let Some(json) = js_call_string(&handle, "species_json") {
+                    species.set(parse_species_json(&json));
                 }
             }
-        });
-    });
-
-    let toggle_controls = move |_| {
-        controls_visible.set(!controls_visible());
+        }
     };
 
+    use_effect({
+        let canvas_id = canvas_id.clone();
+        move || {
+            let canvas_id = canvas_id.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                gloo_timers::future::TimeoutFuture::new(500).await;
+                if let Some(handle) = get_bevy_handle(&canvas_id) {
+                    if let Some(v) = js_get_f32(&handle, "timestep") {
+                        timestep.set(v);
+                    }
+                    if let Some(v) = js_get_u32(&handle, "max_flock_size") {
+                        max_flock_size.set(v);
+                    }
+                    if let Some(v) = js_get_bool(&handle, "enable_randomization") {
+                        enable_randomization.set(v);
+                    }
+                    if let Some(v) = js_get_usize(&handle, "current_flock_size") {
+                        current_flock_size.set(v);
+                    }
+                    if let Some(json) = js_call_string(&handle, "species_json") {
+                        species.set(parse_species_json(&json));
+                    }
+                }
+            });
+        }
+    });
+
     let on_timestep_change = {
-        let canvas_id = canvas_id_timestep.clone();
+        let canvas_id = canvas_id.clone();
         move |e: Event<FormData>| {
             if let Ok(v) = e.value().parse::<f32>() {
                 timestep.set(v);
@@ -445,7 +533,7 @@ fn FlockControls(canvas_id: String) -> Element {
     };
 
     let on_flock_size_change = {
-        let canvas_id = canvas_id_flock.clone();
+        let canvas_id = canvas_id.clone();
         move |e: Event<FormData>| {
             if let Ok(v) = e.value().parse::<u32>() {
                 max_flock_size.set(v);
@@ -457,7 +545,7 @@ fn FlockControls(canvas_id: String) -> Element {
     };
 
     let on_randomization_change = {
-        let canvas_id = canvas_id_rand.clone();
+        let canvas_id = canvas_id.clone();
         move |e: Event<FormData>| {
             let checked = e.value() == "true";
             enable_randomization.set(checked);
@@ -471,51 +559,150 @@ fn FlockControls(canvas_id: String) -> Element {
         }
     };
 
+    let on_generate_species = {
+        let canvas_id = canvas_id.clone();
+        move |_| {
+            if let Some(handle) = get_bevy_handle(&canvas_id) {
+                js_call_method(&handle, "generate_random_species");
+            }
+            refresh_species();
+        }
+    };
+
     rsx! {
         div { class: "demo-controls",
-            button {
-                class: "controls-toggle",
-                onclick: toggle_controls,
+            button { class: "controls-toggle", onclick: move |_| controls_visible.set(!controls_visible()),
                 if controls_visible() { "▼ hide" } else { "▶ settings" }
             }
             if controls_visible() {
-                div { class: "controls-panel",
+                div { class: "controls-panel controls-panel-scroll",
                     div { class: "control-row",
                         label { "timestep" }
-                        input {
-                            r#type: "range",
-                            min: "0",
-                            max: "5",
-                            step: "0.1",
-                            value: "{timestep}",
-                            oninput: on_timestep_change,
-                        }
+                        input { r#type: "range", min: "0", max: "5", step: "0.1", value: "{timestep}", oninput: on_timestep_change }
                         span { class: "control-value", "{timestep:.1}" }
                     }
                     div { class: "control-row",
-                        label { "flock size" }
-                        input {
-                            r#type: "range",
-                            min: "0",
-                            max: "5000",
-                            step: "100",
-                            value: "{max_flock_size}",
-                            oninput: on_flock_size_change,
-                        }
+                        label { "max flock" }
+                        input { r#type: "range", min: "0", max: "2000", step: "50", value: "{max_flock_size}", oninput: on_flock_size_change }
                         span { class: "control-value", "{max_flock_size}" }
                     }
                     div { class: "control-row",
+                        label { "current" }
+                        span { class: "control-value", "{current_flock_size}" }
+                    }
+                    div { class: "control-row",
                         label {
-                            input {
-                                r#type: "checkbox",
-                                checked: enable_randomization(),
-                                onchange: on_randomization_change,
-                            }
+                            input { r#type: "checkbox", checked: enable_randomization(), onchange: on_randomization_change }
                             " auto-randomize"
+                        }
+                    }
+                    div { class: "control-row",
+                        button { class: "reset-btn", onclick: on_generate_species, "generate random species" }
+                    }
+                    div { class: "species-list",
+                        for cfg in species().iter().cloned() {
+                            FlockSpeciesControls { key: "{cfg.id}", canvas_id: canvas_id.clone(), cfg: cfg.clone(), species }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+#[component]
+fn FlockSpeciesControls(
+    canvas_id: String,
+    cfg: SpeciesConfigUi,
+    species: Signal<Vec<SpeciesConfigUi>>,
+) -> Element {
+    let core_species = matches!(
+        cfg.id.as_str(),
+        "primary" | "secondary" | "tertiary" | "highlight"
+    );
+    let remove_id = cfg.id.clone();
+    let on_remove = {
+        let canvas_id = canvas_id.clone();
+        move |_| {
+            if let Some(handle) = get_bevy_handle(&canvas_id) {
+                if let Ok(func) =
+                    js_sys::Reflect::get(&handle, &JsValue::from_str("remove_species"))
+                {
+                    if let Ok(f) = func.dyn_into::<js_sys::Function>() {
+                        let _ = f.call1(&handle, &JsValue::from_str(&remove_id));
+                    }
+                }
+            }
+            species.with_mut(|items| items.retain(|item| item.id != remove_id));
+        }
+    };
+
+    rsx! {
+        details { class: "species-controls", open: core_species,
+            summary { "{cfg.id}" }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "probability", label: "spawn probability multiplier", min: "0", max: "100", step: "1", value: cfg.probability, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "neighbor_distance", label: "neighbor distance", min: "0", max: "250", step: "1", value: cfg.neighbor_distance, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "desired_separation", label: "desired separation", min: "0", max: "250", step: "1", value: cfg.desired_separation, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "separation_multiplier", label: "separation", min: "0", max: "10", step: "0.1", value: cfg.separation_multiplier, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "alignment_multiplier", label: "alignment", min: "0", max: "10", step: "0.1", value: cfg.alignment_multiplier, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "cohesion_multiplier", label: "cohesion", min: "0", max: "10", step: "0.1", value: cfg.cohesion_multiplier, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "max_speed", label: "max speed", min: "0", max: "10", step: "0.1", value: cfg.max_speed, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "max_force", label: "max force", min: "0", max: "10", step: "0.1", value: cfg.max_force, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "bird_size", label: "bird size", min: "0.1", max: "5", step: "0.1", value: cfg.bird_size, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "color_r", label: "red", min: "0", max: "1", step: "0.01", value: cfg.color_r, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "color_g", label: "green", min: "0", max: "1", step: "0.01", value: cfg.color_g, species }
+            SpeciesSlider { canvas_id: canvas_id.clone(), species_id: cfg.id.clone(), field: "color_b", label: "blue", min: "0", max: "1", step: "0.01", value: cfg.color_b, species }
+            if !core_species {
+                div { class: "control-row", button { class: "reset-btn", onclick: on_remove, "remove species" } }
+            }
+        }
+    }
+}
+
+#[component]
+fn SpeciesSlider(
+    canvas_id: String,
+    species_id: String,
+    field: &'static str,
+    label: &'static str,
+    min: &'static str,
+    max: &'static str,
+    step: &'static str,
+    value: f32,
+    species: Signal<Vec<SpeciesConfigUi>>,
+) -> Element {
+    let oninput = move |e: Event<FormData>| {
+        if let Ok(v) = e.value().parse::<f32>() {
+            if let Some(handle) = get_bevy_handle(&canvas_id) {
+                js_call_species_value(&handle, &species_id, field, v);
+            }
+            species.with_mut(|items| {
+                if let Some(item) = items.iter_mut().find(|item| item.id == species_id) {
+                    match field {
+                        "probability" => item.probability = v,
+                        "neighbor_distance" => item.neighbor_distance = v,
+                        "desired_separation" => item.desired_separation = v,
+                        "separation_multiplier" => item.separation_multiplier = v,
+                        "alignment_multiplier" => item.alignment_multiplier = v,
+                        "cohesion_multiplier" => item.cohesion_multiplier = v,
+                        "max_speed" => item.max_speed = v,
+                        "max_force" => item.max_force = v,
+                        "bird_size" => item.bird_size = v,
+                        "color_r" => item.color_r = v,
+                        "color_g" => item.color_g = v,
+                        "color_b" => item.color_b = v,
+                        _ => {}
+                    }
+                }
+            });
+        }
+    };
+
+    rsx! {
+        div { class: "control-row species-row",
+            label { "{label}" }
+            input { r#type: "range", min, max, step, value: "{value}", oninput }
+            span { class: "control-value", "{value:.2}" }
         }
     }
 }
@@ -528,7 +715,9 @@ fn PipedreamControls(canvas_id: String) -> Element {
     let mut scale = use_signal(|| 10.0_f32);
     let mut pixel = use_signal(|| 3.0_f32);
     let mut pipe_count = use_signal(|| 8_usize);
+    let mut min_spacing = use_signal(|| 5_i32);
     let mut straightness = use_signal(|| 10_u32);
+    let mut max_len_per_pipe = use_signal(|| 500_usize);
 
     // Clone canvas_id for all closures
     let canvas_id_effect = canvas_id.clone();
@@ -536,7 +725,9 @@ fn PipedreamControls(canvas_id: String) -> Element {
     let canvas_id_scale = canvas_id.clone();
     let canvas_id_pixel = canvas_id.clone();
     let canvas_id_pipes = canvas_id.clone();
+    let canvas_id_spacing = canvas_id.clone();
     let canvas_id_straight = canvas_id.clone();
+    let canvas_id_max_len = canvas_id.clone();
     let canvas_id_reset = canvas_id.clone();
 
     // Sync from handle on mount
@@ -557,8 +748,14 @@ fn PipedreamControls(canvas_id: String) -> Element {
                 if let Some(v) = js_get_usize(&handle, "pipe_count") {
                     pipe_count.set(v);
                 }
+                if let Some(v) = js_get_f32(&handle, "min_spacing") {
+                    min_spacing.set(v as i32);
+                }
                 if let Some(v) = js_get_u32(&handle, "straightness") {
                     straightness.set(v);
+                }
+                if let Some(v) = js_get_usize(&handle, "max_len_per_pipe") {
+                    max_len_per_pipe.set(v);
                 }
             }
         });
@@ -616,6 +813,18 @@ fn PipedreamControls(canvas_id: String) -> Element {
         }
     };
 
+    let on_min_spacing_change = {
+        let canvas_id = canvas_id_spacing.clone();
+        move |e: Event<FormData>| {
+            if let Ok(v) = e.value().parse::<i32>() {
+                min_spacing.set(v);
+                if let Some(handle) = get_bevy_handle(&canvas_id) {
+                    js_set(&handle, "min_spacing", &JsValue::from_f64(v as f64));
+                }
+            }
+        }
+    };
+
     let on_straightness_change = {
         let canvas_id = canvas_id_straight.clone();
         move |e: Event<FormData>| {
@@ -623,6 +832,18 @@ fn PipedreamControls(canvas_id: String) -> Element {
                 straightness.set(v);
                 if let Some(handle) = get_bevy_handle(&canvas_id) {
                     js_set(&handle, "straightness", &JsValue::from_f64(v as f64));
+                }
+            }
+        }
+    };
+
+    let on_max_len_change = {
+        let canvas_id = canvas_id_max_len.clone();
+        move |e: Event<FormData>| {
+            if let Ok(v) = e.value().parse::<usize>() {
+                max_len_per_pipe.set(v);
+                if let Some(handle) = get_bevy_handle(&canvas_id) {
+                    js_set(&handle, "max_len_per_pipe", &JsValue::from_f64(v as f64));
                 }
             }
         }
@@ -695,6 +916,18 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         span { class: "control-value", "{pipe_count}" }
                     }
                     div { class: "control-row",
+                        label { "min spacing" }
+                        input {
+                            r#type: "range",
+                            min: "0",
+                            max: "5",
+                            step: "1",
+                            value: "{min_spacing}",
+                            oninput: on_min_spacing_change,
+                        }
+                        span { class: "control-value", "{min_spacing}" }
+                    }
+                    div { class: "control-row",
                         label { "straightness" }
                         input {
                             r#type: "range",
@@ -705,6 +938,18 @@ fn PipedreamControls(canvas_id: String) -> Element {
                             oninput: on_straightness_change,
                         }
                         span { class: "control-value", "{straightness}" }
+                    }
+                    div { class: "control-row",
+                        label { "max length" }
+                        input {
+                            r#type: "range",
+                            min: "10",
+                            max: "2000",
+                            step: "10",
+                            value: "{max_len_per_pipe}",
+                            oninput: on_max_len_change,
+                        }
+                        span { class: "control-value", "{max_len_per_pipe}" }
                     }
                     div { class: "control-row",
                         button {
@@ -770,10 +1015,7 @@ fn bird_nix_demo() -> Element {
 }
 
 fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
-    let url = format!(
-        "https://olivecasazza.github.io/notebooks/notebooks/{}.html",
-        slug
-    );
+    let url = format!("/notebooks/{}.html", slug);
     rsx! {
         iframe {
             src: "{url}",
@@ -1325,6 +1567,30 @@ const APP_CSS: &str = r#"
   padding: 10px 12px;
   margin-top: 4px;
   min-width: 180px;
+}
+.controls-panel-scroll {
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(72vh, 640px);
+  overflow-y: auto;
+}
+.species-list {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.species-controls {
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  margin-top: 6px;
+}
+.species-controls summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.species-row label {
+  min-width: 150px;
 }
 
 .control-row {

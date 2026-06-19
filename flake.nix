@@ -15,18 +15,25 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay, crane, panel-kit }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    rust-overlay,
+    crane,
+    panel-kit,
+  }:
+    flake-utils.lib.eachDefaultSystem (
+      system: let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ (import rust-overlay) ];
+          overlays = [(import rust-overlay)];
         };
 
         rustToolchain = p:
           p.rust-bin.stable.latest.default.override {
-            extensions = [ "rust-src" "rustfmt" "clippy" ];
-            targets = [ "wasm32-unknown-unknown" ];
+            extensions = ["rust-src" "rustfmt" "clippy"];
+            targets = ["wasm32-unknown-unknown"];
           };
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
@@ -35,9 +42,12 @@
         # Cargo.toml uses "../panel-kit" — we recreate that via prePatch.
         src = pkgs.lib.cleanSourceWith {
           src = ./.;
-          filter = path: type:
+          filter = path: type: let
+            rel = pkgs.lib.removePrefix "${toString ./.}/" (toString path);
+          in
             (craneLib.filterCargoSources path type)
-            || builtins.match ".*\\.(html|css|json)$" path != null;
+            || builtins.match ".*\\.(html|css|json)$" rel != null
+            || builtins.match "app/ui/public/.*" rel != null;
         };
 
         commonArgs = {
@@ -52,32 +62,33 @@
 
           # Recreate panel-kit as sibling so path = "../panel-kit" resolves.
           prePatch = ''
-            cp -rL ${panel-kit.outPath} ../../panel-kit
-            chmod -R u+w ../../panel-kit
+            chmod -R u+w ../../..
+            cp -rL ${panel-kit.outPath} ../../../panel-kit
+            chmod -R u+w ../../../panel-kit
           '';
         };
 
-        cargoArtifacts = craneLib.buildDepsOnly (commonArgs // { doCheck = false; });
+        cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {doCheck = false;});
 
-        info-ui = craneLib.buildTrunkPackage (commonArgs // {
-          inherit cargoArtifacts;
-          wasm-bindgen-cli = pkgs.wasm-bindgen-cli;
-        });
+        info-ui = craneLib.buildTrunkPackage (commonArgs
+          // {
+            inherit cargoArtifacts;
+            wasm-bindgen-cli = pkgs.wasm-bindgen-cli;
+          });
 
         # GitHub Pages build with public URL prefix
-        pages = craneLib.buildTrunkPackage (commonArgs // {
-          inherit cargoArtifacts;
-          wasm-bindgen-cli = pkgs.wasm-bindgen-cli;
-          trunkExtraBuildArgs = "--public-url /info/";
-        });
+        pages = craneLib.buildTrunkPackage (commonArgs
+          // {
+            inherit cargoArtifacts;
+            wasm-bindgen-cli = pkgs.wasm-bindgen-cli;
+            trunkExtraBuildArgs = "--public-url /info/";
+          });
 
         devShell = import ./nix/devshell.nix {
           inherit pkgs;
           rust = rustToolchain pkgs;
         };
-
-      in
-      {
+      in {
         packages = {
           inherit info-ui pages;
           default = info-ui;
