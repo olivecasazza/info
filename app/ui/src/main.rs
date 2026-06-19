@@ -1015,7 +1015,11 @@ fn bird_nix_demo() -> Element {
 }
 
 fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
-    let url = format!("/notebooks/{}.html", slug);
+    let url = if slug == "wigglystuff" {
+        "/notebooks/wigglystuff-export/?v=20260619".to_string()
+    } else {
+        format!("/notebooks/{}.html", slug)
+    };
     rsx! {
         iframe {
             src: "{url}",
