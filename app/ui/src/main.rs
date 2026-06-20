@@ -1406,18 +1406,171 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
 }
 
 fn hephaestus_demo() -> Element {
-    const TAPE: &str = include_str!("../public/projects-media/tapes/hephaestus-scale-up.tape");
+    let step = use_signal(|| 0u32);
+
+    use_future(move || {
+        let mut step = step;
+        async move {
+            loop {
+                gloo_timers::future::TimeoutFuture::new(1500).await;
+                let s = *step.read();
+                step.set(if s >= 16 { 0 } else { s + 1 });
+            }
+        }
+    });
+
+    let s = *step.read();
+
+    // Power state per host across the cycle:
+    // steps 0-1: all on (Ready), 2-5: scaling down, 6-8: all off,
+    // 9-14: scaling up, 15: all on again
+    let host_state = |host_idx: usize, step: u32| -> &'static str {
+        // Scale down: hp01 off at step 2, hp02 off at 3, hp03 off at 4
+        // Scale up: hp01 on at step 9, hp02 at 11, hp03 at 13
+        match (host_idx, step) {
+            _ if step <= 1 => "ready",
+            _ if step >= 15 => "ready",
+            (0, s) if s >= 2 && s <= 5 => {
+                if s == 2 {
+                    "powering-off"
+                } else {
+                    "off"
+                }
+            }
+            (1, s) if s >= 3 && s <= 6 => {
+                if s == 3 {
+                    "powering-off"
+                } else {
+                    "off"
+                }
+            }
+            (2, s) if s >= 4 && s <= 7 => {
+                if s == 4 {
+                    "powering-off"
+                } else {
+                    "off"
+                }
+            }
+            (0, s) if s >= 9 && s <= 13 => {
+                if s <= 10 {
+                    "provisioning"
+                } else {
+                    "joining"
+                }
+            }
+            (1, s) if s >= 11 && s <= 13 => {
+                if s <= 12 {
+                    "provisioning"
+                } else {
+                    "joining"
+                }
+            }
+            (2, s) if s >= 13 && s <= 14 => {
+                if s == 13 {
+                    "provisioning"
+                } else {
+                    "joining"
+                }
+            }
+            _ => "off",
+        }
+    };
+
+    let hosts = ["hp01", "hp02", "hp03"];
+    let replicas = if s <= 1 {
+        3
+    } else if s >= 6 && s <= 8 {
+        0
+    } else if s >= 15 {
+        3
+    } else {
+        match s {
+            2..=2 => 2,
+            3..=3 => 1,
+            4..=8 => 0,
+            9..=10 => 1,
+            11..=12 => 2,
+            13..=14 => 3,
+            _ => 3,
+        }
+    };
+
+    let phase_label = match s {
+        0..=1 => "steady state: 3/3 ready",
+        2..=5 => "scaling down: IPMI power-off",
+        6..=8 => "scaled to zero: all hosts off",
+        9..=14 => "scaling up: IPMI power-on + PXE boot",
+        _ => "steady state: 3/3 ready",
+    };
 
     rsx! {
-        article { class: "project-article recording-panel",
-            header {
-                h1 { "hephaestus recording" }
-                p { "The recording is generated from the VHS tape that lives in the repo alongside the page assets." }
+        figure { class: "project-figure recording-figure cascade-demo",
+            div { class: "cascade-split",
+                // Left: real asciinema recording
+                div {
+                    id: "asciinema-heph-container",
+                    class: "asciinema-container",
+                    onmounted: move |_| {
+                        let _ = web_sys::window().and_then(|w: web_sys::Window| {
+                            let doc = w.document()?;
+                            let js = concat!(
+                                "AsciinemaPlayer.create('/projects-media/hephaestus-demo.cast',",
+                                " document.getElementById('asciinema-heph-container'), {",
+                                "  cols: 80, rows: 22, autoPlay: true, loop: true, theme: 'monokai',",
+                                "  fontSize: '10px', fit: false, idleTimeLimit: 3, controls: false",
+                                "});"
+                            ).to_string();
+                            if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
+                                let script = doc.create_element("script").ok()?;
+                                script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
+                                let link = doc.create_element("link").ok()?;
+                                link.set_attribute("rel", "stylesheet").ok()?;
+                                link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
+                                doc.head()?.append_child(&link).ok()?;
+                                doc.head()?.append_child(&script).ok()?;
+                                let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
+                                    let _ = js_sys::eval(&js);
+                                }).into_js_value();
+                                let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                    cb.as_ref().unchecked_ref(), 500,
+                                );
+                                std::mem::forget(cb);
+                            } else {
+                                let _ = js_sys::eval(&js);
+                            }
+                            Some(())
+                        });
+                    },
+                }
+                // Right: live host power state panel
+                div { class: "heph-panel",
+                    div { class: "tree-title", "bare-metal pool" }
+                    div { class: "heph-replicas",
+                        span { class: "heph-replica-num", "{replicas}" }
+                        span { class: "heph-replica-label", "/ 3 replicas" }
+                    }
+                    div { class: "heph-phase", "{phase_label}" }
+                    div { class: "heph-hosts",
+                        for (i, host) in hosts.iter().enumerate() {
+                            div { class: "heph-host heph-{host_state(i, s)}",
+                                span { class: "heph-host-name", "{host}" }
+                                span { class: "heph-host-state", "{host_state(i, s)}" }
+                            }
+                        }
+                    }
+                    if s >= 6 && s <= 8 {
+                        div { class: "heph-info", "pool cold — zero running metal" }
+                    }
+                    if s >= 9 && s <= 14 {
+                        div { class: "heph-info",
+                            "IPMI power-on → firmware POST → PXE → join cluster"
+                            br {}
+                            "~90s per host, dominated by firmware"
+                        }
+                    }
+                }
             }
-            section { class: "article-section",
-                h2 { "scale-up tape" }
-                pre { class: "code-block", code { "{TAPE}" } }
-            }
+            figcaption { "Real recording: kubectl patch metalmachinepool hpc-workers replicas 3→0→3 against nixlab ProLiant hosts via IPMI." }
         }
     }
 }
@@ -1748,6 +1901,75 @@ const APP_CSS: &str = r#"
   font-size: 10px;
   text-align: center;
   padding-top: 12px;
+}
+.heph-panel {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.heph-replicas {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  justify-content: center;
+}
+.heph-replica-num {
+  font-size: 28px;
+  font-weight: bold;
+  color: var(--accent);
+}
+.heph-replica-label {
+  font-size: 11px;
+  color: var(--dim);
+}
+.heph-phase {
+  text-align: center;
+  font-size: 10px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.heph-hosts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.heph-host {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--line2);
+  background: var(--panel);
+  font-size: 11px;
+  animation: node-pop 0.3s ease-out;
+}
+.heph-host-name { font-weight: bold; }
+.heph-host-state { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
+.heph-ready { border-color: var(--green); }
+.heph-ready .heph-host-name { color: var(--green); }
+.heph-ready .heph-host-state { color: var(--green); }
+.heph-off { border-color: var(--line2); opacity: 0.5; }
+.heph-off .heph-host-name, .heph-off .heph-host-state { color: var(--dim); }
+.heph-powering-off { border-color: var(--red); animation: node-pop 0.3s ease-out, pulse-border 1s ease-in-out infinite 0.3s; }
+.heph-powering-off .heph-host-name, .heph-powering-off .heph-host-state { color: var(--red); }
+.heph-provisioning { border-color: var(--yellow); animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s; }
+.heph-provisioning .heph-host-name, .heph-provisioning .heph-host-state { color: var(--yellow); }
+.heph-joining { border-color: var(--blue); animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s; }
+.heph-joining .heph-host-name, .heph-joining .heph-host-state { color: var(--blue); }
+.heph-info {
+  margin-top: auto;
+  text-align: center;
+  font-size: 9px;
+  color: var(--dim);
+  line-height: 1.5;
 }
 .project-figure img {
   flex: 1;
