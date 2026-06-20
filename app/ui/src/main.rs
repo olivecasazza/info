@@ -1030,125 +1030,44 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
 }
 
 fn consortium_demo() -> Element {
-    let step = use_signal(|| 0u32);
-
-    use_future(move || {
-        let mut step = step;
-        async move {
-            loop {
-                gloo_timers::future::TimeoutFuture::new(1200).await;
-                let s = *step.read();
-                step.set(if s >= 12 { 0 } else { s + 1 });
-            }
-        }
-    });
-
-    let s = *step.read();
-
     rsx! {
-        figure { class: "project-figure recording-figure cascade-demo",
-            div { class: "cascade-split",
-                // Left: real asciinema recording
-                div {
-                    id: "asciinema-container",
-                    class: "asciinema-container",
-                    onmounted: move |_| {
-                        let _ = web_sys::window().and_then(|w: web_sys::Window| {
-                            let doc = w.document()?;
-                            let js = concat!(
-                                "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
-                                " document.getElementById('asciinema-container'), {",
-                                "  cols: 80, rows: 22, autoPlay: true, loop: true, theme: 'monokai',",
-                                "  fontSize: '10px', fit: false, idleTimeLimit: 2, controls: false",
-                                "});"
-                            ).to_string();
-                            if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
-                                let script = doc.create_element("script").ok()?;
-                                script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
-                                let link = doc.create_element("link").ok()?;
-                                link.set_attribute("rel", "stylesheet").ok()?;
-                                link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
-                                doc.head()?.append_child(&link).ok()?;
-                                doc.head()?.append_child(&script).ok()?;
-                                let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
-                                    let _ = js_sys::eval(&js);
-                                }).into_js_value();
-                                let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
-                                    cb.as_ref().unchecked_ref(), 500,
-                                );
-                                std::mem::forget(cb);
-                            } else {
+        figure { class: "project-figure recording-figure",
+            div {
+                id: "asciinema-container",
+                class: "asciinema-container",
+                onmounted: move |_| {
+                    let _ = web_sys::window().and_then(|w: web_sys::Window| {
+                        let doc = w.document()?;
+                        let js = concat!(
+                            "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
+                            " document.getElementById('asciinema-container'), {",
+                            "  cols: 100, rows: 28, autoPlay: true, loop: true, theme: 'monokai',",
+                            "  fontSize: '11px', fit: false, idleTimeLimit: 2, controls: false",
+                            "});"
+                        ).to_string();
+                        if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
+                            let script = doc.create_element("script").ok()?;
+                            script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
+                            let link = doc.create_element("link").ok()?;
+                            link.set_attribute("rel", "stylesheet").ok()?;
+                            link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
+                            doc.head()?.append_child(&link).ok()?;
+                            doc.head()?.append_child(&script).ok()?;
+                            let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
                                 let _ = js_sys::eval(&js);
-                            }
-                            Some(())
-                        });
-                    },
-                }
-                // Right: animated cascade tree
-                div { class: "cascade-tree",
-                    div { class: "tree-title", "cascade fan-out" }
-                    if s >= 1 {
-                        div { class: "tree-round",
-                            span { class: "round-label", "r0" }
-                            div { class: "tree-node tree-source", "mm01" }
+                            }).into_js_value();
+                            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                cb.as_ref().unchecked_ref(), 500,
+                            );
+                            std::mem::forget(cb);
+                        } else {
+                            let _ = js_sys::eval(&js);
                         }
-                    }
-                    if s >= 4 {
-                        div { class: "tree-round",
-                            span { class: "round-label", "r1" }
-                            div { class: "tree-col",
-                                div { class: "tree-node tree-done", "mm01" }
-                                div { class: "tree-branch",
-                                    span { class: "tree-line" }
-                                    span { class: "tree-line" }
-                                }
-                                div { class: "tree-row",
-                                    div { class: "tree-node tree-active", "mm02" }
-                                    div { class: "tree-node tree-active", "mm03" }
-                                }
-                            }
-                        }
-                    }
-                    if s >= 8 {
-                        div { class: "tree-round",
-                            span { class: "round-label", "r2" }
-                            div { class: "tree-col",
-                                div { class: "tree-row",
-                                    div { class: "tree-node tree-done", "mm01" }
-                                }
-                                div { class: "tree-branch",
-                                    span { class: "tree-line" }
-                                    span { class: "tree-line" }
-                                }
-                                div { class: "tree-row",
-                                    div { class: "tree-col",
-                                        div { class: "tree-node tree-done", "mm02" }
-                                        div { class: "tree-branch",
-                                            span { class: "tree-line" }
-                                            span { class: "tree-line" }
-                                        }
-                                        div { class: "tree-row",
-                                            div { class: "tree-node tree-active", "mm04" }
-                                            div { class: "tree-node tree-active", "mm05" }
-                                        }
-                                    }
-                                    div { class: "tree-col",
-                                        div { class: "tree-node tree-done", "mm03" }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if s >= 11 {
-                        div { class: "tree-summary",
-                            "3 rounds · O(log₂ N) copies"
-                            br {}
-                            "vs 5 rounds serial"
-                        }
-                    }
-                }
+                        Some(())
+                    });
+                },
             }
-            figcaption { "Real recording + cascade tree: cast deploy --on mm[01-05] --cascade --cascade-fanout 2 against the nixlab Mac Mini fleet." }
+            figcaption { "Live cascade deploy: cast deploy --on mm[01-05] --cascade --cascade-fanout 2 against the nixlab Mac Mini fleet." }
         }
     }
 }
@@ -1493,17 +1412,18 @@ fn hephaestus_demo() -> Element {
                             let doc = w.document()?;
                             // Create player and set up time tracking
                             let setup = concat!(
-                                "var __hephPlayer = AsciinemaPlayer.create(",
+                                "window.__hephPlayer = AsciinemaPlayer.create(",
                                 "  '/projects-media/hephaestus-demo.cast',",
                                 "  document.getElementById('asciinema-heph-container'),",
                                 "  { cols: 80, rows: 22, autoPlay: true, loop: true,",
                                 "    theme: 'monokai', fontSize: '10px', fit: false,",
                                 "    idleTimeLimit: 3, controls: false });",
                                 "setInterval(function() {",
-                                "  if (__hephPlayer && __hephPlayer.getCurrentTime) {",
+                                "  try {",
+                                "    var t = window.__hephPlayer.getCurrentTime();",
                                 "    var el = document.getElementById('asciinema-heph-container');",
-                                "    if (el) el.setAttribute('data-time', __hephPlayer.getCurrentTime());",
-                                "  }",
+                                "    if (el && typeof t === 'number') el.setAttribute('data-time', String(t));",
+                                "  } catch(e) {}",
                                 "}, 200);"
                             );
                             if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
