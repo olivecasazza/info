@@ -1382,11 +1382,8 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
             }
             section { class: "article-section",
                 h2 { "case study - nixlab fleet" }
-                p { "Live in production on the nixlab cluster. Manages three ProLiant workers (hp01-03) plus five Mac Mini agents (mm01-05). Power events flow through IPMI for the ProLiants and Wake-on-LAN for the Macs (no BMC). The ML training pool scales 0 → 3 ProLiants when SkyPilot tasks queue up, and the edge pool stays cold until a request drives it back up. End-to-end from kubectl patch metalmachinepool to a Ready node sits around 90 s, dominated by firmware POST + PXE — the controller itself reconciles in tens of milliseconds." }
-                figure { class: "project-figure",
-                    img { src: "/projects-media/hephaestus-scale-up.gif", alt: "hephaestus scale-up recording" }
-                    figcaption { "Pool scaling 2 → 16 (kubectl get metalmachine -w against a Ray-driven scale-up)." }
-                }
+                p { "Live in production on the nixlab cluster. Manages three ProLiant workers (hp01-03) plus five Mac Mini agents (mm01-05). Power events flow through IPMI for the ProLiants and Wake-on-LAN for the Macs (no BMC). The hpc-workers pool scales 0 → 3 ProLiants when SkyPilot tasks queue up, and scales back to zero when the pool is idle. End-to-end from kubectl patch metalmachinepool to a Ready node sits around 90 s, dominated by firmware POST + PXE — the controller itself reconciles in tens of milliseconds." }
+                p { "The separate recording panel shows a real 3 → 0 → 3 power cycle captured against hp01-hp03: the operator sends IPMI power-off to all three hosts simultaneously, waits for them to reach Available, then powers them back on. The firmware POST dominates — the controller's reconcile loop runs in milliseconds." }
             }
             section { class: "article-section",
                 h2 { "install" }
