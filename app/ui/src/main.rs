@@ -1379,12 +1379,10 @@ fn hephaestus_demo() -> Element {
 
     let replicas = if t < 0.3 {
         3
-    } else if t < 19.0 {
-        0
     } else if t < 50.0 {
-        1
+        0
     } else {
-        3
+        0
     };
 
     let phase_label: &str = if t < 0.3 {
@@ -1454,7 +1452,7 @@ fn hephaestus_demo() -> Element {
                     div { class: "tree-title", "bare-metal pool" }
                     div { class: "heph-replicas",
                         span { class: "heph-replica-num", "{replicas}" }
-                        span { class: "heph-replica-label", "/ 3 replicas" }
+                        span { class: "heph-replica-label", "/ 3 ready" }
                     }
                     div { class: "heph-phase", "{phase_label}" }
                     div { class: "heph-hosts",
