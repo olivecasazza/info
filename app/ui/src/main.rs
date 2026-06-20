@@ -1030,44 +1030,125 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
 }
 
 fn consortium_demo() -> Element {
-    rsx! {
-        figure { class: "project-figure recording-figure",
-            div {
-                id: "asciinema-container",
-                class: "asciinema-container",
-                onmounted: move |_| {
-                    let _ = web_sys::window().and_then(|w: web_sys::Window| {
-                        let doc = w.document()?;
-                        let js = concat!(
-                            "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
-                            " document.getElementById('asciinema-container'), {",
-                            "  cols: 92, rows: 26, autoPlay: true, loop: true, theme: 'monokai',",
-                            "  fontSize: '12px', fit: false, idleTimeLimit: 2, controls: false",
-                            "});"
-                        ).to_string();
-                        if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
-                            let script = doc.create_element("script").ok()?;
-                            script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
-                            let link = doc.create_element("link").ok()?;
-                            link.set_attribute("rel", "stylesheet").ok()?;
-                            link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
-                            doc.head()?.append_child(&link).ok()?;
-                            doc.head()?.append_child(&script).ok()?;
-                            let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
-                                let _ = js_sys::eval(&js);
-                            }).into_js_value();
-                            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
-                                cb.as_ref().unchecked_ref(), 500,
-                            );
-                            std::mem::forget(cb);
-                        } else {
-                            let _ = js_sys::eval(&js);
-                        }
-                        Some(())
-                    });
-                },
+    let step = use_signal(|| 0u32);
+
+    use_future(move || {
+        let mut step = step;
+        async move {
+            loop {
+                gloo_timers::future::TimeoutFuture::new(1200).await;
+                let s = *step.read();
+                step.set(if s >= 12 { 0 } else { s + 1 });
             }
-            figcaption { "Live cascade deploy: cast deploy --on mm[01-05] --cascade --cascade-fanout 2 against the nixlab Mac Mini fleet." }
+        }
+    });
+
+    let s = *step.read();
+
+    rsx! {
+        figure { class: "project-figure recording-figure cascade-demo",
+            div { class: "cascade-split",
+                // Left: real asciinema recording
+                div {
+                    id: "asciinema-container",
+                    class: "asciinema-container",
+                    onmounted: move |_| {
+                        let _ = web_sys::window().and_then(|w: web_sys::Window| {
+                            let doc = w.document()?;
+                            let js = concat!(
+                                "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
+                                " document.getElementById('asciinema-container'), {",
+                                "  cols: 80, rows: 22, autoPlay: true, loop: true, theme: 'monokai',",
+                                "  fontSize: '10px', fit: false, idleTimeLimit: 2, controls: false",
+                                "});"
+                            ).to_string();
+                            if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
+                                let script = doc.create_element("script").ok()?;
+                                script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
+                                let link = doc.create_element("link").ok()?;
+                                link.set_attribute("rel", "stylesheet").ok()?;
+                                link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
+                                doc.head()?.append_child(&link).ok()?;
+                                doc.head()?.append_child(&script).ok()?;
+                                let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
+                                    let _ = js_sys::eval(&js);
+                                }).into_js_value();
+                                let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                    cb.as_ref().unchecked_ref(), 500,
+                                );
+                                std::mem::forget(cb);
+                            } else {
+                                let _ = js_sys::eval(&js);
+                            }
+                            Some(())
+                        });
+                    },
+                }
+                // Right: animated cascade tree
+                div { class: "cascade-tree",
+                    div { class: "tree-title", "cascade fan-out" }
+                    if s >= 1 {
+                        div { class: "tree-round",
+                            span { class: "round-label", "r0" }
+                            div { class: "tree-node tree-source", "mm01" }
+                        }
+                    }
+                    if s >= 4 {
+                        div { class: "tree-round",
+                            span { class: "round-label", "r1" }
+                            div { class: "tree-col",
+                                div { class: "tree-node tree-done", "mm01" }
+                                div { class: "tree-branch",
+                                    span { class: "tree-line" }
+                                    span { class: "tree-line" }
+                                }
+                                div { class: "tree-row",
+                                    div { class: "tree-node tree-active", "mm02" }
+                                    div { class: "tree-node tree-active", "mm03" }
+                                }
+                            }
+                        }
+                    }
+                    if s >= 8 {
+                        div { class: "tree-round",
+                            span { class: "round-label", "r2" }
+                            div { class: "tree-col",
+                                div { class: "tree-row",
+                                    div { class: "tree-node tree-done", "mm01" }
+                                }
+                                div { class: "tree-branch",
+                                    span { class: "tree-line" }
+                                    span { class: "tree-line" }
+                                }
+                                div { class: "tree-row",
+                                    div { class: "tree-col",
+                                        div { class: "tree-node tree-done", "mm02" }
+                                        div { class: "tree-branch",
+                                            span { class: "tree-line" }
+                                            span { class: "tree-line" }
+                                        }
+                                        div { class: "tree-row",
+                                            div { class: "tree-node tree-active", "mm04" }
+                                            div { class: "tree-node tree-active", "mm05" }
+                                        }
+                                    }
+                                    div { class: "tree-col",
+                                        div { class: "tree-node tree-done", "mm03" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if s >= 11 {
+                        div { class: "tree-summary",
+                            "3 rounds · O(log₂ N) copies"
+                            br {}
+                            "vs 5 rounds serial"
+                        }
+                    }
+                }
+            }
+            figcaption { "Real recording + cascade tree: cast deploy --on mm[01-05] --cascade --cascade-fanout 2 against the nixlab Mac Mini fleet." }
         }
     }
 }
@@ -1558,18 +1639,115 @@ const APP_CSS: &str = r#"
   --panel-min-h: 50vh;
 }
 .asciinema-container {
+  flex: 1;
+  min-width: 0;
+  min-height: 350px;
+  overflow: hidden;
+}
+.cascade-split {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.cascade-tree {
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 12px 8px;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.tree-title {
+  color: var(--dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.tree-round {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+.round-label {
+  color: var(--dim);
+  font-size: 9px;
+  width: 20px;
+  padding-top: 4px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.tree-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+}
+.tree-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.tree-branch {
+  display: flex;
+  gap: 40px;
+  height: 14px;
+}
+.tree-line {
+  display: block;
+  width: 1px;
   height: 100%;
-  min-height: 450px;
-  overflow: visible;
+  background: var(--line2);
 }
-.asciinema-container .ap-wrapper {
-  height: auto !important;
-  max-height: none !important;
-  overflow: visible !important;
+.tree-node {
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: bold;
+  border: 1px solid var(--line2);
+  background: var(--panel);
+  color: var(--dim);
+  white-space: nowrap;
+  animation: node-pop 0.3s ease-out;
 }
-.asciinema-container .ap-terminal {
-  font-size: 11px !important;
-  line-height: 1.35 !important;
+@keyframes node-pop {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+.tree-source {
+  border-color: var(--yellow);
+  color: var(--yellow);
+  background: rgba(240,221,125,0.08);
+}
+.tree-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(217,185,76,0.08);
+  animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s;
+}
+@keyframes pulse-border {
+  50% { box-shadow: 0 0 8px rgba(217,185,76,0.4); }
+}
+.tree-done {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(93,205,190,0.05);
+}
+.tree-summary {
+  margin-top: auto;
+  color: var(--dim);
+  font-size: 10px;
+  text-align: center;
+  padding-top: 12px;
 }
 .project-figure img {
   flex: 1;
