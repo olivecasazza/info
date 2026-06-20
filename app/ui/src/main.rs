@@ -752,7 +752,7 @@ fn SpeciesSlider(
 fn PipedreamControls(canvas_id: String) -> Element {
     let mut controls_visible = use_signal(|| false);
     let mut speed = use_signal(|| 24.0_f32);
-    let mut scale = use_signal(|| 2.0_f32);
+    let mut scale = use_signal(|| 1.0_f32);
     let mut pixel = use_signal(|| 2.5_f32);
     let mut flows = use_signal(|| 12_usize);
     let mut sites = use_signal(|| 4_usize);
@@ -942,13 +942,13 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         label { "zoom" }
                         input {
                             r#type: "range",
-                            min: "1",
-                            max: "32",
-                            step: "0.5",
+                            min: "0.25",
+                            max: "4",
+                            step: "0.05",
                             value: "{scale}",
                             oninput: on_scale_change,
                         }
-                        span { class: "control-value", "{scale:.1}" }
+                        span { class: "control-value", "{scale:.2}" }
                     }
                     div { class: "control-row",
                         label { "pixel snap" }

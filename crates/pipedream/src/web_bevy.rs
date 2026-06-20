@@ -39,7 +39,7 @@ impl Default for ExternalConfig {
     fn default() -> Self {
         Self {
             speed: 24.0,
-            scale: 2.0,
+            scale: 1.0, // zoom multiplier on top of auto-fit
             pixel: 2.5,
             flows: 12,
             sites: 4,
@@ -52,9 +52,17 @@ impl Default for ExternalConfig {
     }
 }
 
+/// CSS-pixels-per-backing-pixel. The backing canvas is rendered at this fraction
+/// of the panel's CSS size and nearest-neighbor upscaled, giving the chunky
+/// pixelated look. Used both at startup and by the live resize system.
+const BACKING_SCALE: f32 = 2.5;
+
 thread_local! {
     static EXTERNAL_CONFIG: RefCell<ExternalConfig> = RefCell::new(ExternalConfig::default());
     static CONFIG_DIRTY: RefCell<bool> = const { RefCell::new(false) };
+    /// CSS selector of the canvas Bevy is rendering into, captured at start() so
+    /// the resize system can read the parent panel's live size.
+    static CANVAS_SELECTOR: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 fn mark_config_dirty() {
@@ -100,9 +108,9 @@ impl WebHandle {
             )
         });
         let (css_w, css_h) = parent_size.unwrap_or((960.0, 540.0));
-        let backing_scale = 2.5_f32;
-        let backing_w = (css_w / backing_scale).round().max(320.0);
-        let backing_h = (css_h / backing_scale).round().max(200.0);
+        CANVAS_SELECTOR.with(|s| *s.borrow_mut() = selector.clone());
+        let backing_w = (css_w / BACKING_SCALE).round().max(320.0);
+        let backing_h = (css_h / BACKING_SCALE).round().max(200.0);
         canvas.set_width(backing_w as u32);
         canvas.set_height(backing_h as u32);
         let style = canvas.style();
@@ -162,7 +170,7 @@ impl WebHandle {
 
     #[wasm_bindgen(setter)]
     pub fn set_scale(&self, v: f32) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().scale = v.clamp(1.0, 32.0));
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().scale = v.clamp(0.25, 4.0));
         mark_config_dirty();
     }
 
@@ -447,9 +455,13 @@ impl Palette {
 /// Isometric projection. `focus` is the world point that maps to screen center,
 /// so a campus laid out on the ground plane (x,y) with z up stays framed.
 struct IsoRenderer {
+    /// Fit scale, recomputed each frame from the panel size (auto-fit) × user zoom.
     scale: f32,
     pixel: f32,
     focus: [f32; 3],
+    /// Screen-space recentering offset (px), so the campus bbox centers on the
+    /// panel regardless of the iso skew.
+    offset: egui::Vec2,
 }
 
 impl Default for IsoRenderer {
@@ -458,6 +470,7 @@ impl Default for IsoRenderer {
             scale: 2.0,
             pixel: 2.5,
             focus: [0.0, 0.0, 0.0],
+            offset: egui::Vec2::ZERO,
         }
     }
 }
@@ -583,6 +596,48 @@ impl PipeSim {
         [sx / n, sy / n, 14.0]
     }
 
+    /// Screen-space bounding box of the static campus at unit scale, relative to
+    /// `focus`. Returns (center, half_extent) in unprojected-by-scale screen
+    /// units; the renderer derives a fit scale and recentering offset from it so
+    /// the whole campus fills the panel. Padded for server box size + the lane
+    /// offsets and spawn-scatter that transiently exceed the node centers.
+    fn screen_extent(&self, focus: [f32; 3]) -> ((f32, f32), (f32, f32)) {
+        let proj = |p: IVec3| -> (f32, f32) {
+            let dx = p.x as f32 - focus[0];
+            let dy = p.y as f32 - focus[1];
+            let dz = p.z as f32 - focus[2];
+            (dx - dy, (dx + dy) * 0.5 - dz)
+        };
+        let (mut min_x, mut min_y) = (f32::MAX, f32::MAX);
+        let (mut max_x, mut max_y) = (f32::MIN, f32::MIN);
+        let mut visit = |p: IVec3| {
+            let (x, y) = proj(p);
+            min_x = min_x.min(x);
+            max_x = max_x.max(x);
+            min_y = min_y.min(y);
+            max_y = max_y.max(y);
+        };
+        for &s in &self.servers {
+            visit(s);
+        }
+        for site in &self.sites {
+            visit(site.core);
+            for &agg in &site.aisle_aggs {
+                visit(agg);
+            }
+        }
+        visit(self.global_core);
+        if min_x > max_x {
+            return ((0.0, 0.0), (40.0, 30.0));
+        }
+        let pad_x = 5.0;
+        let pad_y = 4.0;
+        (
+            ((min_x + max_x) * 0.5, (min_y + max_y) * 0.5),
+            ((max_x - min_x) * 0.5 + pad_x, (max_y - min_y) * 0.5 + pad_y),
+        )
+    }
+
     /// Lay out sites, aisles, racks and the switch tree on the ground plane.
     fn generate_topology(&mut self) {
         self.servers.clear();
@@ -595,37 +650,50 @@ impl PipeSim {
         let aisles = self.aisles.max(1);
         let racks = self.racks.max(1);
 
-        // Square-ish campus grid of sites.
-        let cols = (n as f32).sqrt().ceil() as usize;
-        let rows = n.div_ceil(cols);
-
-        let lo = 14.0_f32;
-        let hi = self.bounds.x.min(self.bounds.y) as f32 - 14.0;
-        let cell_x = (hi - lo) / cols as f32;
-        let cell_y = (hi - lo) / rows as f32;
-        let cell = cell_x.min(cell_y);
-
         let ground_z = 8.0_f32;
-        self.global_core = self.clamp_point(IVec3::new(
-            self.bounds.x / 2,
-            self.bounds.y / 2,
-            (ground_z + 20.0) as i32,
-        ));
+        let campus_x = self.bounds.x as f32 * 0.5;
+        let campus_y = self.bounds.y as f32 * 0.5;
+        self.global_core =
+            self.clamp_point(IVec3::new(campus_x as i32, campus_y as i32, (ground_z + 20.0) as i32));
+
+        // Fixed per-site footprint (independent of site count now that sites are
+        // scattered, not packed into a grid). A site spans `block_w` x `block_h`
+        // on the ground plane.
+        let rack_pitch = 4.5_f32;
+        let aisle_pitch = 5.5_f32;
+        let block_w = rack_pitch * (racks as f32 - 1.0); // along x (racks)
+        let block_h = aisle_pitch * (aisles as f32 - 1.0); // along y (aisles)
+        // Bounding radius of one site incl. its core stub (sits ~8 toward -x).
+        let site_radius = 0.5 * (block_w * block_w + block_h * block_h).sqrt() + 9.0;
+
+        // Sites sit on a jittered ring at roughly equal distance from the campus
+        // center: random base rotation + even angular spacing + small jitter so
+        // the layout reads as "scattered but balanced" rather than a rigid
+        // polygon. Ring radius keeps neighbors from overlapping while staying
+        // inside the clamp box; the auto-fit renderer reframes whatever results.
+        let two_pi = std::f32::consts::TAU;
+        let budget = self.bounds.x.min(self.bounds.y) as f32 * 0.5 - 10.0;
+        let ring_r = if n <= 1 {
+            0.0
+        } else {
+            let non_overlap = site_radius * 1.12 / (std::f32::consts::PI / n as f32).sin();
+            non_overlap.min(budget - site_radius).max(site_radius)
+        };
+        let base_angle = (self.rng.rand_u32() as f32 / u32::MAX as f32) * two_pi;
+        let jitter = |rng: &mut oorandom::Rand32, mag: f32| -> f32 {
+            (rng.rand_u32() as f32 / u32::MAX as f32 - 0.5) * 2.0 * mag
+        };
 
         for s in 0..n {
-            let cx = s % cols;
-            let cy = s / cols;
-            let center_x = lo + cell_x * (cx as f32 + 0.5);
-            let center_y = lo + cell_y * (cy as f32 + 0.5);
+            let (center_x, center_y) = if n <= 1 {
+                (campus_x, campus_y)
+            } else {
+                let ang = base_angle + (s as f32 / n as f32) * two_pi
+                    + jitter(&mut self.rng, two_pi / n as f32 * 0.18);
+                let r = ring_r + jitter(&mut self.rng, site_radius * 0.12);
+                (campus_x + r * ang.cos(), campus_y + r * ang.sin())
+            };
 
-            // Pitches sized to the cell so a site never bleeds into its
-            // neighbor regardless of the aisle/rack sliders.
-            let usable = cell * 0.74;
-            let rack_pitch = (usable / racks as f32).clamp(3.0, 6.0);
-            let aisle_pitch = (usable / aisles as f32).clamp(4.0, 7.0);
-
-            let block_w = rack_pitch * (racks as f32 - 1.0); // along x (racks)
-            let block_h = aisle_pitch * (aisles as f32 - 1.0); // along y (aisles)
             let x0 = center_x - block_w * 0.5;
             let y0 = center_y - block_h * 0.5;
 
@@ -950,6 +1018,7 @@ impl Plugin for PipedreamPlugin {
         app.insert_resource(ClearColor(Color::BLACK))
             .init_resource::<PipedreamState>()
             .add_systems(Startup, setup)
+            .add_systems(Update, sync_canvas_size)
             .add_systems(Update, sync_external_config)
             .add_systems(Update, simulation_step.after(sync_external_config))
             .add_systems(Update, render_system.after(simulation_step))
@@ -965,7 +1034,7 @@ fn sync_external_config(mut state: ResMut<PipedreamState>) {
     let ext = get_external_config();
 
     state.speed = ext.speed;
-    state.renderer.scale = ext.scale;
+    state.zoom = ext.scale; // renderer.scale is owned by the per-frame auto-fit
     state.renderer.pixel = ext.pixel;
     state.sim.trail = ext.trail;
     state.ui.visible = ext.show_ui;
@@ -986,7 +1055,7 @@ fn sync_external_config(mut state: ResMut<PipedreamState>) {
         state.sim.racks = ext.racks;
         let flows = state.flows;
         state.sim.reset(flows);
-        state.renderer.focus = state.sim.focus();
+        refresh_fit(&mut state);
         state.sim_time = 0.0;
         rebuild_nodes(&mut state);
     }
@@ -994,7 +1063,7 @@ fn sync_external_config(mut state: ResMut<PipedreamState>) {
     if ext.reset_requested {
         let flows = state.flows;
         state.sim.reset(flows);
-        state.renderer.focus = state.sim.focus();
+        refresh_fit(&mut state);
         state.sim_time = 0.0;
         rebuild_nodes(&mut state);
         EXTERNAL_CONFIG.with(|c| c.borrow_mut().reset_requested = false);
@@ -1010,6 +1079,12 @@ struct PipedreamState {
     aisles: usize,
     racks: usize,
     speed: f32,
+    /// User zoom multiplier applied on top of the per-frame auto-fit scale.
+    zoom: f32,
+    /// Cached campus screen-extent (center, half) at unit scale; refreshed on
+    /// reset and consumed by the auto-fit in render_system.
+    fit_center: (f32, f32),
+    fit_half: (f32, f32),
     accumulator: f32,
     sim: PipeSim,
     nodes: Vec<ServerNode>,
@@ -1023,7 +1098,9 @@ impl Default for PipedreamState {
     fn default() -> Self {
         let seed = js_sys::Date::now() as u64;
         let ext = get_external_config();
-        let bounds = IVec3::new(96, 96, 48);
+        // Generous bounds so even a wide ring of large sites never hits the
+        // clamp box; the auto-fit renderer reframes whatever the campus spans.
+        let bounds = IVec3::new(200, 200, 56);
 
         let mut sim = PipeSim::new(seed, bounds, ext.flows, ext.sites, ext.aisles, ext.racks);
         sim.trail = ext.trail;
@@ -1047,19 +1124,24 @@ impl Default for PipedreamState {
         ui.visible = ext.show_ui;
 
         let focus = sim.focus();
+        let (fit_center, fit_half) = sim.screen_extent(focus);
 
         Self {
             palette: Palette::from_theme(),
             renderer: IsoRenderer {
-                scale: ext.scale,
+                scale: 2.0,
                 pixel: ext.pixel,
                 focus,
+                offset: egui::Vec2::ZERO,
             },
             flows: ext.flows,
             sites: ext.sites,
             aisles: ext.aisles,
             racks: ext.racks,
             speed: ext.speed,
+            zoom: ext.scale,
+            fit_center,
+            fit_half,
             accumulator: 0.0,
             sim,
             nodes: initial_nodes,
@@ -1072,6 +1154,45 @@ impl Default for PipedreamState {
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d::default());
+}
+
+/// Recompute the renderer focus and cached campus screen-extent after a reset.
+fn refresh_fit(state: &mut PipedreamState) {
+    let focus = state.sim.focus();
+    let (center, half) = state.sim.screen_extent(focus);
+    state.renderer.focus = focus;
+    state.fit_center = center;
+    state.fit_half = half;
+}
+
+/// Resize the Bevy render target to match the panel's live CSS size (at the
+/// pixelated backing scale) so the view expands to fit a resized panel. egui's
+/// `screen_rect` then tracks it and the auto-fit reframes automatically.
+fn sync_canvas_size(mut windows: Query<&mut Window>) {
+    let selector = CANVAS_SELECTOR.with(|s| s.borrow().clone());
+    if selector.is_empty() {
+        return;
+    }
+    let Some((css_w, css_h)) = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.query_selector(&selector).ok().flatten())
+        .and_then(|el| el.parent_element())
+        .map(|p| (p.client_width() as f32, p.client_height() as f32))
+    else {
+        return;
+    };
+    if css_w < 1.0 || css_h < 1.0 {
+        return;
+    }
+    let bw = (css_w / BACKING_SCALE).round().max(320.0);
+    let bh = (css_h / BACKING_SCALE).round().max(200.0);
+    if let Ok(mut window) = windows.get_single_mut() {
+        if (window.resolution.width() - bw).abs() > 0.5
+            || (window.resolution.height() - bh).abs() > 0.5
+        {
+            window.resolution.set(bw, bh);
+        }
+    }
 }
 
 /// Rebuild server nodes from the sim's server positions (called after reset).
@@ -1109,12 +1230,24 @@ fn simulation_step(time: Res<Time>, mut state: ResMut<PipedreamState>) {
     }
 }
 
-fn render_system(mut contexts: EguiContexts, state: Res<PipedreamState>) {
+fn render_system(mut contexts: EguiContexts, mut state: ResMut<PipedreamState>) {
     let ctx = contexts.ctx_mut();
     ctx.tessellation_options_mut(|opts| {
         opts.feathering = false;
         opts.feathering_size_in_pixels = 0.0;
     });
+
+    // Auto-fit: choose the scale that makes the cached campus extent fill the
+    // panel, then recenter its bbox. Recomputed every frame so a resized panel
+    // (see sync_canvas_size) reframes live.
+    let screen = ctx.screen_rect();
+    let margin = 0.92;
+    let (hw, hh) = state.fit_half;
+    let fit = ((screen.width() * 0.5 * margin) / hw.max(0.001))
+        .min((screen.height() * 0.5 * margin) / hh.max(0.001));
+    let scale = (fit * state.zoom).max(0.05);
+    state.renderer.scale = scale;
+    state.renderer.offset = egui::vec2(-state.fit_center.0 * scale, -state.fit_center.1 * scale);
 
     egui::CentralPanel::default()
         .frame(egui::Frame::none())
@@ -1154,8 +1287,8 @@ fn draw_box(
     faces: [Color32; 3],
 ) {
     let center_pt = rect.center();
-    let iso =
-        |x: f32, y: f32, z: f32| -> Pos2 { state.renderer.project(x, y, z) + center_pt.to_vec2() };
+    let shift = center_pt.to_vec2() + state.renderer.offset;
+    let iso = |x: f32, y: f32, z: f32| -> Pos2 { state.renderer.project(x, y, z) + shift };
 
     let (cx, cy, cz) = (center[0], center[1], center[2]);
     let (sx, sy, sz) = (size[0] * 0.5, size[1] * 0.5, size[2] * 0.5);
@@ -1474,7 +1607,7 @@ fn ui_system(
     ui.frame(ctx, dt, |egui_ui| {
         egui_ui.collapsing("campus", |ui| {
             ui.add(egui::Slider::new(&mut state.speed, 1.0..=480.0).text("speed"));
-            ui.add(egui::Slider::new(&mut state.renderer.scale, 1.0..=32.0).text("zoom"));
+            ui.add(egui::Slider::new(&mut state.zoom, 0.25..=4.0).text("zoom"));
             ui.add(egui::Slider::new(&mut state.renderer.pixel, 1.0..=4.0).text("pixel"));
             ui.add(egui::Slider::new(&mut state.sim.trail, 50..=2000).text("trail"));
 
