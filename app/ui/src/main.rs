@@ -1392,6 +1392,41 @@ fn hephaestus_demo() -> Element {
 
     let hosts = ["hp01", "hp02", "hp03"];
 
+    // Real uptime values from the recording, captured via SSH /proc/uptime.
+    // The recording polls uptime every few seconds. We interpolate between
+    // the two data points before power-off, then show "—" after hosts go down.
+    let host_uptime = |host_idx: usize, t: f64| -> &'static str {
+        // Data points from the real recording:
+        //   17.0s: hp01=49m hp02=49m hp03=54m
+        //   21.6s: hp01=50m hp02=50m hp03=54m
+        //   25.1s+: all "—" (powered off)
+        if t < 17.0 {
+            // Hosts are up — show approximate uptime at t=0
+            match host_idx {
+                0 | 1 => "49m",
+                2 => "54m",
+                _ => "—",
+            }
+        } else if t < 21.6 {
+            // Second poll
+            match host_idx {
+                0 | 1 => "49m",
+                2 => "54m",
+                _ => "—",
+            }
+        } else if t < 25.1 {
+            // Third poll — just before power-off
+            match host_idx {
+                0 | 1 => "50m",
+                2 => "54m",
+                _ => "—",
+            }
+        } else {
+            // Hosts powered off — unreachable
+            "—"
+        }
+    };
+
     rsx! {
         figure { class: "project-figure recording-figure cascade-demo",
             div { class: "cascade-split",
@@ -1452,7 +1487,10 @@ fn hephaestus_demo() -> Element {
                         for (i, host) in hosts.iter().enumerate() {
                             div { class: "heph-host heph-{host_state(i, t)}",
                                 span { class: "heph-host-name", "{host}" }
-                                span { class: "heph-host-state", "{host_state(i, t)}" }
+                                span { class: "heph-host-meta",
+                                    span { class: "heph-host-state", "{host_state(i, t)}" }
+                                    span { class: "heph-host-uptime", "up: {host_uptime(i, t)}" }
+                                }
                             }
                         }
                     }
@@ -1850,7 +1888,9 @@ const APP_CSS: &str = r#"
   animation: node-pop 0.3s ease-out;
 }
 .heph-host-name { font-weight: bold; }
+.heph-host-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
 .heph-host-state { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
+.heph-host-uptime { font-size: 8px; opacity: 0.7; }
 .heph-ready { border-color: var(--green); }
 .heph-ready .heph-host-name { color: var(--green); }
 .heph-ready .heph-host-state { color: var(--green); }
