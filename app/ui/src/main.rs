@@ -205,9 +205,9 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::NotebookInverseKinematics,
     Panel::NotebookWigglystuff,
 ];
-const SIDEBAR_TILE_WIDTH: f64 = 33.333;
+const SIDEBAR_TILE_WIDTH: f64 = 35.0;
 const PROJECT_TILE_WIDTH: f64 = 100.0 - SIDEBAR_TILE_WIDTH;
-const TOP_ROW_TILE_BASIS: f64 = 58.0;
+const TOP_ROW_TILE_BASIS: f64 = 60.0;
 const BOTTOM_ROW_TILE_BASIS: f64 = 100.0 - TOP_ROW_TILE_BASIS;
 
 fn default_layout() -> Vec<PanelWin<Panel>> {
@@ -226,7 +226,7 @@ fn default_layout() -> Vec<PanelWin<Panel>> {
     ]
 }
 
-const LAYOUT_KEY: &str = "info_layout_v9";
+const LAYOUT_KEY: &str = "info_layout_v10";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App
@@ -253,7 +253,10 @@ fn App() -> Element {
         }
         opened_initial_project.set(true);
 
-        if let Some((_, project)) = random_project() {
+        let route_resources = current_path_resources();
+        if !route_resources.is_empty() {
+            open_project_resources(ws, route_resources);
+        } else if let Some((_, project)) = random_project() {
             open_project_resources(ws, resources_for_project(project.link));
         }
     });
@@ -319,6 +322,13 @@ fn random_project() -> Option<(&'static str, &'static info_core::Project)> {
 
     let idx = (js_sys::Math::random() * total as f64).floor() as usize;
     info_core::project_at(idx)
+}
+
+fn current_path_resources() -> &'static [Panel] {
+    web_sys::window()
+        .and_then(|w: web_sys::Window| w.location().pathname().ok())
+        .map(|path| resources_for_project(&path))
+        .unwrap_or(&[])
 }
 
 fn resource_panel_default(kind: Panel, index: usize, total: usize, z: i32) -> PanelWin<Panel> {
@@ -712,12 +722,12 @@ fn SpeciesSlider(
 fn PipedreamControls(canvas_id: String) -> Element {
     let mut controls_visible = use_signal(|| false);
     let mut speed = use_signal(|| 20.0_f32);
-    let mut scale = use_signal(|| 10.0_f32);
+    let mut scale = use_signal(|| 7.0_f32);
     let mut pixel = use_signal(|| 3.0_f32);
     let mut pipe_count = use_signal(|| 8_usize);
     let mut min_spacing = use_signal(|| 5_i32);
     let mut straightness = use_signal(|| 10_u32);
-    let mut max_len_per_pipe = use_signal(|| 500_usize);
+    let mut max_len_per_pipe = use_signal(|| 180_usize);
 
     // Clone canvas_id for all closures
     let canvas_id_effect = canvas_id.clone();
@@ -883,8 +893,8 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         label { "scale" }
                         input {
                             r#type: "range",
-                            min: "6",
-                            max: "26",
+                            min: "4",
+                            max: "18",
                             step: "1",
                             value: "{scale}",
                             oninput: on_scale_change,
@@ -944,7 +954,7 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         input {
                             r#type: "range",
                             min: "10",
-                            max: "2000",
+                            max: "900",
                             step: "10",
                             value: "{max_len_per_pipe}",
                             oninput: on_max_len_change,
@@ -1499,6 +1509,11 @@ const APP_CSS: &str = r#"
   flex: 1;
   min-height: 0;
   position: relative;
+}
+.featured-demo canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
 }
 
 /* Project detail pages */
