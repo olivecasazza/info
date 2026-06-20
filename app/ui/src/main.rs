@@ -1406,102 +1406,83 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
 }
 
 fn hephaestus_demo() -> Element {
-    let step = use_signal(|| 0u32);
+    let play_time = use_signal(|| 0.0f64);
 
+    // Poll the asciinema player's real playback time to sync the panel.
     use_future(move || {
-        let mut step = step;
+        let mut play_time = play_time;
         async move {
             loop {
-                gloo_timers::future::TimeoutFuture::new(1500).await;
-                let s = *step.read();
-                step.set(if s >= 16 { 0 } else { s + 1 });
+                gloo_timers::future::TimeoutFuture::new(200).await;
+                if let Some(t) = web_sys::window().and_then(|w| {
+                    let doc = w.document()?;
+                    let el = doc.get_element_by_id("asciinema-heph-container")?;
+                    let val = el.get_attribute("data-time")?;
+                    val.parse::<f64>().ok()
+                }) {
+                    play_time.set(t);
+                }
             }
         }
     });
 
-    let s = *step.read();
+    let t = *play_time.read();
 
-    // Power state per host across the cycle:
-    // steps 0-1: all on (Ready), 2-5: scaling down, 6-8: all off,
-    // 9-14: scaling up, 15: all on again
-    let host_state = |host_idx: usize, step: u32| -> &'static str {
-        // Scale down: hp01 off at step 2, hp02 off at 3, hp03 off at 4
-        // Scale up: hp01 on at step 9, hp02 at 11, hp03 at 13
-        match (host_idx, step) {
-            _ if step <= 1 => "ready",
-            _ if step >= 15 => "ready",
-            (0, s) if s >= 2 && s <= 5 => {
-                if s == 2 {
-                    "powering-off"
-                } else {
-                    "off"
-                }
-            }
-            (1, s) if s >= 3 && s <= 6 => {
-                if s == 3 {
-                    "powering-off"
-                } else {
-                    "off"
-                }
-            }
-            (2, s) if s >= 4 && s <= 7 => {
-                if s == 4 {
-                    "powering-off"
-                } else {
-                    "off"
-                }
-            }
-            (0, s) if s >= 9 && s <= 13 => {
-                if s <= 10 {
-                    "provisioning"
-                } else {
-                    "joining"
-                }
-            }
-            (1, s) if s >= 11 && s <= 13 => {
-                if s <= 12 {
-                    "provisioning"
-                } else {
-                    "joining"
-                }
-            }
-            (2, s) if s >= 13 && s <= 14 => {
-                if s == 13 {
-                    "provisioning"
-                } else {
-                    "joining"
-                }
-            }
-            _ => "off",
+    // Drive host states from real recording timestamps (seconds):
+    //   0.0-0.3: initial Ready
+    //   0.3:  patch replicas → 0 (scale down)
+    //   0.5:  Deprovisioning
+    //   6.8:  PoweringOff
+    //   19.0: patch replicas → 3 (scale up)
+    //   24.3: Available
+    //   50.4: Provisioning
+    //   126.0: end
+    let host_state = |host_idx: usize, t: f64| -> &'static str {
+        // All hosts transition simultaneously — IPMI sends power commands
+        // to all three at once. The recording timestamps are:
+        //   0.0-0.3: Ready
+        //   0.3: patch → 0 (scale down)
+        //   0.5: Deprovisioning (all three)
+        //   6.8: PoweringOff (all three)
+        //   19.0: patch → 3 (scale up)
+        //   24.3: Available (all three)
+        //   50.4: Provisioning (all three)
+        if t < 0.3 {
+            "ready"
+        } else if t < 6.8 {
+            "powering-off"
+        } else if t < 24.0 {
+            "off"
+        } else if t < 50.0 {
+            "provisioning"
+        } else {
+            "provisioning"
         }
+    };
+
+    let replicas = if t < 0.3 {
+        3
+    } else if t < 19.0 {
+        0
+    } else if t < 50.0 {
+        1
+    } else {
+        3
+    };
+
+    let phase_label: &str = if t < 0.3 {
+        "steady state: 3/3 ready"
+    } else if t < 7.0 {
+        "scaling down: IPMI power-off"
+    } else if t < 19.0 {
+        "scaled to zero: all hosts off"
+    } else if t < 50.0 {
+        "scaling up: IPMI power-on + PXE"
+    } else {
+        "provisioning: firmware POST"
     };
 
     let hosts = ["hp01", "hp02", "hp03"];
-    let replicas = if s <= 1 {
-        3
-    } else if s >= 6 && s <= 8 {
-        0
-    } else if s >= 15 {
-        3
-    } else {
-        match s {
-            2..=2 => 2,
-            3..=3 => 1,
-            4..=8 => 0,
-            9..=10 => 1,
-            11..=12 => 2,
-            13..=14 => 3,
-            _ => 3,
-        }
-    };
-
-    let phase_label = match s {
-        0..=1 => "steady state: 3/3 ready",
-        2..=5 => "scaling down: IPMI power-off",
-        6..=8 => "scaled to zero: all hosts off",
-        9..=14 => "scaling up: IPMI power-on + PXE boot",
-        _ => "steady state: 3/3 ready",
-    };
 
     rsx! {
         figure { class: "project-figure recording-figure cascade-demo",
@@ -1513,13 +1494,21 @@ fn hephaestus_demo() -> Element {
                     onmounted: move |_| {
                         let _ = web_sys::window().and_then(|w: web_sys::Window| {
                             let doc = w.document()?;
-                            let js = concat!(
-                                "AsciinemaPlayer.create('/projects-media/hephaestus-demo.cast',",
-                                " document.getElementById('asciinema-heph-container'), {",
-                                "  cols: 80, rows: 22, autoPlay: true, loop: true, theme: 'monokai',",
-                                "  fontSize: '10px', fit: false, idleTimeLimit: 3, controls: false",
-                                "});"
-                            ).to_string();
+                            // Create player and set up time tracking
+                            let setup = concat!(
+                                "var __hephPlayer = AsciinemaPlayer.create(",
+                                "  '/projects-media/hephaestus-demo.cast',",
+                                "  document.getElementById('asciinema-heph-container'),",
+                                "  { cols: 80, rows: 22, autoPlay: true, loop: true,",
+                                "    theme: 'monokai', fontSize: '10px', fit: false,",
+                                "    idleTimeLimit: 3, controls: false });",
+                                "setInterval(function() {",
+                                "  if (__hephPlayer && __hephPlayer.getCurrentTime) {",
+                                "    var el = document.getElementById('asciinema-heph-container');",
+                                "    if (el) el.setAttribute('data-time', __hephPlayer.getCurrentTime());",
+                                "  }",
+                                "}, 200);"
+                            );
                             if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
                                 let script = doc.create_element("script").ok()?;
                                 script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
@@ -1529,20 +1518,20 @@ fn hephaestus_demo() -> Element {
                                 doc.head()?.append_child(&link).ok()?;
                                 doc.head()?.append_child(&script).ok()?;
                                 let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
-                                    let _ = js_sys::eval(&js);
+                                    let _ = js_sys::eval(setup);
                                 }).into_js_value();
                                 let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
                                     cb.as_ref().unchecked_ref(), 500,
                                 );
                                 std::mem::forget(cb);
                             } else {
-                                let _ = js_sys::eval(&js);
+                                let _ = js_sys::eval(setup);
                             }
                             Some(())
                         });
                     },
                 }
-                // Right: live host power state panel
+                // Right: power state panel synced to recording time
                 div { class: "heph-panel",
                     div { class: "tree-title", "bare-metal pool" }
                     div { class: "heph-replicas",
@@ -1552,18 +1541,18 @@ fn hephaestus_demo() -> Element {
                     div { class: "heph-phase", "{phase_label}" }
                     div { class: "heph-hosts",
                         for (i, host) in hosts.iter().enumerate() {
-                            div { class: "heph-host heph-{host_state(i, s)}",
+                            div { class: "heph-host heph-{host_state(i, t)}",
                                 span { class: "heph-host-name", "{host}" }
-                                span { class: "heph-host-state", "{host_state(i, s)}" }
+                                span { class: "heph-host-state", "{host_state(i, t)}" }
                             }
                         }
                     }
-                    if s >= 6 && s <= 8 {
+                    if t >= 7.0 && t < 19.0 {
                         div { class: "heph-info", "pool cold — zero running metal" }
                     }
-                    if s >= 9 && s <= 14 {
+                    if t >= 19.0 && t < 100.0 {
                         div { class: "heph-info",
-                            "IPMI power-on → firmware POST → PXE → join cluster"
+                            "IPMI power-on → firmware POST → PXE → join"
                             br {}
                             "~90s per host, dominated by firmware"
                         }
