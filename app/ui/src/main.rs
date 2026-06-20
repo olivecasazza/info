@@ -1357,44 +1357,37 @@ fn hephaestus_demo() -> Element {
     let host_state = |host_idx: usize, t: f64| -> &'static str {
         // All hosts transition simultaneously — IPMI sends power commands
         // to all three at once. The recording timestamps are:
-        //   0.0-0.3: Ready
-        //   0.3: patch → 0 (scale down)
-        //   0.5: Deprovisioning (all three)
-        //   6.8: PoweringOff (all three)
-        //   19.0: patch → 3 (scale up)
-        //   24.3: Available (all three)
-        //   50.4: Provisioning (all three)
-        if t < 0.3 {
+        //   0.0-0.5: Ready, patch → 0
+        //  17.6: Deprovisioning (all three)
+        //  24.7: PoweringOff (all three)
+        //  46.6: Available (all three) — powered off, waiting for scale-up
+        //  55.9: Provisioning (all three) — IPMI power-on, PXE boot
+        // 169.0: end (still Provisioning)
+        if t < 0.5 {
             "ready"
-        } else if t < 6.8 {
+        } else if t < 24.7 {
             "powering-off"
-        } else if t < 24.0 {
+        } else if t < 55.9 {
             "off"
-        } else if t < 50.0 {
-            "provisioning"
         } else {
             "provisioning"
         }
     };
 
-    let replicas = if t < 0.3 {
-        3
-    } else if t < 50.0 {
-        0
-    } else {
-        0
-    };
+    let replicas = if t < 0.5 { 3 } else { 0 };
 
-    let phase_label: &str = if t < 0.3 {
+    let phase_label: &str = if t < 0.5 {
         "steady state: 3/3 ready"
-    } else if t < 7.0 {
-        "scaling down: IPMI power-off"
-    } else if t < 19.0 {
-        "scaled to zero: all hosts off"
-    } else if t < 50.0 {
-        "scaling up: IPMI power-on + PXE"
+    } else if t < 17.6 {
+        "scaling down: patch replicas → 0"
+    } else if t < 24.7 {
+        "deprovisioning: IPMI power-off"
+    } else if t < 46.6 {
+        "powered off: awaiting scale-up"
+    } else if t < 55.9 {
+        "scaling up: patch replicas → 3"
     } else {
-        "provisioning: firmware POST"
+        "provisioning: IPMI power-on + PXE boot"
     };
 
     let hosts = ["hp01", "hp02", "hp03"];
@@ -1463,10 +1456,10 @@ fn hephaestus_demo() -> Element {
                             }
                         }
                     }
-                    if t >= 7.0 && t < 19.0 {
+                    if t >= 24.7 && t < 46.6 {
                         div { class: "heph-info", "pool cold — zero running metal" }
                     }
-                    if t >= 19.0 && t < 100.0 {
+                    if t >= 46.6 && t < 169.0 {
                         div { class: "heph-info",
                             "IPMI power-on → firmware POST → PXE → join"
                             br {}
