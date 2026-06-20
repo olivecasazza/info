@@ -1323,190 +1323,45 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
 }
 
 fn hephaestus_demo() -> Element {
-    let play_time = use_signal(|| 0.0f64);
-
-    // Poll the asciinema player's real playback time to sync the panel.
-    use_future(move || {
-        let mut play_time = play_time;
-        async move {
-            loop {
-                gloo_timers::future::TimeoutFuture::new(200).await;
-                if let Some(t) = web_sys::window().and_then(|w| {
-                    let doc = w.document()?;
-                    let el = doc.get_element_by_id("asciinema-heph-container")?;
-                    let val = el.get_attribute("data-time")?;
-                    val.parse::<f64>().ok()
-                }) {
-                    play_time.set(t);
-                }
-            }
-        }
-    });
-
-    let t = *play_time.read();
-
-    // Drive host states from real recording timestamps (seconds):
-    //   0.0-0.3: initial Ready
-    //   0.3:  patch replicas → 0 (scale down)
-    //   0.5:  Deprovisioning
-    //   6.8:  PoweringOff
-    //   19.0: patch replicas → 3 (scale up)
-    //   24.3: Available
-    //   50.4: Provisioning
-    //   126.0: end
-    let host_state = |host_idx: usize, t: f64| -> &'static str {
-        // All hosts transition simultaneously — IPMI sends power commands
-        // to all three at once. The recording timestamps are:
-        //   0.0-0.5: Ready, patch → 0
-        //  17.6: Deprovisioning (all three)
-        //  24.7: PoweringOff (all three)
-        //  46.6: Available (all three) — powered off, waiting for scale-up
-        //  55.9: Provisioning (all three) — IPMI power-on, PXE boot
-        // 169.0: end (still Provisioning)
-        if t < 0.5 {
-            "ready"
-        } else if t < 24.7 {
-            "powering-off"
-        } else if t < 55.9 {
-            "off"
-        } else {
-            "provisioning"
-        }
-    };
-
-    let replicas = if t < 0.5 { 3 } else { 0 };
-
-    let phase_label: &str = if t < 0.5 {
-        "steady state: 3/3 ready"
-    } else if t < 17.6 {
-        "scaling down: patch replicas → 0"
-    } else if t < 24.7 {
-        "deprovisioning: IPMI power-off"
-    } else if t < 46.6 {
-        "powered off: awaiting scale-up"
-    } else if t < 55.9 {
-        "scaling up: patch replicas → 3"
-    } else {
-        "provisioning: IPMI power-on + PXE boot"
-    };
-
-    let hosts = ["hp01", "hp02", "hp03"];
-
-    // Real uptime values from the recording, captured via SSH /proc/uptime.
-    // The recording polls uptime every few seconds. We interpolate between
-    // the two data points before power-off, then show "—" after hosts go down.
-    let host_uptime = |host_idx: usize, t: f64| -> &'static str {
-        // Data points from the real recording:
-        //   17.0s: hp01=49m hp02=49m hp03=54m
-        //   21.6s: hp01=50m hp02=50m hp03=54m
-        //   25.1s+: all "—" (powered off)
-        if t < 17.0 {
-            // Hosts are up — show approximate uptime at t=0
-            match host_idx {
-                0 | 1 => "49m",
-                2 => "54m",
-                _ => "—",
-            }
-        } else if t < 21.6 {
-            // Second poll
-            match host_idx {
-                0 | 1 => "49m",
-                2 => "54m",
-                _ => "—",
-            }
-        } else if t < 25.1 {
-            // Third poll — just before power-off
-            match host_idx {
-                0 | 1 => "50m",
-                2 => "54m",
-                _ => "—",
-            }
-        } else {
-            // Hosts powered off — unreachable
-            "—"
-        }
-    };
-
     rsx! {
-        figure { class: "project-figure recording-figure cascade-demo",
-            div { class: "cascade-split",
-                // Left: real asciinema recording
-                div {
-                    id: "asciinema-heph-container",
-                    class: "asciinema-container",
-                    onmounted: move |_| {
-                        let _ = web_sys::window().and_then(|w: web_sys::Window| {
-                            let doc = w.document()?;
-                            // Create player and set up time tracking
-                            let setup = concat!(
-                                "window.__hephPlayer = AsciinemaPlayer.create(",
-                                "  '/projects-media/hephaestus-demo.cast',",
-                                "  document.getElementById('asciinema-heph-container'),",
-                                "  { cols: 80, rows: 22, autoPlay: true, loop: true, speed: 0.5,",
-                                "    theme: 'monokai', fontSize: '10px', fit: false,",
-                                "    idleTimeLimit: 3, controls: false });",
-                                "setInterval(function() {",
-                                "  try {",
-                                "    var t = window.__hephPlayer.getCurrentTime();",
-                                "    var el = document.getElementById('asciinema-heph-container');",
-                                "    if (el && typeof t === 'number') el.setAttribute('data-time', String(t));",
-                                "  } catch(e) {}",
-                                "}, 200);"
+        figure { class: "project-figure recording-figure",
+            div {
+                id: "asciinema-heph-container",
+                class: "asciinema-container",
+                onmounted: move |_| {
+                    let _ = web_sys::window().and_then(|w: web_sys::Window| {
+                        let doc = w.document()?;
+                        let js = concat!(
+                            "AsciinemaPlayer.create('/projects-media/hephaestus-demo.cast',",
+                            " document.getElementById('asciinema-heph-container'), {",
+                            "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
+                            "  theme: 'monokai', fontSize: '11px', fit: false,",
+                            "  idleTimeLimit: 3, controls: false",
+                            "});"
+                        ).to_string();
+                        if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
+                            let script = doc.create_element("script").ok()?;
+                            script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
+                            let link = doc.create_element("link").ok()?;
+                            link.set_attribute("rel", "stylesheet").ok()?;
+                            link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
+                            doc.head()?.append_child(&link).ok()?;
+                            doc.head()?.append_child(&script).ok()?;
+                            let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
+                                let _ = js_sys::eval(&js);
+                            }).into_js_value();
+                            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                cb.as_ref().unchecked_ref(), 500,
                             );
-                            if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
-                                let script = doc.create_element("script").ok()?;
-                                script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
-                                let link = doc.create_element("link").ok()?;
-                                link.set_attribute("rel", "stylesheet").ok()?;
-                                link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
-                                doc.head()?.append_child(&link).ok()?;
-                                doc.head()?.append_child(&script).ok()?;
-                                let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
-                                    let _ = js_sys::eval(setup);
-                                }).into_js_value();
-                                let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
-                                    cb.as_ref().unchecked_ref(), 500,
-                                );
-                                std::mem::forget(cb);
-                            } else {
-                                let _ = js_sys::eval(setup);
-                            }
-                            Some(())
-                        });
-                    },
-                }
-                // Right: power state panel synced to recording time
-                div { class: "heph-panel",
-                    div { class: "tree-title", "bare-metal pool" }
-                    div { class: "heph-replicas",
-                        span { class: "heph-replica-num", "{replicas}" }
-                        span { class: "heph-replica-label", "/ 3 ready" }
-                    }
-                    div { class: "heph-phase", "{phase_label}" }
-                    div { class: "heph-hosts",
-                        for (i, host) in hosts.iter().enumerate() {
-                            div { class: "heph-host heph-{host_state(i, t)}",
-                                span { class: "heph-host-name", "{host}" }
-                                span { class: "heph-host-meta",
-                                    span { class: "heph-host-state", "{host_state(i, t)}" }
-                                    span { class: "heph-host-uptime", "up: {host_uptime(i, t)}" }
-                                }
-                            }
+                            std::mem::forget(cb);
+                        } else {
+                            let _ = js_sys::eval(&js);
                         }
-                    }
-                    if t >= 24.7 && t < 46.6 {
-                        div { class: "heph-info", "pool cold — zero running metal" }
-                    }
-                    if t >= 46.6 && t < 169.0 {
-                        div { class: "heph-info",
-                            "IPMI power-on → firmware POST → PXE → join"
-                            br {}
-                            "~90s per host, dominated by firmware"
-                        }
-                    }
-                }
+                        Some(())
+                    });
+                },
             }
-            figcaption { "Real recording: kubectl patch metalmachinepool hpc-workers replicas 3→0→3 against nixlab ProLiant hosts via IPMI." }
+            figcaption { "Real IPMI scale-up/down: kubectl patch metalmachinepool hpc-workers replicas 3→0→3 against nixlab ProLiant hosts." }
         }
     }
 }
@@ -1725,12 +1580,12 @@ const APP_CSS: &str = r#"
 }
 .ws-root:not(.mobile) .panel-consortium-demo,
 .ws-root:not(.mobile) .panel-hephaestus-recording {
-  --panel-min-h: 50vh;
+  --panel-min-h: 120px;
 }
 .asciinema-container {
   flex: 1;
   min-width: 0;
-  min-height: 350px;
+  min-height: 120px;
   overflow: hidden;
 }
 .cascade-split {
