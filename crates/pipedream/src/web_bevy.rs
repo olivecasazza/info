@@ -1,10 +1,10 @@
 //! WASM entrypoint for Bevy-based pipedream.
 //!
 //! A data-center campus visualizer. Three layers:
-//!  * `PipeSim` — a 4-level wiring tree (global core → site core → aisle
-//!    aggregation switch → server). Flows route up their source server's
-//!    branch, across the backbone, and down into a destination server. Trunks
-//!    emerge for free because siblings share parents.
+//!  * `PipeSim` — a wiring tree (server → aisle aggregation → site core)
+//!    whose site cores tap a backbone ring. Flows route up their source
+//!    server's branch, around the ring to the destination site, and down its
+//!    branch. Trunks emerge for free because siblings share parents.
 //!  * `ServerNode` — low-poly server boxes laid out in site aisles (rows of
 //!    racks) that assemble with a Lego-style "reverse explode" animation.
 //!  * `draw_rj45` — a detailed RJ45 plug on each server faceplate.
@@ -368,7 +368,7 @@ struct Palette {
     faceplate: Color32,
     lid: Color32,
     led: [Color32; 3],
-    /// Infrastructure node colors: [aisle agg, site core, global core].
+    /// Infrastructure node colors: [aisle agg, site core, backbone].
     infra: [Color32; 3],
     /// T568B wire order, pin 1..8.
     wires: [Color32; 8],
@@ -399,8 +399,8 @@ impl Palette {
             Color32::from_rgb(80, 150, 240),
         ];
 
-        // Aisle aggregation, site core, global core — escalating brightness so
-        // the tree's spine reads top-down at a glance.
+        // Aisle aggregation, site core, backbone — escalating brightness so the
+        // tree reads bottom-up (rack → ring) at a glance.
         let infra = [highlight, compliment, Color32::from_rgb(236, 232, 220)];
 
         // T568B pinout colors.
@@ -489,26 +489,32 @@ impl IsoRenderer {
 //=============================================================================
 /// Data-center wiring tree on a voxel grid.
 ///
-/// Layout: `sites` data centers on a ground-plane grid. Each site is `aisles`
-/// rows of `racks` server boxes, with an aisle aggregation switch at the head
-/// of each aisle and a site core switch in front. A single global core sits at
-/// campus center and elevation.
+/// Layout: `sites` data centers scattered on a jittered ring around the campus
+/// center. Each site is `aisles` rows of `racks` server boxes, with an aisle
+/// aggregation switch at the head of each aisle and a site core switch in front.
+/// The site cores tap a backbone ring (one elevated node per site, joined in a
+/// loop) instead of a single central core, so inter-site traffic flows around
+/// the perimeter rather than piling into one crossing.
 ///
-/// Topology (4-level tree): global core → site core → aisle agg → server.
-/// Each flow picks a random source and destination server and routes up its
-/// source branch, across the backbone, and down the destination branch. Cables
-/// bound for the same parent share that parent's junction, so trunks form
-/// without any explicit corridor logic.
+/// Topology: server → aisle agg → site core → backbone ring → ... → server.
+/// Each flow picks a random source and destination server. Cables bound for the
+/// same parent share that parent's junction, so trunks form without any
+/// explicit corridor logic.
 
 /// One data-center site: a core switch plus one aggregation switch per aisle.
 struct Site {
+    center: IVec3,
     core: IVec3,
     aisle_aggs: Vec<IVec3>,
 }
 
 struct PipeSim {
     bounds: IVec3,
-    global_core: IVec3,
+    /// Backbone ring: one elevated node above each site, connected in a loop
+    /// (site index order = angular order). Inter-site traffic routes around the
+    /// ring instead of through a single central core, so it doesn't pile into
+    /// one crossing. Empty for a single site (no inter-site traffic).
+    backbone: Vec<IVec3>,
     /// Persistent server positions and which site/aisle each belongs to.
     servers: Vec<IVec3>,
     server_facings: Vec<Dir>,
@@ -540,7 +546,7 @@ impl PipeSim {
     ) -> Self {
         let mut s = Self {
             bounds,
-            global_core: IVec3::new(bounds.x / 2, bounds.y / 2, bounds.z / 2),
+            backbone: Vec::new(),
             servers: Vec::new(),
             server_facings: Vec::new(),
             server_site: Vec::new(),
@@ -626,7 +632,9 @@ impl PipeSim {
                 visit(agg);
             }
         }
-        visit(self.global_core);
+        for &node in &self.backbone {
+            visit(node);
+        }
         if min_x > max_x {
             return ((0.0, 0.0), (40.0, 30.0));
         }
@@ -653,8 +661,6 @@ impl PipeSim {
         let ground_z = 8.0_f32;
         let campus_x = self.bounds.x as f32 * 0.5;
         let campus_y = self.bounds.y as f32 * 0.5;
-        self.global_core =
-            self.clamp_point(IVec3::new(campus_x as i32, campus_y as i32, (ground_z + 20.0) as i32));
 
         // Fixed per-site footprint (independent of site count now that sites are
         // scattered, not packed into a grid). A site spans `block_w` x `block_h`
@@ -698,6 +704,11 @@ impl PipeSim {
             let y0 = center_y - block_h * 0.5;
 
             let mut site = Site {
+                center: self.clamp_point(IVec3::new(
+                    center_x.round() as i32,
+                    center_y.round() as i32,
+                    ground_z as i32,
+                )),
                 core: IVec3::new(0, 0, 0),
                 aisle_aggs: Vec::with_capacity(aisles),
             };
@@ -732,6 +743,21 @@ impl PipeSim {
             ));
             self.sites.push(site);
         }
+
+        // Backbone ring: an elevated node above each site center, tapped by that
+        // site's core. Routing walks consecutive nodes, so the loop closes
+        // (last → first) and traffic flows around the perimeter. Only meaningful
+        // with two or more sites.
+        self.backbone.clear();
+        if n >= 2 {
+            for site in &self.sites {
+                self.backbone.push(self.clamp_point(IVec3::new(
+                    site.center.x,
+                    site.center.y,
+                    (ground_z + 17.0) as i32,
+                )));
+            }
+        }
     }
 
     fn reset(&mut self, flows: usize) {
@@ -743,10 +769,16 @@ impl PipeSim {
 
         self.generate_topology();
 
+        // Placeholder head/target; respawn() overwrites both immediately.
+        let seed_pos = self.servers.first().copied().unwrap_or(IVec3::new(
+            self.bounds.x / 2,
+            self.bounds.y / 2,
+            self.bounds.z / 2,
+        ));
         for _ in 0..flows {
-            self.heads.push(self.global_core);
+            self.heads.push(seed_pos);
             self.dirs.push(Dir::PosX);
-            self.leaf_targets.push(self.global_core);
+            self.leaf_targets.push(seed_pos);
             self.routes.push(Vec::new());
             self.respawn(self.heads.len() - 1);
         }
@@ -822,8 +854,8 @@ impl PipeSim {
     }
 
     /// Route a flow up the source server's branch (server → aisle agg → site
-    /// core), across the backbone (→ global core → dest site core) when the
-    /// destination is in another site, then down the destination branch.
+    /// core → backbone tap), around the backbone ring to the destination site's
+    /// tap, then down the destination branch. Intra-site flows skip the ring.
     fn build_route(&self, src: usize, dest: usize, flow: usize) -> Vec<Dir> {
         let off = Self::lane(flow);
         let s_site = self.server_site[src];
@@ -837,8 +869,19 @@ impl PipeSim {
         let mut wps: Vec<IVec3> = Vec::new();
         wps.push(self.clamp_point(self.sites[s_site].aisle_aggs[s_aisle].add(off)));
         wps.push(self.clamp_point(self.sites[s_site].core.add(off)));
-        if s_site != d_site {
-            wps.push(self.clamp_point(self.global_core.add(off)));
+        if s_site != d_site && self.backbone.len() == self.sites.len() {
+            // Walk the ring from the source tap to the destination tap in the
+            // shorter direction; every intermediate backbone node is a waypoint
+            // so the cable hugs the perimeter loop.
+            let n = self.backbone.len();
+            wps.push(self.clamp_point(self.backbone[s_site].add(off)));
+            let forward = (d_site + n - s_site) % n;
+            let step: isize = if forward <= n - forward { 1 } else { -1 };
+            let mut k = s_site;
+            while k != d_site {
+                k = ((k as isize + step).rem_euclid(n as isize)) as usize;
+                wps.push(self.clamp_point(self.backbone[k].add(off)));
+            }
             wps.push(self.clamp_point(self.sites[d_site].core.add(off)));
         }
         wps.push(self.clamp_point(self.sites[d_site].aisle_aggs[d_aisle].add(off)));
@@ -1352,19 +1395,20 @@ fn push_shaded_box_cmd(
     });
 }
 
-/// Static tree infrastructure: global core, site cores, aisle aggregation
+/// Static infrastructure: backbone ring nodes, site cores, aisle aggregation
 /// switches. Drawn opaque so the tree skeleton is legible between cable bursts.
 fn push_infra_cmds(state: &PipedreamState, cmds: &mut Vec<IsoBoxCmd>) {
     let p = &state.palette;
-    let gc = state.sim.global_core;
-    push_shaded_box_cmd(
-        cmds,
-        p,
-        [gc.x as f32, gc.y as f32, gc.z as f32],
-        [5.0, 5.0, 4.0],
-        p.infra[2],
-        255,
-    );
+    for &node in &state.sim.backbone {
+        push_shaded_box_cmd(
+            cmds,
+            p,
+            [node.x as f32, node.y as f32, node.z as f32],
+            [3.0, 3.0, 2.6],
+            p.infra[2],
+            255,
+        );
+    }
     for site in &state.sim.sites {
         let c = site.core;
         push_shaded_box_cmd(
