@@ -1041,8 +1041,9 @@ fn consortium_demo() -> Element {
                         let js = concat!(
                             "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
                             " document.getElementById('asciinema-container'), {",
-                            "  cols: 100, rows: 28, autoPlay: true, loop: true, theme: 'monokai',",
-                            "  fontSize: '11px', fit: false, idleTimeLimit: 2, controls: false",
+                            "  cols: 100, rows: 28, autoPlay: true, loop: true, speed: 0.5,",
+                            "  theme: 'monokai', fontSize: '11px', fit: false,",
+                            "  idleTimeLimit: 2, controls: false",
                             "});"
                         ).to_string();
                         if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
@@ -1415,7 +1416,7 @@ fn hephaestus_demo() -> Element {
                                 "window.__hephPlayer = AsciinemaPlayer.create(",
                                 "  '/projects-media/hephaestus-demo.cast',",
                                 "  document.getElementById('asciinema-heph-container'),",
-                                "  { cols: 80, rows: 22, autoPlay: true, loop: true,",
+                                "  { cols: 80, rows: 22, autoPlay: true, loop: true, speed: 0.5,",
                                 "    theme: 'monokai', fontSize: '10px', fit: false,",
                                 "    idleTimeLimit: 3, controls: false });",
                                 "setInterval(function() {",
