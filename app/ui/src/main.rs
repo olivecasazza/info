@@ -1081,7 +1081,7 @@ fn consortium_demo() -> Element {
                             "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
                             " document.getElementById('asciinema-container'), {",
                             "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
-                            "  theme: 'monokai', fontSize: '11px', fit: true,",
+                            "  theme: 'monokai', fontSize: '11px', fit: false,",
                             "  idleTimeLimit: 2, controls: false",
                             "});"
                         ).to_string();
@@ -1374,7 +1374,7 @@ fn hephaestus_demo() -> Element {
                             "AsciinemaPlayer.create('/projects-media/hephaestus-demo.cast',",
                             " document.getElementById('asciinema-heph-container'), {",
                             "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
-                            "  theme: 'monokai', fontSize: '11px', fit: true,",
+                            "  theme: 'monokai', fontSize: '11px', fit: false,",
                             "  idleTimeLimit: 3, controls: false",
                             "});"
                         ).to_string();
@@ -1633,13 +1633,13 @@ const APP_CSS: &str = r#"
   overflow-y: auto;
   overflow-x: hidden;
 }
-.asciinema-container .asciinema-player {
-  width: 100% !important;
-  height: 100% !important;
+/* Override asciinema-player's internal overflow:hidden so the full
+   terminal is scrollable within the panel instead of clipped. */
+.asciinema-container .ap-player {
+  overflow: visible !important;
 }
-.asciinema-container .asciinema-player-wrapper {
-  width: 100%;
-  height: 100%;
+.asciinema-container .ap-terminal {
+  overflow: visible !important;
 }
 .cascade-split {
   display: flex;
