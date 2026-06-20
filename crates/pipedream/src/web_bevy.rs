@@ -565,14 +565,22 @@ impl PipeSim {
         )
     }
 
-    /// Ground-plane campus centroid — used as the renderer focus so the whole
-    /// site grid stays centered on screen.
+    /// Renderer focus (world point that maps to screen center). Centered on the
+    /// server centroid — the bulk of the geometry — rather than the bounds box,
+    /// so an off-center or non-square site grid still frames well. The z bias
+    /// sits between the ground racks and the elevated cores so neither the
+    /// backbone nor the rows fall off an edge.
     fn focus(&self) -> [f32; 3] {
-        [
-            self.bounds.x as f32 * 0.5,
-            self.bounds.y as f32 * 0.5,
-            10.0,
-        ]
+        if self.servers.is_empty() {
+            return [self.bounds.x as f32 * 0.5, self.bounds.y as f32 * 0.5, 14.0];
+        }
+        let (mut sx, mut sy) = (0.0_f32, 0.0_f32);
+        for s in &self.servers {
+            sx += s.x as f32;
+            sy += s.y as f32;
+        }
+        let n = self.servers.len() as f32;
+        [sx / n, sy / n, 14.0]
     }
 
     /// Lay out sites, aisles, racks and the switch tree on the ground plane.
@@ -978,6 +986,7 @@ fn sync_external_config(mut state: ResMut<PipedreamState>) {
         state.sim.racks = ext.racks;
         let flows = state.flows;
         state.sim.reset(flows);
+        state.renderer.focus = state.sim.focus();
         state.sim_time = 0.0;
         rebuild_nodes(&mut state);
     }
@@ -985,6 +994,7 @@ fn sync_external_config(mut state: ResMut<PipedreamState>) {
     if ext.reset_requested {
         let flows = state.flows;
         state.sim.reset(flows);
+        state.renderer.focus = state.sim.focus();
         state.sim_time = 0.0;
         rebuild_nodes(&mut state);
         EXTERNAL_CONFIG.with(|c| c.borrow_mut().reset_requested = false);
