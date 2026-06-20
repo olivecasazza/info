@@ -722,9 +722,10 @@ fn SpeciesSlider(
 fn PipedreamControls(canvas_id: String) -> Element {
     let mut controls_visible = use_signal(|| false);
     let mut speed = use_signal(|| 20.0_f32);
-    let mut scale = use_signal(|| 4.0_f32);
+    let mut scale = use_signal(|| 5.5_f32);
     let mut pixel = use_signal(|| 3.0_f32);
     let mut pipe_count = use_signal(|| 10_usize);
+    let mut server_count = use_signal(|| 24_usize);
     let mut min_spacing = use_signal(|| 5_i32);
     let mut straightness = use_signal(|| 10_u32);
     let mut max_len_per_pipe = use_signal(|| 180_usize);
@@ -735,6 +736,7 @@ fn PipedreamControls(canvas_id: String) -> Element {
     let canvas_id_scale = canvas_id.clone();
     let canvas_id_pixel = canvas_id.clone();
     let canvas_id_pipes = canvas_id.clone();
+    let canvas_id_servers = canvas_id.clone();
     let canvas_id_spacing = canvas_id.clone();
     let canvas_id_straight = canvas_id.clone();
     let canvas_id_max_len = canvas_id.clone();
@@ -757,6 +759,9 @@ fn PipedreamControls(canvas_id: String) -> Element {
                 }
                 if let Some(v) = js_get_usize(&handle, "pipe_count") {
                     pipe_count.set(v);
+                }
+                if let Some(v) = js_get_usize(&handle, "server_count") {
+                    server_count.set(v);
                 }
                 if let Some(v) = js_get_f32(&handle, "min_spacing") {
                     min_spacing.set(v as i32);
@@ -823,6 +828,18 @@ fn PipedreamControls(canvas_id: String) -> Element {
         }
     };
 
+    let on_server_count_change = {
+        let canvas_id = canvas_id_servers.clone();
+        move |e: Event<FormData>| {
+            if let Ok(v) = e.value().parse::<usize>() {
+                server_count.set(v);
+                if let Some(handle) = get_bevy_handle(&canvas_id) {
+                    js_set(&handle, "server_count", &JsValue::from_f64(v as f64));
+                }
+            }
+        }
+    };
+
     let on_min_spacing_change = {
         let canvas_id = canvas_id_spacing.clone();
         move |e: Event<FormData>| {
@@ -881,8 +898,8 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         label { "speed" }
                         input {
                             r#type: "range",
-                            min: "5",
-                            max: "240",
+                            min: "1",
+                            max: "480",
                             step: "5",
                             value: "{speed}",
                             oninput: on_speed_change,
@@ -893,20 +910,20 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         label { "scale" }
                         input {
                             r#type: "range",
-                            min: "3",
-                            max: "18",
-                            step: "1",
+                            min: "2",
+                            max: "32",
+                            step: "0.5",
                             value: "{scale}",
                             oninput: on_scale_change,
                         }
-                        span { class: "control-value", "{scale:.0}" }
+                        span { class: "control-value", "{scale:.1}" }
                     }
                     div { class: "control-row",
                         label { "pixel" }
                         input {
                             r#type: "range",
                             min: "1",
-                            max: "8",
+                            max: "12",
                             step: "0.5",
                             value: "{pixel}",
                             oninput: on_pixel_change,
@@ -918,7 +935,7 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         input {
                             r#type: "range",
                             min: "1",
-                            max: "8",
+                            max: "32",
                             step: "1",
                             value: "{pipe_count}",
                             oninput: on_pipe_count_change,
@@ -926,11 +943,23 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         span { class: "control-value", "{pipe_count}" }
                     }
                     div { class: "control-row",
+                        label { "servers" }
+                        input {
+                            r#type: "range",
+                            min: "2",
+                            max: "72",
+                            step: "1",
+                            value: "{server_count}",
+                            oninput: on_server_count_change,
+                        }
+                        span { class: "control-value", "{server_count}" }
+                    }
+                    div { class: "control-row",
                         label { "min spacing" }
                         input {
                             r#type: "range",
                             min: "0",
-                            max: "5",
+                            max: "24",
                             step: "1",
                             value: "{min_spacing}",
                             oninput: on_min_spacing_change,
@@ -942,7 +971,7 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         input {
                             r#type: "range",
                             min: "1",
-                            max: "20",
+                            max: "100",
                             step: "1",
                             value: "{straightness}",
                             oninput: on_straightness_change,
@@ -954,7 +983,7 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         input {
                             r#type: "range",
                             min: "10",
-                            max: "900",
+                            max: "1800",
                             step: "10",
                             value: "{max_len_per_pipe}",
                             oninput: on_max_len_change,
@@ -1052,7 +1081,7 @@ fn consortium_demo() -> Element {
                             "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
                             " document.getElementById('asciinema-container'), {",
                             "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
-                            "  theme: 'monokai', fontSize: '11px', fit: false,",
+                            "  theme: 'monokai', fontSize: '11px', fit: true,",
                             "  idleTimeLimit: 2, controls: false",
                             "});"
                         ).to_string();
@@ -1345,7 +1374,7 @@ fn hephaestus_demo() -> Element {
                             "AsciinemaPlayer.create('/projects-media/hephaestus-demo.cast',",
                             " document.getElementById('asciinema-heph-container'), {",
                             "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
-                            "  theme: 'monokai', fontSize: '11px', fit: false,",
+                            "  theme: 'monokai', fontSize: '11px', fit: true,",
                             "  idleTimeLimit: 3, controls: false",
                             "});"
                         ).to_string();
@@ -1603,6 +1632,14 @@ const APP_CSS: &str = r#"
   min-height: 120px;
   overflow-y: auto;
   overflow-x: hidden;
+}
+.asciinema-container .asciinema-player {
+  width: 100% !important;
+  height: 100% !important;
+}
+.asciinema-container .asciinema-player-wrapper {
+  width: 100%;
+  height: 100%;
 }
 .cascade-split {
   display: flex;
