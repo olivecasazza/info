@@ -722,9 +722,9 @@ fn SpeciesSlider(
 fn PipedreamControls(canvas_id: String) -> Element {
     let mut controls_visible = use_signal(|| false);
     let mut speed = use_signal(|| 20.0_f32);
-    let mut scale = use_signal(|| 7.0_f32);
+    let mut scale = use_signal(|| 4.0_f32);
     let mut pixel = use_signal(|| 3.0_f32);
-    let mut pipe_count = use_signal(|| 8_usize);
+    let mut pipe_count = use_signal(|| 10_usize);
     let mut min_spacing = use_signal(|| 5_i32);
     let mut straightness = use_signal(|| 10_u32);
     let mut max_len_per_pipe = use_signal(|| 180_usize);
@@ -893,7 +893,7 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         label { "scale" }
                         input {
                             r#type: "range",
-                            min: "4",
+                            min: "3",
                             max: "18",
                             step: "1",
                             value: "{scale}",
@@ -1601,7 +1601,8 @@ const APP_CSS: &str = r#"
   flex: 1;
   min-width: 0;
   min-height: 120px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .cascade-split {
   display: flex;
