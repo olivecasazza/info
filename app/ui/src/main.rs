@@ -1041,7 +1041,7 @@ fn consortium_demo() -> Element {
                         let js = concat!(
                             "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
                             " document.getElementById('asciinema-container'), {",
-                            "  cols: 100, rows: 28, autoPlay: true, loop: true, speed: 0.5,",
+                            "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
                             "  theme: 'monokai', fontSize: '11px', fit: false,",
                             "  idleTimeLimit: 2, controls: false",
                             "});"
