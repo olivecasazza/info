@@ -1,21 +1,20 @@
 //! WASM entrypoint for Bevy-based pipedream.
 //!
-//! Migrated from original app.rs, using egui painter for rendering.
-//!
-//! Three subsystems:
-//!  * `PipeSim` — a center→leaf tree: cables bundle into shared trunk corridors
-//!    near the core switch and fan out toward leaf servers, looping forever.
-//!  * `draw_rj45` — a detailed RJ45 plug: transparent clear body over the eight
-//!    T568B wire stripes, gold contact pins, and a release tab.
-//!  * `ServerNode` — low-poly server boxes at the tree leaves that assemble with
-//!    a Lego-style "reverse explode" animation when a cable reaches them.
+//! A data-center campus visualizer. Three layers:
+//!  * `PipeSim` — a 4-level wiring tree (global core → site core → aisle
+//!    aggregation switch → server). Flows route up their source server's
+//!    branch, across the backbone, and down into a destination server. Trunks
+//!    emerge for free because siblings share parents.
+//!  * `ServerNode` — low-poly server boxes laid out in site aisles (rows of
+//!    racks) that assemble with a Lego-style "reverse explode" animation.
+//!  * `draw_rj45` — a detailed RJ45 plug on each server faceplate.
 
 use bevy::prelude::*;
+use bevy::window::WindowResolution;
 use bevy_core::BevyCorePlugins;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use egui::{pos2, Color32, Pos2, Rect, Shape, Stroke};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
 use wasm_bindgen::prelude::*;
 
 //=============================================================================
@@ -27,13 +26,11 @@ struct ExternalConfig {
     speed: f32,
     scale: f32,
     pixel: f32,
-    pipe_count: usize,
-    min_spacing: i32,
-    straightness: u32,
-    min_run_length: u32,
-    max_len_per_pipe: usize,
-    depth_levels: u32,
-    server_count: usize,
+    flows: usize,
+    sites: usize,
+    aisles: usize,
+    racks: usize,
+    trail: usize,
     show_ui: bool,
     reset_requested: bool,
 }
@@ -41,16 +38,14 @@ struct ExternalConfig {
 impl Default for ExternalConfig {
     fn default() -> Self {
         Self {
-            speed: 20.0,
-            scale: 4.0,
-            pixel: 3.0,
-            pipe_count: 10,
-            min_spacing: 5,
-            straightness: 10,
-            min_run_length: 5,
-            max_len_per_pipe: 180,
-            depth_levels: 3,
-            server_count: 24,
+            speed: 24.0,
+            scale: 2.0,
+            pixel: 2.5,
+            flows: 12,
+            sites: 4,
+            aisles: 3,
+            racks: 5,
+            trail: 320,
             show_ui: false, // Hide egui by default; Dioxus controls are used instead
             reset_requested: false,
         }
@@ -59,7 +54,7 @@ impl Default for ExternalConfig {
 
 thread_local! {
     static EXTERNAL_CONFIG: RefCell<ExternalConfig> = RefCell::new(ExternalConfig::default());
-    static CONFIG_DIRTY: RefCell<bool> = RefCell::new(false);
+    static CONFIG_DIRTY: RefCell<bool> = const { RefCell::new(false) };
 }
 
 fn mark_config_dirty() {
@@ -98,13 +93,31 @@ impl WebHandle {
         } else {
             format!("#{}", canvas_id)
         };
+        let parent_size = canvas.parent_element().map(|parent| {
+            (
+                parent.client_width().max(640) as f32,
+                parent.client_height().max(360) as f32,
+            )
+        });
+        let (css_w, css_h) = parent_size.unwrap_or((960.0, 540.0));
+        let backing_scale = 2.5_f32;
+        let backing_w = (css_w / backing_scale).round().max(320.0);
+        let backing_h = (css_h / backing_scale).round().max(200.0);
+        canvas.set_width(backing_w as u32);
+        canvas.set_height(backing_h as u32);
+        let style = canvas.style();
+        let _ = style.set_property("width", "100%");
+        let _ = style.set_property("height", "100%");
+        let _ = style.set_property("image-rendering", "pixelated");
 
         App::new()
             .add_plugins(DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Pipedream".into(),
                     canvas: Some(selector),
-                    fit_canvas_to_parent: true,
+                    resolution: WindowResolution::new(backing_w, backing_h)
+                        .with_scale_factor_override(1.0),
+                    fit_canvas_to_parent: false,
                     prevent_default_event_handling: false,
                     ..Default::default()
                 }),
@@ -138,7 +151,7 @@ impl WebHandle {
 
     #[wasm_bindgen(setter)]
     pub fn set_speed(&self, v: f32) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().speed = v.clamp(5.0, 240.0));
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().speed = v.clamp(1.0, 480.0));
         mark_config_dirty();
     }
 
@@ -149,7 +162,7 @@ impl WebHandle {
 
     #[wasm_bindgen(setter)]
     pub fn set_scale(&self, v: f32) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().scale = v.clamp(6.0, 26.0));
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().scale = v.clamp(1.0, 32.0));
         mark_config_dirty();
     }
 
@@ -160,84 +173,62 @@ impl WebHandle {
 
     #[wasm_bindgen(setter)]
     pub fn set_pixel(&self, v: f32) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().pixel = v.clamp(1.0, 8.0));
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().pixel = v.clamp(1.0, 4.0));
         mark_config_dirty();
     }
 
     #[wasm_bindgen(getter)]
-    pub fn pipe_count(&self) -> usize {
-        EXTERNAL_CONFIG.with(|c| c.borrow().pipe_count)
+    pub fn flows(&self) -> usize {
+        EXTERNAL_CONFIG.with(|c| c.borrow().flows)
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_pipe_count(&self, v: usize) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().pipe_count = v.clamp(1, 24));
+    pub fn set_flows(&self, v: usize) {
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().flows = v.clamp(1, 40));
         mark_config_dirty();
     }
 
     #[wasm_bindgen(getter)]
-    pub fn min_spacing(&self) -> i32 {
-        EXTERNAL_CONFIG.with(|c| c.borrow().min_spacing)
+    pub fn sites(&self) -> usize {
+        EXTERNAL_CONFIG.with(|c| c.borrow().sites)
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_min_spacing(&self, v: i32) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().min_spacing = v.clamp(0, 12));
+    pub fn set_sites(&self, v: usize) {
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().sites = v.clamp(1, 9));
         mark_config_dirty();
     }
 
     #[wasm_bindgen(getter)]
-    pub fn straightness(&self) -> u32 {
-        EXTERNAL_CONFIG.with(|c| c.borrow().straightness)
+    pub fn aisles(&self) -> usize {
+        EXTERNAL_CONFIG.with(|c| c.borrow().aisles)
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_straightness(&self, v: u32) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().straightness = v.clamp(1, 50));
+    pub fn set_aisles(&self, v: usize) {
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().aisles = v.clamp(1, 6));
         mark_config_dirty();
     }
 
     #[wasm_bindgen(getter)]
-    pub fn min_run_length(&self) -> u32 {
-        EXTERNAL_CONFIG.with(|c| c.borrow().min_run_length)
+    pub fn racks(&self) -> usize {
+        EXTERNAL_CONFIG.with(|c| c.borrow().racks)
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_min_run_length(&self, v: u32) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().min_run_length = v.clamp(1, 20));
+    pub fn set_racks(&self, v: usize) {
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().racks = v.clamp(1, 8));
         mark_config_dirty();
     }
 
     #[wasm_bindgen(getter)]
-    pub fn max_len_per_pipe(&self) -> usize {
-        EXTERNAL_CONFIG.with(|c| c.borrow().max_len_per_pipe)
+    pub fn trail(&self) -> usize {
+        EXTERNAL_CONFIG.with(|c| c.borrow().trail)
     }
 
     #[wasm_bindgen(setter)]
-    pub fn set_max_len_per_pipe(&self, v: usize) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().max_len_per_pipe = v.clamp(10, 900));
-        mark_config_dirty();
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn depth_levels(&self) -> u32 {
-        EXTERNAL_CONFIG.with(|c| c.borrow().depth_levels)
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_depth_levels(&self, v: u32) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().depth_levels = v.clamp(2, 8));
-        mark_config_dirty();
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn server_count(&self) -> usize {
-        EXTERNAL_CONFIG.with(|c| c.borrow().server_count)
-    }
-
-    #[wasm_bindgen(setter)]
-    pub fn set_server_count(&self, v: usize) {
-        EXTERNAL_CONFIG.with(|c| c.borrow_mut().server_count = v.clamp(2, 48));
+    pub fn set_trail(&self, v: usize) {
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().trail = v.clamp(50, 2000));
         mark_config_dirty();
     }
 
@@ -279,10 +270,6 @@ impl IVec3 {
         IVec3::new(self.x + o.x, self.y + o.y, self.z + o.z)
     }
 
-    fn sub(self, o: IVec3) -> IVec3 {
-        IVec3::new(self.x - o.x, self.y - o.y, self.z - o.z)
-    }
-
     fn comp(self, i: usize) -> i32 {
         match i {
             0 => self.x,
@@ -294,31 +281,6 @@ impl IVec3 {
 
 fn manhattan(a: IVec3, b: IVec3) -> i32 {
     (a.x - b.x).abs() + (a.y - b.y).abs() + (a.z - b.z).abs()
-}
-
-/// Dominant signed axis of a vector — used to pick each cable's trunk corridor
-/// so cables bound for the same octant share a trunk near the core.
-fn dominant_axis(v: IVec3) -> Dir {
-    let ax = v.x.abs();
-    let ay = v.y.abs();
-    let az = v.z.abs();
-    if ax >= ay && ax >= az {
-        if v.x >= 0 {
-            Dir::PosX
-        } else {
-            Dir::NegX
-        }
-    } else if ay >= az {
-        if v.y >= 0 {
-            Dir::PosY
-        } else {
-            Dir::NegY
-        }
-    } else if v.z >= 0 {
-        Dir::PosZ
-    } else {
-        Dir::NegZ
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -398,6 +360,8 @@ struct Palette {
     faceplate: Color32,
     lid: Color32,
     led: [Color32; 3],
+    /// Infrastructure node colors: [aisle agg, site core, global core].
+    infra: [Color32; 3],
     /// T568B wire order, pin 1..8.
     wires: [Color32; 8],
 }
@@ -427,6 +391,10 @@ impl Palette {
             Color32::from_rgb(80, 150, 240),
         ];
 
+        // Aisle aggregation, site core, global core — escalating brightness so
+        // the tree's spine reads top-down at a glance.
+        let infra = [highlight, compliment, Color32::from_rgb(236, 232, 220)];
+
         // T568B pinout colors.
         let wires = [
             Color32::from_rgb(245, 228, 205), // 1 white/orange
@@ -449,6 +417,7 @@ impl Palette {
             faceplate,
             lid,
             led,
+            infra,
             wires,
         }
     }
@@ -475,121 +444,107 @@ impl Palette {
     }
 }
 
+/// Isometric projection. `focus` is the world point that maps to screen center,
+/// so a campus laid out on the ground plane (x,y) with z up stays framed.
 struct IsoRenderer {
     scale: f32,
     pixel: f32,
+    focus: [f32; 3],
 }
 
 impl Default for IsoRenderer {
     fn default() -> Self {
         Self {
-            scale: 7.0,
-            pixel: 3.0,
+            scale: 2.0,
+            pixel: 2.5,
+            focus: [0.0, 0.0, 0.0],
         }
     }
 }
 
 impl IsoRenderer {
     fn project(&self, x: f32, y: f32, z: f32) -> Pos2 {
-        let sx = (x - y) * self.scale;
-        let sy = (x + y) * 0.5 * self.scale - z * self.scale;
+        let dx = x - self.focus[0];
+        let dy = y - self.focus[1];
+        let dz = z - self.focus[2];
+        let sx = (dx - dy) * self.scale;
+        let sy = (dx + dy) * 0.5 * self.scale - dz * self.scale;
         pos2(sx, sy)
     }
 }
 
 //=============================================================================
-/// Cable simulation on a voxel grid — server-first architecture.
+/// Data-center wiring tree on a voxel grid.
 ///
-/// 1. Servers are spawned at edge positions facing the camera.
-/// 2. Each cable picks a random source server and a random destination server.
-/// 3. The cable routes: source → center (trunk up) → destination (trunk down).
-///    Near the center all cables converge into high-probability shared corridors
-///    (the "core switch cable ways").  Near the leaves cables diverge to their
-///    individual targets.
-/// 4. When a cable reaches its destination it respawns with a new src→dest pair.
-/// Old segments are reaped FIFO so the volume never saturates.
+/// Layout: `sites` data centers on a ground-plane grid. Each site is `aisles`
+/// rows of `racks` server boxes, with an aisle aggregation switch at the head
+/// of each aisle and a site core switch in front. A single global core sits at
+/// campus center and elevation.
+///
+/// Topology (4-level tree): global core → site core → aisle agg → server.
+/// Each flow picks a random source and destination server and routes up its
+/// source branch, across the backbone, and down the destination branch. Cables
+/// bound for the same parent share that parent's junction, so trunks form
+/// without any explicit corridor logic.
 
-#[derive(Clone, Copy, PartialEq)]
-enum CablePhase {
-    /// Source server → center.  Trunk axis is the direction from src toward center.
-    TrunkUp,
-    /// Center → destination server.  Trunk axis is direction from center toward dest.
-    TrunkDown,
-    /// Final leaf approach — beeline to dest, no trunk constraint.
-    Leaf,
+/// One data-center site: a core switch plus one aggregation switch per aisle.
+struct Site {
+    core: IVec3,
+    aisle_aggs: Vec<IVec3>,
 }
 
 struct PipeSim {
     bounds: IVec3,
-    center: IVec3,
-    max_center_dist: i32,
-    /// Persistent server positions (set once per reset, on the volume edges).
+    global_core: IVec3,
+    /// Persistent server positions and which site/aisle each belongs to.
     servers: Vec<IVec3>,
-    /// Per-cable state.
+    server_facings: Vec<Dir>,
+    server_site: Vec<usize>,
+    server_aisle: Vec<usize>,
+    sites: Vec<Site>,
+    /// Per-flow state.
     heads: Vec<IVec3>,
     dirs: Vec<Dir>,
-    run_lengths: Vec<u32>,
     leaf_targets: Vec<IVec3>,
-    trunk_axes: Vec<Dir>,
-    phases: Vec<CablePhase>,
-    trunk_remaining: Vec<u32>,
-    /// Explicit hierarchical route for each cable. Weighted random walking was
-    /// too unstable visually; paths are now generated through shared cable-way
-    /// waypoints, then consumed one voxel step at a time.
     routes: Vec<Vec<Dir>>,
-    /// For each cable: index into `servers` for source and destination.
-    cable_src: Vec<usize>,
-    cable_dest: Vec<usize>,
-    visited: HashSet<IVec3>,
     segments: Vec<Segment>,
-    /// Cable way reinforcement — cells traversed by many cables get a routing
-    /// bonus so trunk corridors self-reinforce.
-    way_strength: HashMap<IVec3, u32>,
     rng: oorandom::Rand32,
-    min_spacing: i32,
-    straightness: u32,
-    min_run_length: u32,
-    max_len_per_pipe: usize,
-    depth_levels: u32,
+    trail: usize,
+    /// Topology dimensions.
+    n_sites: usize,
+    aisles: usize,
+    racks: usize,
 }
 
 impl PipeSim {
     fn new(
         seed: u64,
         bounds: IVec3,
-        pipe_count: usize,
-        server_count: usize,
-        min_spacing: i32,
+        flows: usize,
+        sites: usize,
+        aisles: usize,
+        racks: usize,
     ) -> Self {
         let mut s = Self {
             bounds,
-            center: IVec3::new(bounds.x / 2, bounds.y / 2, bounds.z / 2),
-            max_center_dist: manhattan(
-                IVec3::new(0, 0, 0),
-                IVec3::new(bounds.x / 2, bounds.y / 2, bounds.z / 2),
-            ),
+            global_core: IVec3::new(bounds.x / 2, bounds.y / 2, bounds.z / 2),
             servers: Vec::new(),
+            server_facings: Vec::new(),
+            server_site: Vec::new(),
+            server_aisle: Vec::new(),
+            sites: Vec::new(),
             heads: Vec::new(),
             dirs: Vec::new(),
-            run_lengths: Vec::new(),
             leaf_targets: Vec::new(),
-            trunk_axes: Vec::new(),
-            phases: Vec::new(),
-            trunk_remaining: Vec::new(),
             routes: Vec::new(),
-            cable_src: Vec::new(),
-            cable_dest: Vec::new(),
-            visited: HashSet::new(),
             segments: Vec::new(),
-            way_strength: HashMap::new(),
             rng: oorandom::Rand32::new(seed),
-            min_spacing,
-            straightness: 10,
-            min_run_length: 5,
-            max_len_per_pipe: 180,
-            depth_levels: 3,
+            trail: 320,
+            n_sites: sites,
+            aisles,
+            racks,
         };
-        s.reset(pipe_count, server_count);
+        s.reset(flows);
         s
     }
 
@@ -602,125 +557,6 @@ impl PipeSim {
             && p.z < self.bounds.z
     }
 
-    /// Generate server positions in visible rack aisles / rows.
-    ///
-    /// The earlier edge-wall scatter made many servers face sideways or away
-    /// from the camera and also packed several leaves too closely together.
-    /// Rows keep the leaf servers legible: each row is a rack aisle, slots are
-    /// spread across the row, and every server uses the same camera-visible
-    /// face orientation.
-    fn generate_servers(&mut self, count: usize) {
-        self.servers.clear();
-        if count == 0 {
-            return;
-        }
-
-        // Real aisle pods, not one long row:
-        //   pod = two parallel rack rows with a walkway between them
-        //   group gap = visible empty space before the next aisle pod
-        // Each row contains adjacent servers.  Coordinates are generated in
-        // projected/screen space then inverted back to world grid coordinates,
-        // because rows that are straight in world space do not look straight in
-        // the isometric view.
-        let slots_per_row = 3usize;
-        let rows_per_pod = 2usize;
-        let pod_capacity = slots_per_row * rows_per_pod;
-        let pod_count = ((count + pod_capacity - 1) / pod_capacity).clamp(1, 4);
-        let slot_spacing = 12.0;
-        let row_spacing = 11.0;
-        let pod_col_spacing = 52.0;
-        let pod_row_spacing = 44.0;
-        let z_base = 7;
-        // Keep aisle pods in a screen-space band with room to breathe instead
-        // of centering them in the full 3D volume, where the far pods get
-        // hidden behind the cable cage.
-        let center_screen_y = 32.0;
-
-        for i in 0..count {
-            let pod = i / pod_capacity;
-            let within_pod = i % pod_capacity;
-            let row = within_pod / slots_per_row;
-            let slot = within_pod % slots_per_row;
-            let remaining_in_pod = (count - pod * pod_capacity).min(pod_capacity);
-            let row_len = (remaining_in_pod.saturating_sub(row * slots_per_row))
-                .min(slots_per_row)
-                .max(1);
-
-            let centered_slot = slot as f32 - (row_len as f32 - 1.0) * 0.5;
-            let centered_row = row as f32 - 0.5;
-            let pod_cols = if pod_count <= 1 { 1 } else { 2 };
-            let pod_rows = ((pod_count + pod_cols - 1) / pod_cols).max(1);
-            let pod_col = pod % pod_cols;
-            let pod_row = pod / pod_cols;
-            let centered_pod_col = pod_col as f32 - (pod_cols as f32 - 1.0) * 0.5;
-            let centered_pod_row = pod_row as f32 - (pod_rows as f32 - 1.0) * 0.5;
-
-            let screen_x = centered_pod_col * pod_col_spacing + centered_slot * slot_spacing;
-            let screen_y =
-                center_screen_y + centered_pod_row * pod_row_spacing + centered_row * row_spacing;
-            let z = z_base + pod as i32 * 2;
-
-            // Invert the renderer's projection basis:
-            //   screen_x = x - y
-            //   screen_y = (x + y) / 2 - z
-            let sum = 2.0 * (screen_y + z as f32);
-            let x = ((sum + screen_x) * 0.5).round() as i32;
-            let y = ((sum - screen_x) * 0.5).round() as i32;
-
-            self.servers.push(self.clamp_point(IVec3::new(x, y, z)));
-        }
-    }
-
-    fn reset(&mut self, pipe_count: usize, server_count: usize) {
-        self.visited.clear();
-        self.segments.clear();
-        self.way_strength.clear();
-        self.heads.clear();
-        self.dirs.clear();
-        self.run_lengths.clear();
-        self.leaf_targets.clear();
-        self.trunk_axes.clear();
-        self.phases.clear();
-        self.trunk_remaining.clear();
-        self.routes.clear();
-        self.cable_src.clear();
-        self.cable_dest.clear();
-        self.center = IVec3::new(self.bounds.x / 2, self.bounds.y / 2, self.bounds.z / 2);
-        self.max_center_dist = manhattan(IVec3::new(0, 0, 0), self.center);
-
-        // 1. Spawn servers at edges first.
-        self.generate_servers(server_count);
-
-        // 2. Init cables — each picks a random src→dest pair.
-        for _ in 0..pipe_count {
-            self.heads.push(self.center);
-            self.dirs.push(Dir::PosX);
-            self.run_lengths.push(0);
-            self.leaf_targets.push(self.center);
-            self.trunk_axes.push(Dir::PosX);
-            self.phases.push(CablePhase::TrunkUp);
-            self.trunk_remaining.push(0);
-            self.routes.push(Vec::new());
-            self.cable_src.push(0);
-            self.cable_dest.push(0);
-            self.respawn(self.heads.len() - 1);
-        }
-    }
-
-    /// Pick a random destination different from source.
-    fn pick_dest(&mut self, src: usize) -> usize {
-        if self.servers.len() <= 1 {
-            return src;
-        }
-        loop {
-            let d = self.rng.rand_u32() % self.servers.len() as u32;
-            let d = d as usize;
-            if d != src {
-                return d;
-            }
-        }
-    }
-
     fn clamp_point(&self, p: IVec3) -> IVec3 {
         IVec3::new(
             p.x.clamp(1, self.bounds.x - 2),
@@ -729,47 +565,137 @@ impl PipeSim {
         )
     }
 
-    fn cable_lane_offset(&self, pipe_id: usize, level: u32) -> IVec3 {
-        // Same-space overlap fix: core cable ways are shared conceptually, but
-        // not as identical voxels.  Give each pipe a tiny deterministic lane
-        // in a bundle.  The spread is strongest at top/core levels and fades
-        // near leaves so paths still visibly converge into the same cable tray.
-        let lane = pipe_id as i32;
-        let a = lane.rem_euclid(5) - 2; // -2..2
-        let b = (lane / 5).rem_euclid(5) - 2;
-        let c = lane.rem_euclid(3) - 1;
-        let depth = self.depth_levels.max(3);
-        let spread = (depth.saturating_sub(level).max(1) as i32).min(3);
-        // X/Y separate adjacent cables in the tray; Z tiers separate crossings
-        // so the isometric renderer can show one tray passing over another
-        // instead of painting several routes into the same visual plane.
-        IVec3::new(a * spread, b * spread, c * spread)
+    /// Ground-plane campus centroid — used as the renderer focus so the whole
+    /// site grid stays centered on screen.
+    fn focus(&self) -> [f32; 3] {
+        [
+            self.bounds.x as f32 * 0.5,
+            self.bounds.y as f32 * 0.5,
+            10.0,
+        ]
     }
 
-    /// A deterministic hierarchy waypoint between the core and a server.
-    /// level=1 is a high-sharing core cable-way; larger levels move toward the
-    /// server and use a finer snap grid, so paths branch progressively.
-    fn hierarchy_point(&self, server: IVec3, level: u32, pipe_id: usize) -> IVec3 {
-        let depth = self.depth_levels.max(3);
-        let t = (level as f32 / depth as f32).clamp(0.0, 1.0);
-        let raw = IVec3::new(
-            (self.center.x as f32 + (server.x - self.center.x) as f32 * t).round() as i32,
-            (self.center.y as f32 + (server.y - self.center.y) as f32 * t).round() as i32,
-            (self.center.z as f32 + (server.z - self.center.z) as f32 * t).round() as i32,
-        );
+    /// Lay out sites, aisles, racks and the switch tree on the ground plane.
+    fn generate_topology(&mut self) {
+        self.servers.clear();
+        self.server_facings.clear();
+        self.server_site.clear();
+        self.server_aisle.clear();
+        self.sites.clear();
 
-        // Coarse near center, finer near servers. This is the static cable-way
-        // probability tree: top levels snap many servers onto the same lanes;
-        // leaf levels keep more individual variation.
-        let q = (18 / level.max(1) as i32).max(3);
-        let snap = |v: i32, c: i32| c + (((v - c) as f32 / q as f32).round() as i32) * q;
-        let snapped = IVec3::new(
-            snap(raw.x, self.center.x),
-            snap(raw.y, self.center.y),
-            snap(raw.z, self.center.z),
-        );
+        let n = self.n_sites.max(1);
+        let aisles = self.aisles.max(1);
+        let racks = self.racks.max(1);
 
-        self.clamp_point(snapped.add(self.cable_lane_offset(pipe_id, level)))
+        // Square-ish campus grid of sites.
+        let cols = (n as f32).sqrt().ceil() as usize;
+        let rows = n.div_ceil(cols);
+
+        let lo = 14.0_f32;
+        let hi = self.bounds.x.min(self.bounds.y) as f32 - 14.0;
+        let cell_x = (hi - lo) / cols as f32;
+        let cell_y = (hi - lo) / rows as f32;
+        let cell = cell_x.min(cell_y);
+
+        let ground_z = 8.0_f32;
+        self.global_core = self.clamp_point(IVec3::new(
+            self.bounds.x / 2,
+            self.bounds.y / 2,
+            (ground_z + 20.0) as i32,
+        ));
+
+        for s in 0..n {
+            let cx = s % cols;
+            let cy = s / cols;
+            let center_x = lo + cell_x * (cx as f32 + 0.5);
+            let center_y = lo + cell_y * (cy as f32 + 0.5);
+
+            // Pitches sized to the cell so a site never bleeds into its
+            // neighbor regardless of the aisle/rack sliders.
+            let usable = cell * 0.74;
+            let rack_pitch = (usable / racks as f32).clamp(3.0, 6.0);
+            let aisle_pitch = (usable / aisles as f32).clamp(4.0, 7.0);
+
+            let block_w = rack_pitch * (racks as f32 - 1.0); // along x (racks)
+            let block_h = aisle_pitch * (aisles as f32 - 1.0); // along y (aisles)
+            let x0 = center_x - block_w * 0.5;
+            let y0 = center_y - block_h * 0.5;
+
+            let mut site = Site {
+                core: IVec3::new(0, 0, 0),
+                aisle_aggs: Vec::with_capacity(aisles),
+            };
+
+            for a in 0..aisles {
+                let ay = y0 + aisle_pitch * a as f32;
+                // Aisle aggregation switch at the front (low x) of the row,
+                // raised onto an overhead tray.
+                let agg = self.clamp_point(IVec3::new(
+                    (x0 - 4.0) as i32,
+                    ay.round() as i32,
+                    (ground_z + 4.0) as i32,
+                ));
+                site.aisle_aggs.push(agg);
+
+                for r in 0..racks {
+                    let rx = x0 + rack_pitch * r as f32;
+                    let pos =
+                        self.clamp_point(IVec3::new(rx.round() as i32, ay.round() as i32, ground_z as i32));
+                    self.servers.push(pos);
+                    self.server_facings.push(Dir::PosX);
+                    self.server_site.push(s);
+                    self.server_aisle.push(a);
+                }
+            }
+
+            // Site core: in front of the aisles, higher than the aggs.
+            site.core = self.clamp_point(IVec3::new(
+                (x0 - 8.0) as i32,
+                center_y.round() as i32,
+                (ground_z + 10.0) as i32,
+            ));
+            self.sites.push(site);
+        }
+    }
+
+    fn reset(&mut self, flows: usize) {
+        self.segments.clear();
+        self.heads.clear();
+        self.dirs.clear();
+        self.leaf_targets.clear();
+        self.routes.clear();
+
+        self.generate_topology();
+
+        for _ in 0..flows {
+            self.heads.push(self.global_core);
+            self.dirs.push(Dir::PosX);
+            self.leaf_targets.push(self.global_core);
+            self.routes.push(Vec::new());
+            self.respawn(self.heads.len() - 1);
+        }
+    }
+
+    /// Pick a random destination server different from `src`.
+    fn pick_dest(&mut self, src: usize) -> usize {
+        if self.servers.len() <= 1 {
+            return src;
+        }
+        loop {
+            let d = (self.rng.rand_u32() % self.servers.len() as u32) as usize;
+            if d != src {
+                return d;
+            }
+        }
+    }
+
+    /// Small deterministic per-flow lane offset so parallel cables in a shared
+    /// trunk separate into a bundle instead of collapsing onto one line.
+    fn lane(flow: usize) -> IVec3 {
+        let a = (flow % 5) as i32 - 2;
+        let b = ((flow / 5) % 5) as i32 - 2;
+        let c = (flow % 3) as i32 - 1;
+        IVec3::new(a, b, c)
     }
 
     fn push_axis_steps(route: &mut Vec<Dir>, from: &mut IVec3, to: IVec3) {
@@ -819,25 +745,32 @@ impl PipeSim {
         }
     }
 
-    fn build_route(&self, src_pos: IVec3, dest_pos: IVec3, pipe_id: usize) -> Vec<Dir> {
-        let depth = self.depth_levels.max(3);
-        let mut waypoints = Vec::new();
+    /// Route a flow up the source server's branch (server → aisle agg → site
+    /// core), across the backbone (→ global core → dest site core) when the
+    /// destination is in another site, then down the destination branch.
+    fn build_route(&self, src: usize, dest: usize, flow: usize) -> Vec<Dir> {
+        let off = Self::lane(flow);
+        let s_site = self.server_site[src];
+        let s_aisle = self.server_aisle[src];
+        let d_site = self.server_site[dest];
+        let d_aisle = self.server_aisle[dest];
 
-        // Source leaf → aggregation → core. Level depth-1 is close to the
-        // server; level 1 is the high-probability shared top-level cable-way.
-        for level in (1..depth).rev() {
-            waypoints.push(self.hierarchy_point(src_pos, level, pipe_id));
+        let src_pos = self.servers[src];
+        let dest_pos = self.servers[dest];
+
+        let mut wps: Vec<IVec3> = Vec::new();
+        wps.push(self.clamp_point(self.sites[s_site].aisle_aggs[s_aisle].add(off)));
+        wps.push(self.clamp_point(self.sites[s_site].core.add(off)));
+        if s_site != d_site {
+            wps.push(self.clamp_point(self.global_core.add(off)));
+            wps.push(self.clamp_point(self.sites[d_site].core.add(off)));
         }
-        waypoints.push(self.clamp_point(self.center.add(self.cable_lane_offset(pipe_id, 1))));
-        for level in 1..depth {
-            waypoints.push(self.hierarchy_point(dest_pos, level, pipe_id));
-        }
-        waypoints.push(dest_pos);
+        wps.push(self.clamp_point(self.sites[d_site].aisle_aggs[d_aisle].add(off)));
+        wps.push(dest_pos);
 
         let mut route = Vec::new();
         let mut p = src_pos;
-        for wp in waypoints {
-            let wp = self.clamp_point(wp);
+        for wp in wps {
             if wp != p {
                 Self::push_axis_steps(&mut route, &mut p, wp);
             }
@@ -845,105 +778,71 @@ impl PipeSim {
         route
     }
 
-    /// (Re)spawn cable: pick random src→dest, start at source server, route
-    /// through explicit static cable-way hierarchy.
-    fn respawn(&mut self, pipe_id: usize) {
-        let src = self.rng.rand_u32() % self.servers.len() as u32;
-        let src = src as usize;
+    /// (Re)spawn a flow: pick a random src→dest server pair and route through
+    /// the tree.
+    fn respawn(&mut self, flow: usize) {
+        if self.servers.is_empty() {
+            self.routes[flow] = Vec::new();
+            return;
+        }
+        let src = (self.rng.rand_u32() % self.servers.len() as u32) as usize;
         let dest = self.pick_dest(src);
-        self.cable_src[pipe_id] = src;
-        self.cable_dest[pipe_id] = dest;
-
         let src_pos = self.servers[src];
         let dest_pos = self.servers[dest];
 
-        self.heads[pipe_id] = src_pos;
-        let route = self.build_route(src_pos, dest_pos, pipe_id);
-        let first_dir = route
-            .first()
-            .copied()
-            .unwrap_or_else(|| dominant_axis(dest_pos.sub(src_pos)));
-        self.dirs[pipe_id] = first_dir;
-        self.run_lengths[pipe_id] = 0;
-        self.leaf_targets[pipe_id] = dest_pos;
-        self.trunk_axes[pipe_id] = dominant_axis(self.center.sub(src_pos));
-        self.phases[pipe_id] = CablePhase::TrunkUp;
-        self.trunk_remaining[pipe_id] = route.len() as u32;
-        self.routes[pipe_id] = route;
-
-        self.visited.insert(src_pos);
+        self.heads[flow] = src_pos;
+        let route = self.build_route(src, dest, flow);
+        self.dirs[flow] = route.first().copied().unwrap_or(Dir::PosX);
+        self.leaf_targets[flow] = dest_pos;
+        self.routes[flow] = route;
     }
 
     fn step(&mut self) {
         let count = self.heads.len();
-        for pipe_id in 0..count {
-            self.step_one(pipe_id);
+        for flow in 0..count {
+            self.step_one(flow);
         }
     }
 
-    fn step_one(&mut self, pipe_id: usize) {
-        if self.routes.get(pipe_id).map_or(true, |r| r.is_empty()) {
-            self.respawn(pipe_id);
+    fn step_one(&mut self, flow: usize) {
+        if self.routes.get(flow).map_or(true, |r| r.is_empty()) {
+            self.respawn(flow);
             return;
         }
 
-        let d = self.routes[pipe_id].remove(0);
-        let head = self.heads[pipe_id];
+        let d = self.routes[flow].remove(0);
+        let head = self.heads[flow];
         let next = head.add(d.vec());
         if !self.in_bounds(next) {
-            self.respawn(pipe_id);
+            self.respawn(flow);
             return;
         }
 
-        // Keep a coarse phase label for UI/RJ45 decisions. The first third of
-        // the explicit route is source→core, middle is shared core/aggregation,
-        // final third is leaf approach.
-        let remaining = self.routes[pipe_id].len();
-        let total_hint = self.trunk_remaining[pipe_id].max(1) as usize;
-        self.phases[pipe_id] = if remaining > (total_hint * 2) / 3 {
-            CablePhase::TrunkUp
-        } else if remaining > total_hint / 3 {
-            CablePhase::TrunkDown
-        } else {
-            CablePhase::Leaf
-        };
-        self.trunk_remaining[pipe_id] = remaining as u32;
+        self.advance(flow, next, d);
 
-        self.advance(pipe_id, next, d);
-
-        if self.routes[pipe_id].is_empty()
-            || manhattan(self.heads[pipe_id], self.leaf_targets[pipe_id]) <= 1
+        if self.routes[flow].is_empty()
+            || manhattan(self.heads[flow], self.leaf_targets[flow]) <= 1
         {
-            self.respawn(pipe_id);
+            self.respawn(flow);
         }
     }
 
-    fn advance(&mut self, pipe_id: usize, to: IVec3, d: Dir) {
-        let from = self.heads[pipe_id];
+    fn advance(&mut self, flow: usize, to: IVec3, d: Dir) {
+        let from = self.heads[flow];
         self.segments.push(Segment {
             from,
             to,
             dir: d,
-            pipe_id,
+            pipe_id: flow,
         });
-        if d == self.dirs[pipe_id] {
-            self.run_lengths[pipe_id] += 1;
-        } else {
-            self.run_lengths[pipe_id] = 1;
-        }
-        self.heads[pipe_id] = to;
-        self.dirs[pipe_id] = d;
-        self.visited.insert(to);
+        self.heads[flow] = to;
+        self.dirs[flow] = d;
 
-        *self.way_strength.entry(to).or_insert(0) += 1;
-
-        let limit = self.max_len_per_pipe * self.heads.len().max(1);
+        // FIFO trail reaping so the volume never saturates. Inter-site routes
+        // are long, so the budget scales with both trail length and flow count.
+        let limit = self.trail * self.heads.len().max(1);
         if self.segments.len() > limit {
-            let old = self.segments.remove(0);
-            self.visited.remove(&old.from);
-            if let Some(strength) = self.way_strength.get_mut(&old.from) {
-                *strength = strength.saturating_sub(1);
-            }
+            self.segments.remove(0);
         }
     }
 }
@@ -1060,38 +959,32 @@ fn sync_external_config(mut state: ResMut<PipedreamState>) {
     state.speed = ext.speed;
     state.renderer.scale = ext.scale;
     state.renderer.pixel = ext.pixel;
-    state.sim.min_spacing = ext.min_spacing;
-    state.sim.straightness = ext.straightness;
-    state.sim.min_run_length = ext.min_run_length;
-    state.sim.max_len_per_pipe = ext.max_len_per_pipe;
-    state.sim.depth_levels = ext.depth_levels;
+    state.sim.trail = ext.trail;
     state.ui.visible = ext.show_ui;
 
-    // Handle pipe count change - requires reset
-    if ext.pipe_count != state.pipe_count {
-        state.pipe_count = ext.pipe_count;
-        let pc = state.pipe_count;
-        let sc = state.server_count;
-        state.sim.reset(pc, sc);
+    // Topology-changing knobs require a full reset + node rebuild.
+    let topo_changed = ext.flows != state.flows
+        || ext.sites != state.sites
+        || ext.aisles != state.aisles
+        || ext.racks != state.racks;
+
+    if topo_changed {
+        state.flows = ext.flows;
+        state.sites = ext.sites;
+        state.aisles = ext.aisles;
+        state.racks = ext.racks;
+        state.sim.n_sites = ext.sites;
+        state.sim.aisles = ext.aisles;
+        state.sim.racks = ext.racks;
+        let flows = state.flows;
+        state.sim.reset(flows);
         state.sim_time = 0.0;
         rebuild_nodes(&mut state);
     }
 
-    // Handle server count change - requires reset
-    if ext.server_count != state.server_count {
-        state.server_count = ext.server_count;
-        let pc = state.pipe_count;
-        let sc = state.server_count;
-        state.sim.reset(pc, sc);
-        state.sim_time = 0.0;
-        rebuild_nodes(&mut state);
-    }
-
-    // Handle reset request
     if ext.reset_requested {
-        let pc = state.pipe_count;
-        let sc = state.server_count;
-        state.sim.reset(pc, sc);
+        let flows = state.flows;
+        state.sim.reset(flows);
         state.sim_time = 0.0;
         rebuild_nodes(&mut state);
         EXTERNAL_CONFIG.with(|c| c.borrow_mut().reset_requested = false);
@@ -1102,8 +995,10 @@ fn sync_external_config(mut state: ResMut<PipedreamState>) {
 struct PipedreamState {
     palette: Palette,
     renderer: IsoRenderer,
-    pipe_count: usize,
-    server_count: usize,
+    flows: usize,
+    sites: usize,
+    aisles: usize,
+    racks: usize,
     speed: f32,
     accumulator: f32,
     sim: PipeSim,
@@ -1118,21 +1013,17 @@ impl Default for PipedreamState {
     fn default() -> Self {
         let seed = js_sys::Date::now() as u64;
         let ext = get_external_config();
-        let bounds = IVec3::new(80, 80, 80);
-        let pipe_count = ext.pipe_count;
-        let server_count = ext.server_count;
-        let min_spacing = ext.min_spacing;
+        let bounds = IVec3::new(96, 96, 48);
 
-        let mut sim = PipeSim::new(seed, bounds, pipe_count, server_count, min_spacing);
-        sim.straightness = ext.straightness;
-        sim.max_len_per_pipe = ext.max_len_per_pipe;
+        let mut sim = PipeSim::new(seed, bounds, ext.flows, ext.sites, ext.aisles, ext.racks);
+        sim.trail = ext.trail;
 
         // Populate initial server nodes from the sim's server positions.
         let mut node_seed = (seed as u32).wrapping_mul(2246822519);
         let mut initial_nodes = Vec::new();
         for (idx, &pos) in sim.servers.iter().enumerate() {
             node_seed = node_seed.wrapping_add(7919);
-            let facing = server_facing_for_index(idx);
+            let facing = sim.server_facings.get(idx).copied().unwrap_or(Dir::PosX);
             initial_nodes.push(ServerNode {
                 pos,
                 facing,
@@ -1145,14 +1036,19 @@ impl Default for PipedreamState {
         let mut ui = ui_theme::ProjectUi::new("pipedream");
         ui.visible = ext.show_ui;
 
+        let focus = sim.focus();
+
         Self {
             palette: Palette::from_theme(),
             renderer: IsoRenderer {
                 scale: ext.scale,
                 pixel: ext.pixel,
+                focus,
             },
-            pipe_count,
-            server_count,
+            flows: ext.flows,
+            sites: ext.sites,
+            aisles: ext.aisles,
+            racks: ext.racks,
             speed: ext.speed,
             accumulator: 0.0,
             sim,
@@ -1168,20 +1064,18 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d::default());
 }
 
-fn server_facing_for_index(_index: usize) -> Dir {
-    // All servers face the same camera-visible direction (+X = right-front
-    // face in the iso projection).  Earlier code alternated rows between
-    // PosY and PosX, which made half the fleet face away from the viewer.
-    Dir::PosX
-}
-
 /// Rebuild server nodes from the sim's server positions (called after reset).
 fn rebuild_nodes(state: &mut PipedreamState) {
     state.nodes.clear();
     let mut seed = state.node_seed;
     for (idx, &pos) in state.sim.servers.iter().enumerate() {
         seed = seed.wrapping_add(7919);
-        let facing = server_facing_for_index(idx);
+        let facing = state
+            .sim
+            .server_facings
+            .get(idx)
+            .copied()
+            .unwrap_or(Dir::PosX);
         state.nodes.push(ServerNode {
             pos,
             facing,
@@ -1207,6 +1101,10 @@ fn simulation_step(time: Res<Time>, mut state: ResMut<PipedreamState>) {
 
 fn render_system(mut contexts: EguiContexts, state: Res<PipedreamState>) {
     let ctx = contexts.ctx_mut();
+    ctx.tessellation_options_mut(|opts| {
+        opts.feathering = false;
+        opts.feathering_size_in_pixels = 0.0;
+    });
 
     egui::CentralPanel::default()
         .frame(egui::Frame::none())
@@ -1214,15 +1112,25 @@ fn render_system(mut contexts: EguiContexts, state: Res<PipedreamState>) {
             let rect = ui.max_rect();
             let painter = ui.painter_at(rect);
 
-            // Background
             painter.rect_filled(rect, 0.0, state.palette.bg);
 
-            // Pipes first; servers/RJ45 faceplates draw on top. This fixes the
-            // worst occlusion failure from the previous pass where cable runs
-            // painted over every server regardless of depth.
-            draw_pipes(&state, &painter, rect);
+            // Single depth-sorted pass over the whole scene. With sites spread
+            // across the campus, separate passes for cables and servers would
+            // let a far site's geometry paint over a near site's; one global
+            // sort fixes occlusion everywhere.
+            let mut cmds: Vec<IsoBoxCmd> = Vec::new();
+            push_infra_cmds(&state, &mut cmds);
+            push_pipe_cmds(&state, &mut cmds);
+            push_server_cmds(&state, &mut cmds);
 
-            draw_servers(&state, &painter, rect);
+            cmds.sort_by(|a, b| {
+                a.depth
+                    .partial_cmp(&b.depth)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            for cmd in cmds {
+                draw_box(&state, &painter, rect, cmd.center, cmd.size, cmd.faces);
+            }
         });
 }
 
@@ -1242,17 +1150,14 @@ fn draw_box(
     let (cx, cy, cz) = (center[0], center[1], center[2]);
     let (sx, sy, sz) = (size[0] * 0.5, size[1] * 0.5, size[2] * 0.5);
 
-    let px = state.renderer.pixel.max(1.0);
-    let snap = |p: Pos2| pos2((p.x / px).round() * px, (p.y / px).round() * px);
+    let t_back = iso(cx - sx, cy - sy, cz + sz);
+    let t_right = iso(cx + sx, cy - sy, cz + sz);
+    let t_front = iso(cx + sx, cy + sy, cz + sz);
+    let t_left = iso(cx - sx, cy + sy, cz + sz);
 
-    let t_back = snap(iso(cx - sx, cy - sy, cz + sz));
-    let t_right = snap(iso(cx + sx, cy - sy, cz + sz));
-    let t_front = snap(iso(cx + sx, cy + sy, cz + sz));
-    let t_left = snap(iso(cx - sx, cy + sy, cz + sz));
-
-    let b_right = snap(iso(cx + sx, cy - sy, cz - sz));
-    let b_front = snap(iso(cx + sx, cy + sy, cz - sz));
-    let b_left = snap(iso(cx - sx, cy + sy, cz - sz));
+    let b_right = iso(cx + sx, cy - sy, cz - sz);
+    let b_front = iso(cx + sx, cy + sy, cz - sz);
+    let b_left = iso(cx - sx, cy + sy, cz - sz);
 
     // Right face (+X)
     painter.add(Shape::convex_polygon(
@@ -1274,33 +1179,18 @@ fn draw_box(
     ));
 }
 
-/// Shaded opaque box from a single base color.
-fn draw_iso_box(
-    state: &PipedreamState,
-    painter: &egui::Painter,
-    rect: Rect,
-    center: [f32; 3],
-    size: [f32; 3],
-    color: Color32,
-) {
-    let faces = [
-        state.palette.pipe_dark(color),
-        color,
-        state.palette.pipe_light(color),
-    ];
-    draw_box(state, painter, rect, center, size, faces);
+/// Depth key: corner-of-near-face sum, with a small size bias so nested boxes
+/// (faceplate over chassis) sort stably.
+fn box_depth(center: [f32; 3], size: [f32; 3]) -> f32 {
+    center[0] + center[1] + center[2] + (size[0] + size[1] + size[2]) * 0.08
 }
 
-fn push_box_cmd(cmds: &mut Vec<IsoBoxCmd>, center: [f32; 3], size: [f32; 3], faces: [Color32; 3]) {
-    // Local painter's algorithm: sort by the near corner rather than only the
-    // center, otherwise small faceplate/port boxes can appear to punch through
-    // a larger chassis box from the wrong side.
-    cmds.push(IsoBoxCmd {
-        center,
-        size,
-        faces,
-        depth: center[0] + center[1] + center[2] + (size[0] + size[1] + size[2]) * 0.08,
-    });
+fn shaded_faces(palette: &Palette, color: Color32, alpha: u8) -> [Color32; 3] {
+    [
+        shade(palette.pipe_dark(color), 1.0, alpha),
+        shade(color, 1.0, alpha),
+        shade(palette.pipe_light(color), 1.0, alpha),
+    ]
 }
 
 fn push_shaded_box_cmd(
@@ -1311,21 +1201,52 @@ fn push_shaded_box_cmd(
     color: Color32,
     alpha: u8,
 ) {
-    push_box_cmd(
-        cmds,
+    cmds.push(IsoBoxCmd {
         center,
         size,
-        [
-            shade(palette.pipe_dark(color), 1.0, alpha),
-            shade(color, 1.0, alpha),
-            shade(palette.pipe_light(color), 1.0, alpha),
-        ],
-    );
+        faces: shaded_faces(palette, color, alpha),
+        depth: box_depth(center, size),
+    });
 }
 
-fn draw_servers(state: &PipedreamState, painter: &egui::Painter, rect: Rect) {
+/// Static tree infrastructure: global core, site cores, aisle aggregation
+/// switches. Drawn opaque so the tree skeleton is legible between cable bursts.
+fn push_infra_cmds(state: &PipedreamState, cmds: &mut Vec<IsoBoxCmd>) {
+    let p = &state.palette;
+    let gc = state.sim.global_core;
+    push_shaded_box_cmd(
+        cmds,
+        p,
+        [gc.x as f32, gc.y as f32, gc.z as f32],
+        [5.0, 5.0, 4.0],
+        p.infra[2],
+        255,
+    );
+    for site in &state.sim.sites {
+        let c = site.core;
+        push_shaded_box_cmd(
+            cmds,
+            p,
+            [c.x as f32, c.y as f32, c.z as f32],
+            [3.2, 3.2, 3.2],
+            p.infra[1],
+            255,
+        );
+        for agg in &site.aisle_aggs {
+            push_shaded_box_cmd(
+                cmds,
+                p,
+                [agg.x as f32, agg.y as f32, agg.z as f32],
+                [1.8, 1.4, 1.4],
+                p.infra[0],
+                255,
+            );
+        }
+    }
+}
+
+fn push_server_cmds(state: &PipedreamState, cmds: &mut Vec<IsoBoxCmd>) {
     let now = state.sim_time;
-    let mut cmds: Vec<IsoBoxCmd> = Vec::new();
 
     for node in &state.nodes {
         let age = now - node.spawn_time;
@@ -1365,29 +1286,20 @@ fn draw_servers(state: &PipedreamState, painter: &egui::Painter, rect: Rect) {
                 part.size[1] * scale,
                 part.size[2] * scale,
             ];
-            push_shaded_box_cmd(&mut cmds, &state.palette, center, size, part.color, alpha);
+            push_shaded_box_cmd(cmds, &state.palette, center, size, part.color, alpha);
         }
 
         let plug_age = (age - 0.22).max(0.0);
         let plug_fin = smoothstep(0.0, 0.25, plug_age);
         if plug_fin > 0.0 {
             push_rj45_at_server_cmds(
-                &mut cmds,
+                cmds,
                 &state.palette,
                 node.pos,
                 facing,
                 plug_fin * fin * fout,
             );
         }
-    }
-
-    cmds.sort_by(|a, b| {
-        a.depth
-            .partial_cmp(&b.depth)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    for cmd in cmds {
-        draw_box(state, painter, rect, cmd.center, cmd.size, cmd.faces);
     }
 }
 
@@ -1461,132 +1373,66 @@ fn push_rj45_at_server_cmds(
         shade(palette.plug_clear, 1.0, body_alpha),
         shade(palette.plug_clear, 1.18, body_alpha),
     ];
-    let mut body = IsoBoxCmd {
+    cmds.push(IsoBoxCmd {
         center: bc,
         size: [rl, rw, rh],
         faces,
-        depth: bc[0] + bc[1] + bc[2] + 0.5,
-    };
-    body.depth += 0.2;
-    cmds.push(body);
+        depth: bc[0] + bc[1] + bc[2] + 0.7,
+    });
 }
 
-fn draw_pipes(state: &PipedreamState, painter: &egui::Painter, rect: Rect) {
-    // ---- Depth-sort every voxel edge independently ----
-    // Earlier versions merged long same-direction runs into one draw command.
-    // That looks continuous, but it makes isometric occlusion impossible at
-    // crossings: a 40-cell run has only one depth, so half of it is necessarily
-    // drawn in front of/behind the wrong thing.  Treat each grid edge as a
-    // separate command; the pixel-line rasterizer still visually connects them,
-    // but crossings now sort locally.
-
-    struct Run {
-        from: IVec3,
-        to: IVec3,
-        dir: Dir,
-        pipe_id: usize,
-    }
-
+/// Cable runs and elbow joints, one depth-tagged box per voxel edge. Per-edge
+/// (rather than merged-run) commands let crossings sort locally so cables
+/// occlude correctly where they pass over one another.
+fn push_pipe_cmds(state: &PipedreamState, cmds: &mut Vec<IsoBoxCmd>) {
     let pipe_count = state.sim.heads.len();
-    let mut runs: Vec<Run> = Vec::with_capacity(state.sim.segments.len());
+    let palette = &state.palette;
+
     for seg in &state.sim.segments {
-        runs.push(Run {
-            from: seg.from,
-            to: seg.to,
-            dir: seg.dir,
-            pipe_id: seg.pipe_id,
+        let base_color = palette.pipe(seg.pipe_id);
+        let center = [
+            (seg.from.x + seg.to.x) as f32 * 0.5,
+            (seg.from.y + seg.to.y) as f32 * 0.5,
+            (seg.from.z + seg.to.z) as f32 * 0.5,
+        ];
+        let mut size = [0.54_f32, 0.54_f32, 0.54_f32];
+        match seg.dir {
+            Dir::PosX | Dir::NegX => size[0] = 1.18,
+            Dir::PosY | Dir::NegY => size[1] = 1.18,
+            Dir::PosZ | Dir::NegZ => size[2] = 1.18,
+        }
+        cmds.push(IsoBoxCmd {
+            center,
+            size,
+            faces: [
+                palette.pipe_dark(base_color),
+                base_color,
+                palette.pipe_light(base_color),
+            ],
+            depth: center[0] + center[1] + center[2],
         });
     }
 
-    // ---- Depth-sorted draw commands: cable runs, elbow joints, RJ45 heads ----
-
-    enum Cmd {
-        Cable(Run, f32),
-        Elbow {
-            pos: IVec3,
-            pipe_id: usize,
-            depth: f32,
-        },
-    }
-
-    let mut cmds: Vec<Cmd> = Vec::with_capacity(runs.len() * 2 + pipe_count);
-
-    for r in &runs {
-        let mx = (r.from.x + r.to.x) as f32 * 0.5;
-        let my = (r.from.y + r.to.y) as f32 * 0.5;
-        let mz = (r.from.z + r.to.z) as f32 * 0.5;
-        cmds.push(Cmd::Cable(
-            Run {
-                from: r.from,
-                to: r.to,
-                dir: r.dir,
-                pipe_id: r.pipe_id,
-            },
-            mx + my + mz,
-        ));
-    }
-
-    // Elbow joints at every local bend.  With per-edge rendering these are only
-    // needed when direction changes, not at every segment boundary.
+    // Elbow cubes at direction changes so consecutive segment cuboids connect.
     let mut seen_first: Vec<bool> = vec![false; pipe_count];
     let mut last_dir: Vec<Option<Dir>> = vec![None; pipe_count];
-    for r in &runs {
-        let dir = r.dir;
-        if seen_first[r.pipe_id] && last_dir[r.pipe_id].is_some_and(|prev| prev != dir) {
-            cmds.push(Cmd::Elbow {
-                pos: r.from,
-                pipe_id: r.pipe_id,
-                depth: r.from.x as f32 + r.from.y as f32 + r.from.z as f32,
+    for seg in &state.sim.segments {
+        if seen_first[seg.pipe_id] && last_dir[seg.pipe_id].is_some_and(|prev| prev != seg.dir) {
+            let base_color = palette.pipe(seg.pipe_id);
+            let center = [seg.from.x as f32, seg.from.y as f32, seg.from.z as f32];
+            cmds.push(IsoBoxCmd {
+                center,
+                size: [0.72, 0.72, 0.72],
+                faces: [
+                    palette.pipe_dark(base_color),
+                    base_color,
+                    palette.pipe_light(base_color),
+                ],
+                depth: center[0] + center[1] + center[2],
             });
         }
-        seen_first[r.pipe_id] = true;
-        last_dir[r.pipe_id] = Some(dir);
-    }
-
-    // Cable-tip RJ45 plugs are intentionally not drawn. In this server-first
-    // topology the persistent server faceplates own the visible plugs; drawing
-    // a plug at the moving route head creates floating connectors mid-cable.
-
-    cmds.sort_by(|a, b| {
-        let da = match a {
-            Cmd::Cable(_, d) | Cmd::Elbow { depth: d, .. } => *d,
-        };
-        let db = match b {
-            Cmd::Cable(_, d) | Cmd::Elbow { depth: d, .. } => *d,
-        };
-        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    for cmd in cmds {
-        match cmd {
-            Cmd::Cable(r, _) => {
-                let base_color = state.palette.pipe(r.pipe_id);
-                let center = [
-                    (r.from.x + r.to.x) as f32 * 0.5,
-                    (r.from.y + r.to.y) as f32 * 0.5,
-                    (r.from.z + r.to.z) as f32 * 0.5,
-                ];
-                let mut size = [0.54_f32, 0.54_f32, 0.54_f32];
-                match r.dir {
-                    Dir::PosX | Dir::NegX => size[0] = 1.18,
-                    Dir::PosY | Dir::NegY => size[1] = 1.18,
-                    Dir::PosZ | Dir::NegZ => size[2] = 1.18,
-                }
-                draw_iso_box(state, painter, rect, center, size, base_color);
-            }
-            Cmd::Elbow { pos, pipe_id, .. } => {
-                // Small cubical bend so consecutive segment cuboids connect.
-                let base_color = state.palette.pipe(pipe_id);
-                draw_iso_box(
-                    state,
-                    painter,
-                    rect,
-                    [pos.x as f32, pos.y as f32, pos.z as f32],
-                    [0.72, 0.72, 0.72],
-                    base_color,
-                );
-            }
-        }
+        seen_first[seg.pipe_id] = true;
+        last_dir[seg.pipe_id] = Some(seg.dir);
     }
 }
 
@@ -1616,30 +1462,43 @@ fn ui_system(
     let mut ui = std::mem::take(&mut state.ui);
 
     ui.frame(ctx, dt, |egui_ui| {
-        egui_ui.collapsing("simulation", |ui| {
-            ui.add(egui::Slider::new(&mut state.speed, 5.0..=240.0).text("speed"));
-            ui.add(egui::Slider::new(&mut state.renderer.scale, 4.0..=18.0).text("scale"));
-            ui.add(egui::Slider::new(&mut state.renderer.pixel, 1.0..=8.0).text("pixel"));
-            ui.add(egui::Slider::new(&mut state.pipe_count, 1..=24).text("pipes"));
-            ui.add(egui::Slider::new(&mut state.sim.min_spacing, 0..=12).text("min spacing"));
-            ui.add(egui::Slider::new(&mut state.sim.straightness, 1..=50).text("straightness"));
-            ui.add(egui::Slider::new(&mut state.sim.min_run_length, 1..=20).text("min run length"));
-            ui.add(egui::Slider::new(&mut state.sim.depth_levels, 2..=8).text("depth levels"));
-            if ui
-                .add(egui::Slider::new(&mut state.server_count, 2..=48).text("servers"))
-                .changed()
-            {
-                EXTERNAL_CONFIG.with(|c| c.borrow_mut().server_count = state.server_count);
-                mark_config_dirty();
-            }
-            ui.add(egui::Slider::new(&mut state.sim.max_len_per_pipe, 10..=900).text("max length"));
+        egui_ui.collapsing("campus", |ui| {
+            ui.add(egui::Slider::new(&mut state.speed, 1.0..=480.0).text("speed"));
+            ui.add(egui::Slider::new(&mut state.renderer.scale, 1.0..=32.0).text("zoom"));
+            ui.add(egui::Slider::new(&mut state.renderer.pixel, 1.0..=4.0).text("pixel"));
+            ui.add(egui::Slider::new(&mut state.sim.trail, 50..=2000).text("trail"));
 
-            if ui.button("reset pipes").clicked() {
-                let pc = state.pipe_count;
-                let sc = state.server_count;
-                state.sim.reset(pc, sc);
-                state.sim_time = 0.0;
-                rebuild_nodes(&mut state);
+            // Structural knobs route through ExternalConfig so the reset path is
+            // shared with the Dioxus controls.
+            let structural = |ui: &mut egui::Ui, label: &str, val: usize, set: &dyn Fn(usize)| {
+                let mut v = val;
+                let range = match label {
+                    "flows" => 1..=40,
+                    "sites" => 1..=9,
+                    "aisles" => 1..=6,
+                    _ => 1..=8,
+                };
+                if ui.add(egui::Slider::new(&mut v, range).text(label)).changed() {
+                    set(v);
+                    mark_config_dirty();
+                }
+            };
+            structural(ui, "flows", state.flows, &|v| {
+                EXTERNAL_CONFIG.with(|c| c.borrow_mut().flows = v)
+            });
+            structural(ui, "sites", state.sites, &|v| {
+                EXTERNAL_CONFIG.with(|c| c.borrow_mut().sites = v)
+            });
+            structural(ui, "aisles", state.aisles, &|v| {
+                EXTERNAL_CONFIG.with(|c| c.borrow_mut().aisles = v)
+            });
+            structural(ui, "racks", state.racks, &|v| {
+                EXTERNAL_CONFIG.with(|c| c.borrow_mut().racks = v)
+            });
+
+            if ui.button("reset").clicked() {
+                EXTERNAL_CONFIG.with(|c| c.borrow_mut().reset_requested = true);
+                mark_config_dirty();
             }
         });
     });

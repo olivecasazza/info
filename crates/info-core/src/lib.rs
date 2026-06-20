@@ -155,6 +155,14 @@ static PROJECTS: &[Category] = &[
                     Link { label: "source", url: "https://github.com/olivecasazza/info/tree/main/wasm/pipedream" },
                 ],
             },
+            Project {
+                heading: "panel-kit",
+                text: "A window tiling layout manager library for Rust and WebAssembly, powering Native OS, HTML5 browser and Ratzilla/Ratatui terminal panel UI/UX. This site runs on panel-kit",
+                link: "/src/panel-kit",
+                links: &[
+                    Link { label: "source", url: "https://github.com/olivecasazza/panel-kit" },
+                ],
+            },
         ],
     },
     Category {

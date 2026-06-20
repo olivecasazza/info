@@ -66,6 +66,18 @@ fn js_call_method(obj: &JsValue, method: &str) {
     }
 }
 
+fn apply_pipedream_pixelation(canvas_id: &str, factor: f32) {
+    let factor = factor.clamp(1.0, 4.0);
+    let Some(window) = web_sys::window() else { return };
+    let Some(document) = window.document() else { return };
+    let Some(element) = document.get_element_by_id(canvas_id) else { return };
+    let pct = 100.0 / factor;
+    let style = format!(
+        "width: {pct}% !important; height: {pct}% !important; display: block; transform: scale({factor}); transform-origin: top left; image-rendering: pixelated; image-rendering: crisp-edges;"
+    );
+    let _ = element.set_attribute("style", &style);
+}
+
 fn js_call_string(obj: &JsValue, method: &str) -> Option<String> {
     let func = js_sys::Reflect::get(obj, &JsValue::from_str(method)).ok()?;
     let f = func.dyn_into::<js_sys::Function>().ok()?;
@@ -161,6 +173,9 @@ enum Panel {
     NotebookKinematics,
     NotebookInverseKinematics,
     NotebookWigglystuff,
+    PanelKitPage,
+    PanelKitWebDemo,
+    PanelKitTuiDemo,
 }
 
 impl PanelKind for Panel {
@@ -180,6 +195,9 @@ impl PanelKind for Panel {
             Panel::NotebookKinematics => "kinematics notebook",
             Panel::NotebookInverseKinematics => "inverse kinematics notebook",
             Panel::NotebookWigglystuff => "wigglystuff notebook",
+            Panel::PanelKitPage => "panel-kit page",
+            Panel::PanelKitWebDemo => "panel-kit web demo",
+            Panel::PanelKitTuiDemo => "panel-kit terminal demo",
         }
     }
 }
@@ -192,6 +210,11 @@ const PIPEDREAM_RESOURCES: &[Panel] = &[Panel::PipedreamDemo];
 const KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookKinematics];
 const INVERSE_KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookInverseKinematics];
 const WIGGLYSTUFF_RESOURCES: &[Panel] = &[Panel::NotebookWigglystuff];
+const PANEL_KIT_RESOURCES: &[Panel] = &[
+    Panel::PanelKitPage,
+    Panel::PanelKitWebDemo,
+    Panel::PanelKitTuiDemo,
+];
 const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::BirdNixPage,
     Panel::BirdNixDemo,
@@ -204,6 +227,9 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::NotebookKinematics,
     Panel::NotebookInverseKinematics,
     Panel::NotebookWigglystuff,
+    Panel::PanelKitPage,
+    Panel::PanelKitWebDemo,
+    Panel::PanelKitTuiDemo,
 ];
 const SIDEBAR_TILE_WIDTH: f64 = 35.0;
 const PROJECT_TILE_WIDTH: f64 = 100.0 - SIDEBAR_TILE_WIDTH;
@@ -294,6 +320,9 @@ fn panel_body(kind: Panel, ws: Workspace<Panel>) -> Element {
             "Inverse Kinematics Approximation",
         ),
         Panel::NotebookWigglystuff => notebook_panel("wigglystuff", "Wigglystuff Demos"),
+        Panel::PanelKitPage => panel_kit_page(),
+        Panel::PanelKitWebDemo => panel_kit_web_demo(),
+        Panel::PanelKitTuiDemo => panel_kit_tui_demo(),
     }
 }
 
@@ -304,6 +333,7 @@ fn resources_for_project(link: &str) -> &'static [Panel] {
         "/src/hephaestus" => HEPHAESTUS_RESOURCES,
         "/src/flock" => FLOCK_RESOURCES,
         "/src/pipedream" => PIPEDREAM_RESOURCES,
+        "/src/panel-kit" => PANEL_KIT_RESOURCES,
         "/projects/notebooks/kinematics" => KINEMATICS_RESOURCES,
         "/projects/notebooks/inverse-kinematic-approximations" => INVERSE_KINEMATICS_RESOURCES,
         "/projects/notebooks/wigglystuff"
@@ -721,25 +751,25 @@ fn SpeciesSlider(
 #[component]
 fn PipedreamControls(canvas_id: String) -> Element {
     let mut controls_visible = use_signal(|| false);
-    let mut speed = use_signal(|| 20.0_f32);
-    let mut scale = use_signal(|| 5.5_f32);
-    let mut pixel = use_signal(|| 3.0_f32);
-    let mut pipe_count = use_signal(|| 10_usize);
-    let mut server_count = use_signal(|| 24_usize);
-    let mut min_spacing = use_signal(|| 5_i32);
-    let mut straightness = use_signal(|| 10_u32);
-    let mut max_len_per_pipe = use_signal(|| 180_usize);
+    let mut speed = use_signal(|| 24.0_f32);
+    let mut scale = use_signal(|| 2.0_f32);
+    let mut pixel = use_signal(|| 2.5_f32);
+    let mut flows = use_signal(|| 12_usize);
+    let mut sites = use_signal(|| 4_usize);
+    let mut aisles = use_signal(|| 3_usize);
+    let mut racks = use_signal(|| 5_usize);
+    let mut trail = use_signal(|| 320_usize);
 
     // Clone canvas_id for all closures
     let canvas_id_effect = canvas_id.clone();
     let canvas_id_speed = canvas_id.clone();
     let canvas_id_scale = canvas_id.clone();
     let canvas_id_pixel = canvas_id.clone();
-    let canvas_id_pipes = canvas_id.clone();
-    let canvas_id_servers = canvas_id.clone();
-    let canvas_id_spacing = canvas_id.clone();
-    let canvas_id_straight = canvas_id.clone();
-    let canvas_id_max_len = canvas_id.clone();
+    let canvas_id_flows = canvas_id.clone();
+    let canvas_id_sites = canvas_id.clone();
+    let canvas_id_aisles = canvas_id.clone();
+    let canvas_id_racks = canvas_id.clone();
+    let canvas_id_trail = canvas_id.clone();
     let canvas_id_reset = canvas_id.clone();
 
     // Sync from handle on mount
@@ -756,21 +786,22 @@ fn PipedreamControls(canvas_id: String) -> Element {
                 }
                 if let Some(v) = js_get_f32(&handle, "pixel") {
                     pixel.set(v);
+                    apply_pipedream_pixelation(&canvas_id, v);
                 }
-                if let Some(v) = js_get_usize(&handle, "pipe_count") {
-                    pipe_count.set(v);
+                if let Some(v) = js_get_usize(&handle, "flows") {
+                    flows.set(v);
                 }
-                if let Some(v) = js_get_usize(&handle, "server_count") {
-                    server_count.set(v);
+                if let Some(v) = js_get_usize(&handle, "sites") {
+                    sites.set(v);
                 }
-                if let Some(v) = js_get_f32(&handle, "min_spacing") {
-                    min_spacing.set(v as i32);
+                if let Some(v) = js_get_usize(&handle, "aisles") {
+                    aisles.set(v);
                 }
-                if let Some(v) = js_get_u32(&handle, "straightness") {
-                    straightness.set(v);
+                if let Some(v) = js_get_usize(&handle, "racks") {
+                    racks.set(v);
                 }
-                if let Some(v) = js_get_usize(&handle, "max_len_per_pipe") {
-                    max_len_per_pipe.set(v);
+                if let Some(v) = js_get_usize(&handle, "trail") {
+                    trail.set(v);
                 }
             }
         });
@@ -812,65 +843,66 @@ fn PipedreamControls(canvas_id: String) -> Element {
                 if let Some(handle) = get_bevy_handle(&canvas_id) {
                     js_set(&handle, "pixel", &JsValue::from_f64(v as f64));
                 }
+                apply_pipedream_pixelation(&canvas_id, v);
             }
         }
     };
 
-    let on_pipe_count_change = {
-        let canvas_id = canvas_id_pipes.clone();
+    let on_flows_change = {
+        let canvas_id = canvas_id_flows.clone();
         move |e: Event<FormData>| {
             if let Ok(v) = e.value().parse::<usize>() {
-                pipe_count.set(v);
+                flows.set(v);
                 if let Some(handle) = get_bevy_handle(&canvas_id) {
-                    js_set(&handle, "pipe_count", &JsValue::from_f64(v as f64));
+                    js_set(&handle, "flows", &JsValue::from_f64(v as f64));
                 }
             }
         }
     };
 
-    let on_server_count_change = {
-        let canvas_id = canvas_id_servers.clone();
+    let on_sites_change = {
+        let canvas_id = canvas_id_sites.clone();
         move |e: Event<FormData>| {
             if let Ok(v) = e.value().parse::<usize>() {
-                server_count.set(v);
+                sites.set(v);
                 if let Some(handle) = get_bevy_handle(&canvas_id) {
-                    js_set(&handle, "server_count", &JsValue::from_f64(v as f64));
+                    js_set(&handle, "sites", &JsValue::from_f64(v as f64));
                 }
             }
         }
     };
 
-    let on_min_spacing_change = {
-        let canvas_id = canvas_id_spacing.clone();
-        move |e: Event<FormData>| {
-            if let Ok(v) = e.value().parse::<i32>() {
-                min_spacing.set(v);
-                if let Some(handle) = get_bevy_handle(&canvas_id) {
-                    js_set(&handle, "min_spacing", &JsValue::from_f64(v as f64));
-                }
-            }
-        }
-    };
-
-    let on_straightness_change = {
-        let canvas_id = canvas_id_straight.clone();
-        move |e: Event<FormData>| {
-            if let Ok(v) = e.value().parse::<u32>() {
-                straightness.set(v);
-                if let Some(handle) = get_bevy_handle(&canvas_id) {
-                    js_set(&handle, "straightness", &JsValue::from_f64(v as f64));
-                }
-            }
-        }
-    };
-
-    let on_max_len_change = {
-        let canvas_id = canvas_id_max_len.clone();
+    let on_aisles_change = {
+        let canvas_id = canvas_id_aisles.clone();
         move |e: Event<FormData>| {
             if let Ok(v) = e.value().parse::<usize>() {
-                max_len_per_pipe.set(v);
+                aisles.set(v);
                 if let Some(handle) = get_bevy_handle(&canvas_id) {
-                    js_set(&handle, "max_len_per_pipe", &JsValue::from_f64(v as f64));
+                    js_set(&handle, "aisles", &JsValue::from_f64(v as f64));
+                }
+            }
+        }
+    };
+
+    let on_racks_change = {
+        let canvas_id = canvas_id_racks.clone();
+        move |e: Event<FormData>| {
+            if let Ok(v) = e.value().parse::<usize>() {
+                racks.set(v);
+                if let Some(handle) = get_bevy_handle(&canvas_id) {
+                    js_set(&handle, "racks", &JsValue::from_f64(v as f64));
+                }
+            }
+        }
+    };
+
+    let on_trail_change = {
+        let canvas_id = canvas_id_trail.clone();
+        move |e: Event<FormData>| {
+            if let Ok(v) = e.value().parse::<usize>() {
+                trail.set(v);
+                if let Some(handle) = get_bevy_handle(&canvas_id) {
+                    js_set(&handle, "trail", &JsValue::from_f64(v as f64));
                 }
             }
         }
@@ -907,10 +939,10 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         span { class: "control-value", "{speed:.0}" }
                     }
                     div { class: "control-row",
-                        label { "scale" }
+                        label { "zoom" }
                         input {
                             r#type: "range",
-                            min: "2",
+                            min: "1",
                             max: "32",
                             step: "0.5",
                             value: "{scale}",
@@ -919,11 +951,11 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         span { class: "control-value", "{scale:.1}" }
                     }
                     div { class: "control-row",
-                        label { "pixel" }
+                        label { "pixel snap" }
                         input {
                             r#type: "range",
                             min: "1",
-                            max: "12",
+                            max: "4",
                             step: "0.5",
                             value: "{pixel}",
                             oninput: on_pixel_change,
@@ -931,64 +963,64 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         span { class: "control-value", "{pixel:.1}" }
                     }
                     div { class: "control-row",
-                        label { "pipes" }
+                        label { "flows" }
                         input {
                             r#type: "range",
                             min: "1",
-                            max: "32",
+                            max: "40",
                             step: "1",
-                            value: "{pipe_count}",
-                            oninput: on_pipe_count_change,
+                            value: "{flows}",
+                            oninput: on_flows_change,
                         }
-                        span { class: "control-value", "{pipe_count}" }
+                        span { class: "control-value", "{flows}" }
                     }
                     div { class: "control-row",
-                        label { "servers" }
-                        input {
-                            r#type: "range",
-                            min: "2",
-                            max: "72",
-                            step: "1",
-                            value: "{server_count}",
-                            oninput: on_server_count_change,
-                        }
-                        span { class: "control-value", "{server_count}" }
-                    }
-                    div { class: "control-row",
-                        label { "min spacing" }
-                        input {
-                            r#type: "range",
-                            min: "0",
-                            max: "24",
-                            step: "1",
-                            value: "{min_spacing}",
-                            oninput: on_min_spacing_change,
-                        }
-                        span { class: "control-value", "{min_spacing}" }
-                    }
-                    div { class: "control-row",
-                        label { "straightness" }
+                        label { "sites" }
                         input {
                             r#type: "range",
                             min: "1",
-                            max: "100",
+                            max: "9",
                             step: "1",
-                            value: "{straightness}",
-                            oninput: on_straightness_change,
+                            value: "{sites}",
+                            oninput: on_sites_change,
                         }
-                        span { class: "control-value", "{straightness}" }
+                        span { class: "control-value", "{sites}" }
                     }
                     div { class: "control-row",
-                        label { "max length" }
+                        label { "aisles" }
                         input {
                             r#type: "range",
-                            min: "10",
-                            max: "1800",
+                            min: "1",
+                            max: "6",
+                            step: "1",
+                            value: "{aisles}",
+                            oninput: on_aisles_change,
+                        }
+                        span { class: "control-value", "{aisles}" }
+                    }
+                    div { class: "control-row",
+                        label { "racks/aisle" }
+                        input {
+                            r#type: "range",
+                            min: "1",
+                            max: "8",
+                            step: "1",
+                            value: "{racks}",
+                            oninput: on_racks_change,
+                        }
+                        span { class: "control-value", "{racks}" }
+                    }
+                    div { class: "control-row",
+                        label { "trail" }
+                        input {
+                            r#type: "range",
+                            min: "50",
+                            max: "2000",
                             step: "10",
-                            value: "{max_len_per_pipe}",
-                            oninput: on_max_len_change,
+                            value: "{trail}",
+                            oninput: on_trail_change,
                         }
-                        span { class: "control-value", "{max_len_per_pipe}" }
+                        span { class: "control-value", "{trail}" }
                     }
                     div { class: "control-row",
                         button {
@@ -1405,6 +1437,276 @@ fn hephaestus_demo() -> Element {
     }
 }
 
+fn panel_kit_page() -> Element {
+    const INSTALL: &str = r#"[dependencies]
+panel-kit = { git = "https://github.com/olivecasazza/panel-kit" }"#;
+
+    rsx! {
+        article { class: "project-article",
+            header {
+                h1 { "panel-kit" }
+                p { "A generic window tiling layout manager library for Rust and WebAssembly, powering desktop-like workspace environments in Dioxus web apps and Ratatui terminal interfaces." }
+            }
+            section { class: "article-section",
+                h2 { "overview" }
+                p { "panel-kit implements a full windowing state machine with support for both floating (free placement) and tiling (auto-grid) workspace modes. It provides macOS-style traffic light window controls, drag-to-reorder tiling, a minimized-panel dock, and layout persistence to localStorage or file-based stores." }
+                p { "Originally designed for desktop dashboards and terminal interfaces, the project is structured as a cargo workspace separating the platform-agnostic layout mathematics from the rendering engines." }
+            }
+            section { class: "article-section",
+                h2 { "architecture" }
+                ul {
+                    li { b { "panel-kit-core" } ": The core renderer-agnostic state machine. It manages panel geometry, window states (floating, minimized, maximized), drag-and-resize mathematics, viewport clamping, and serialized layouts. It does not use any web or platform-specific APIs and is purely mathematical (units are pixels on web or cells in terminal)." }
+                    li { b { "panel-kit" } ": The Dioxus web renderer implementation. Translates browser DOM events into layout updates, integrates localStorage persistence, and supplies the CSS chrome styling." }
+                    li { b { "panel-kit-tui" } ": The Ratatui terminal renderer. Uses Crossterm for terminal mouse inputs and renders panels inside terminal cells, with persistence to JSON files." }
+                }
+            }
+            section { class: "article-section",
+                h2 { "key features" }
+                ul {
+                    li { b { "Tiling & Floating" } " — Smooth switching between free-floating desktop windows and a structured grid layout." }
+                    li { b { "Layout Persistence" } " — Restores window geometries, maximized/minimized state, and workspace mode on reload." }
+                    li { b { "Viewport Clamping" } " — Shrinking the window clamps panels within bounds without overwriting their original size, allowing them to spring back when resized." }
+                    li { b { "Multi-Frontend" } " — The core is shared between WebAssembly browser applications and native TUI terminal applications." }
+                }
+            }
+            section { class: "article-section",
+                h2 { "install" }
+                pre { class: "code-block", code { "{INSTALL}" } }
+            }
+            section { class: "article-section",
+                h2 { "links" }
+                ul {
+                    li { a { class: "link", href: "https://github.com/olivecasazza/panel-kit", target: "_blank", "source" } " - github.com/olivecasazza/panel-kit" }
+                }
+            }
+        }
+    }
+}
+
+const DEMO_CSS: &str = r#"
+.ws.tiling .panel-status { flex: 1 1 100%; }
+.tip-target { border-bottom: 1px dashed var(--dim); cursor: help; }
+.topbar button { background: var(--bg); color: var(--fg); border: 1px solid var(--line2);
+  border-radius: 3px; padding: .15rem .5rem; font-size: .72rem; cursor: pointer; }
+.topbar button:hover { border-color: var(--fg); }
+.status-list { margin: .25rem 0; padding-left: 1.1rem; }
+.status-list li { color: var(--dim); }
+textarea.notes { width: 100%; height: 70%; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line2); border-radius: 3px; font-family: var(--mono);
+  font-size: .78rem; padding: .4rem; resize: none; }
+"#;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+enum DemoPanel {
+    Notes,
+    Preview,
+    Status,
+    Help,
+}
+
+impl PanelKind for DemoPanel {
+    fn title(self) -> &'static str {
+        match self {
+            DemoPanel::Notes => "Notes",
+            DemoPanel::Preview => "Preview",
+            DemoPanel::Status => "Status",
+            DemoPanel::Help => "Help",
+        }
+    }
+}
+
+fn demo_default_layout() -> Vec<PanelWin<DemoPanel>> {
+    let mut b = LayoutBuilder::new();
+    let mut help = b.at(DemoPanel::Help, 660.0, 340.0, 380.0, 240.0);
+    help.state = WinState::Minimized;
+    vec![
+        b.at(DemoPanel::Notes, 16.0, 16.0, 420.0, 300.0),
+        b.at(DemoPanel::Preview, 452.0, 16.0, 420.0, 300.0),
+        b.at(DemoPanel::Status, 16.0, 332.0, 560.0, 280.0),
+        help,
+    ]
+}
+
+fn panel_kit_web_demo() -> Element {
+    let ws = use_workspace("panel_kit_web_demo_workspace", demo_default_layout);
+    let mut tip = use_signal(|| Option::<(f64, f64)>::None);
+
+    let mode_label = match ws.effective_mode() {
+        Mode::Floating => "floating",
+        Mode::Tiling => "tiling",
+    };
+
+    let body = move |kind: DemoPanel, maximized: bool| -> Element {
+        match kind {
+            DemoPanel::Notes => rsx! {
+                p { "Type below, then press " b { "t" } " — the mode shortcut is "
+                    "suppressed by the " code { "is_editing()" } " gate while this "
+                    "textarea has focus. Click elsewhere and " b { "t" } " toggles "
+                    "tiling⇄floating." }
+                textarea { class: "notes", placeholder: "type here…" }
+            },
+            DemoPanel::Preview => rsx! {
+                p { "The body closure receives " code { "(kind, maximized)" } "." }
+                p { "This panel is currently "
+                    b { if maximized { "maximized" } else { "not maximized" } }
+                    " — press the green light to flip it." }
+            },
+            DemoPanel::Status => {
+                let (vw, vh) = *ws.viewport.read();
+                let drag_txt = match *ws.drag.read() {
+                    Some(d) => format!(
+                        "{} panel #{}",
+                        match d.kind {
+                            panel_kit::DragKind::Move => "moving",
+                            panel_kit::DragKind::Resize => "resizing",
+                        },
+                        d.idx
+                    ),
+                    None => "none".to_string(),
+                };
+                let tile_drag_txt = match *ws.tile_drag.read() {
+                    Some(k) => format!("reordering “{}”", k.title()),
+                    None => "none".to_string(),
+                };
+                let rows: Vec<String> = ws
+                    .panels
+                    .read()
+                    .iter()
+                    .map(|p| {
+                        let st = match p.state {
+                            WinState::Floating => "floating",
+                            WinState::Minimized => "minimized",
+                            WinState::Maximized => "maximized",
+                        };
+                        format!(
+                            "{}: x={:.0} y={:.0} w={:.0} h={:.0} z={} ({})",
+                            p.kind.title(),
+                            p.x,
+                            p.y,
+                            p.w,
+                            p.h,
+                            p.z,
+                            st
+                        )
+                    })
+                    .collect();
+                rsx! {
+                    p {
+                        "mode: " b { "{mode_label}" }
+                        " · viewport: " b { "{vw:.0}×{vh:.0}" }
+                        " · is_mobile: " b { "{ws.is_mobile.read()}" }
+                        " · viewport_is_mobile(): " b { "{panel_kit::viewport_is_mobile()}" }
+                    }
+                    p { "drag: " b { "{drag_txt}" } " · tile drag: " b { "{tile_drag_txt}" } }
+                    p { "stored geometry (clamping never rewrites it — shrink the "
+                        "window and these numbers hold; grow it back and panels "
+                        "spring back):" }
+                    ul { class: "status-list",
+                        for r in rows {
+                            li { "{r}" }
+                        }
+                    }
+                    p {
+                        span {
+                            class: "tip-target",
+                            onmousemove: move |e: MouseEvent| {
+                                let c = e.client_coordinates();
+                                tip.set(Some(panel_kit::tip_pos(c.x, c.y, 228.0, 96.0)));
+                            },
+                            onmouseleave: move |_| tip.set(None),
+                            "ⓘ hover me for a tip_pos tooltip"
+                        }
+                        " — try it with the window scrolled so the cursor is "
+                        "near the left or bottom edge."
+                    }
+                    p { "layout persists to localStorage under "
+                        code { "panel_kit_web_demo_workspace" } " — reload to verify." }
+                }
+            }
+            DemoPanel::Help => rsx! {
+                p { b { "This panel started minimized" } " (a dock chip) via "
+                    code { "WinState::Minimized" } " in the default layout." }
+                ul { class: "status-list",
+                    li { "red light: toggle floating⇄tiling" }
+                    li { "yellow light: minimize to the dock" }
+                    li { "green light: maximize / restore" }
+                    li { "floating: drag the header to move, the corner to resize, "
+                         "mousedown to raise (z-order)" }
+                    li { "tiling: drag a header over another panel to reorder" }
+                    li { "narrow the window under 760px for the mobile stack" }
+                }
+            },
+        }
+    };
+
+    rsx! {
+        div {
+            style: "width: 100%; height: 100%; position: relative; overflow: hidden;",
+            onmousedown: move |e| e.stop_propagation(),
+            onmousemove: move |e| e.stop_propagation(),
+            onmouseup: move |e| e.stop_propagation(),
+            style { {DEMO_CSS} }
+            div {
+                class: ws.root_class(),
+                tabindex: "0",
+                onmousemove: move |e: MouseEvent| ws.handle_mouse_move(&e),
+                onmouseup: move |_| ws.handle_mouse_up(),
+                onkeydown: move |e: KeyboardEvent| {
+                    if panel_kit::is_editing() {
+                        return;
+                    }
+                    if let dioxus::events::Key::Character(c) = e.key() {
+                        if c == "t" {
+                            let mut mode = ws.mode;
+                            let next = if *mode.read() == Mode::Tiling {
+                                Mode::Floating
+                            } else {
+                                Mode::Tiling
+                            };
+                            mode.set(next);
+                        }
+                    }
+                },
+                header { class: "topbar",
+                    h1 { "panel-kit workspace demo" }
+                    span { class: "hint", "mode: {mode_label} · press t to toggle · drag, resize, traffic lights" }
+                    button {
+                        onclick: move |_| {
+                            if let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
+                                let _ = storage.remove_item("panel_kit_web_demo_workspace");
+                            }
+                            let mut panels = ws.panels;
+                            panels.set(demo_default_layout());
+                            let mut mode = ws.mode;
+                            mode.set(Mode::Floating);
+                        },
+                        "reset layout"
+                    }
+                }
+                {ws.render(body)}
+                {ws.dock()}
+                if let Some((x, y)) = tip() {
+                    div { class: "tip-overlay", style: "left:{x}px; top:{y}px;",
+                        b { "tip_pos in action" }
+                        p { "Placed left of the cursor, flipped right when there's "
+                            "no room, and clamped inside the viewport." }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn panel_kit_tui_demo() -> Element {
+    rsx! {
+        iframe {
+            src: "/wasm/panel-kit-tui/browser_tui.html",
+            class: "featured-iframe",
+            title: "panel-kit terminal demo",
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1540,9 +1842,18 @@ const APP_CSS: &str = r#"
   position: relative;
 }
 .featured-demo canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   -ms-interpolation-mode: nearest-neighbor;
+}
+.featured-demo canvas#pipedream-canvas {
+  width: 40% !important;
+  height: 40% !important;
+  transform: scale(2.5);
+  transform-origin: top left;
 }
 
 /* Project detail pages */
