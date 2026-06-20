@@ -1032,12 +1032,45 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
 fn consortium_demo() -> Element {
     rsx! {
         figure { class: "project-figure recording-figure",
-            img { src: "/projects-media/consortium-fan-out.gif", alt: "consortium fan-out terminal recording" }
-            figcaption { "claw / molt / pinch / cast against mm01-mm05." }
+            div {
+                id: "asciinema-container",
+                class: "asciinema-container",
+                onmounted: move |_| {
+                    let _ = web_sys::window().and_then(|w: web_sys::Window| {
+                        let doc = w.document()?;
+                        let js = concat!(
+                            "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
+                            " document.getElementById('asciinema-container'), {",
+                            "  cols: 92, rows: 26, autoPlay: true, loop: true, theme: 'monokai',",
+                            "  fontSize: '12px', fit: false, idleTimeLimit: 2, controls: false",
+                            "});"
+                        ).to_string();
+                        if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
+                            let script = doc.create_element("script").ok()?;
+                            script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
+                            let link = doc.create_element("link").ok()?;
+                            link.set_attribute("rel", "stylesheet").ok()?;
+                            link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
+                            doc.head()?.append_child(&link).ok()?;
+                            doc.head()?.append_child(&script).ok()?;
+                            let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
+                                let _ = js_sys::eval(&js);
+                            }).into_js_value();
+                            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                cb.as_ref().unchecked_ref(), 500,
+                            );
+                            std::mem::forget(cb);
+                        } else {
+                            let _ = js_sys::eval(&js);
+                        }
+                        Some(())
+                    });
+                },
+            }
+            figcaption { "Live cascade deploy: cast deploy --on mm[01-05] --cascade --cascade-fanout 2 against the nixlab Mac Mini fleet." }
         }
     }
 }
-
 fn bird_nix_page() -> Element {
     const INSTALL: &str = r#"inputs.bird-nix.url = "github:olivecasazza/bird-nix";
 
@@ -1524,8 +1557,19 @@ const APP_CSS: &str = r#"
 .ws-root:not(.mobile) .panel-hephaestus-recording {
   --panel-min-h: 50vh;
 }
-.recording-figure {
-  min-height: calc(50vh - 1.95rem);
+.asciinema-container {
+  height: 100%;
+  min-height: 450px;
+  overflow: visible;
+}
+.asciinema-container .ap-wrapper {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.asciinema-container .ap-terminal {
+  font-size: 11px !important;
+  line-height: 1.35 !important;
 }
 .project-figure img {
   flex: 1;
@@ -1639,5 +1683,142 @@ const APP_CSS: &str = r#"
 .reset-btn:hover {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+/* Cascade fan-out demo */
+.cascade-demo {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 1.55rem .4rem .4rem;
+  overflow: auto;
+}
+.cascade-term {
+  background: #050505;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #111;
+  border-bottom: 1px solid var(--line);
+}
+.term-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.term-title {
+  color: var(--dim);
+  font-size: 11px;
+}
+.term-body {
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.7;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.term-line { white-space: pre-wrap; }
+.term-cmd { color: var(--accent); }
+.term-info { color: var(--dim); }
+.term-r0 { color: var(--yellow); }
+.term-r1 { color: var(--green); }
+.term-r2 { color: var(--blue); }
+.term-done { color: var(--accent); font-weight: bold; }
+.term-cursor { color: var(--accent); animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.cascade-tree {
+  flex: 1;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+}
+.tree-round {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  justify-content: center;
+}
+.round-label {
+  color: var(--dim);
+  font-size: 10px;
+  width: 50px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.tree-node {
+  padding: 4px 12px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: bold;
+  border: 1px solid var(--line2);
+  background: var(--panel);
+  color: var(--dim);
+  white-space: nowrap;
+  animation: node-pop 0.3s ease-out;
+}
+@keyframes node-pop {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+.tree-source {
+  border-color: var(--yellow);
+  color: var(--yellow);
+  background: rgba(240,221,125,0.08);
+}
+.tree-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(217,185,76,0.08);
+  animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s;
+}
+@keyframes pulse-border {
+  50% { box-shadow: 0 0 8px rgba(217,185,76,0.4); }
+}
+.tree-done {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(93,205,190,0.05);
+}
+.tree-edges {
+  display: flex;
+  gap: 24px;
+}
+.tree-edges .edge {
+  display: block;
+  width: 1px;
+  height: 20px;
+  background: var(--line2);
+}
+.tree-nodes {
+  display: flex;
+  gap: 8px;
+}
+.tree-nodes-r2 {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.tree-group {
+  display: flex;
+  gap: 8px;
+}
+.cascade-demo figcaption {
+  color: var(--dim);
+  font-size: 11px;
+  text-align: center;
+  padding: 4px 12px;
 }
 "#;
