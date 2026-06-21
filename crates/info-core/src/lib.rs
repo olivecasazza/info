@@ -161,6 +161,9 @@ static PROJECTS: &[Category] = &[
                 link: "/src/panel-kit",
                 links: &[
                     Link { label: "source", url: "https://github.com/olivecasazza/panel-kit" },
+                    Link { label: "jump-cannon", url: "https://github.com/ocasazza/jump-cannon" },
+                    Link { label: "definitely-not-crosswords", url: "https://github.com/olivecasazza/definitely-not-crosswords" },
+                    Link { label: "bird-nix", url: "https://github.com/olivecasazza/bird-nix" },
                 ],
             },
         ],
