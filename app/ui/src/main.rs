@@ -1765,6 +1765,17 @@ const APP_CSS: &str = r#"
   padding: 1.55rem .4rem .4rem;
 }
 
+/* Mobile: let notebook/demo panels expand */
+.mobile .panel-kinematics-notebook .panel-body,
+.mobile .panel-inverse-kinematics-notebook .panel-body,
+.mobile .panel-wigglystuff-notebook .panel-body,
+.mobile .panel-flocking-demo .panel-body,
+.mobile .panel-pipedream-demo .panel-body,
+.mobile .panel-bird-nix-demo .panel-body {
+  max-height: none;
+  min-height: 60vh;
+}
+
 /* Info panel */
 .info-panel { font-size: 13px; line-height: 1.5; padding: 4px 2px; }
 .info-panel .name { font-size: 1.5rem; margin: 0 0 12px 0; font-weight: 400; }

@@ -2,6 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />    <link rel="icon" href="favicon.ico" />
+    <style id="info-notebook-dark-loader">
+      html, body, #root { background: #0a0a0a !important; color: #ededed !important; }
+      body::before {
+        content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 2px;
+        background: linear-gradient(to right, #6666ff, #0099ff, #00ff00, #ff3399, #6666ff);
+        background-size: 400% 100%; animation: rainbow_animation 6s ease-in-out infinite;
+        pointer-events: none; z-index: 2147483647;
+      }
+      @keyframes rainbow_animation { 0%, 100% { background-position: 0 0; } 50% { background-position: 100% 0; } }
+    </style>
     <!-- Preload is necessary because we show these images when we disconnect from the server,
     but at that point we cannot load these images from the server -->
     <link rel="preload" href="assets/gradient-yHQUC_QB.png" as="image" />
@@ -304,5 +314,8 @@
         configurable: false,
       });
     </script>
-  </body>
+  <style id="info-dark-override">
+html, body, #root, .marimo, [data-marimo], marimo-cell-output, .cm-editor { background: #0a0a0a !important; color: #ededed !important; }
+</style>
+</body>
 </html>
