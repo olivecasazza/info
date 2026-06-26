@@ -10,7 +10,7 @@
     # Panel workspace library — source only, not a flake.
     # Cargo.toml uses path = "../panel-kit"; prePatch recreates this in Nix builds.
     panel-kit = {
-      url = "github:olivecasazza/panel-kit/feat/snap-grid-toggles";
+      url = "github:olivecasazza/panel-kit";
       flake = false;
     };
   };

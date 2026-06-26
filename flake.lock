@@ -68,16 +68,15 @@
     "panel-kit": {
       "flake": false,
       "locked": {
-        "lastModified": 1781908302,
-        "narHash": "sha256-uP2fIQoxhQwR8E7exKLzc+xxGEWeah1PYAJg39NXR/E=",
+        "lastModified": 1782500997,
+        "narHash": "sha256-gX9Zu8Cqqc1oMmeRSSNlU46gwV4WgW7kgNUQmG7o5Og=",
         "owner": "olivecasazza",
         "repo": "panel-kit",
-        "rev": "ec685ac6d59ed1937b1d5eb8c71be5610c73924a",
+        "rev": "bb518374d8cdc79bbca2405a21bc4c1848b2e71b",
         "type": "github"
       },
       "original": {
         "owner": "olivecasazza",
-        "ref": "feat/snap-grid-toggles",
         "repo": "panel-kit",
         "type": "github"
       }

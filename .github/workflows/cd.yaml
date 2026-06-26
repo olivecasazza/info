@@ -30,23 +30,15 @@ jobs:
           name: info
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      # Build WASM packages and sync to app/ui/public/wasm
-      - name: Build WASM packages
-        run: |
-          nix build .#flock-wasm-pkg .#pipedream-wasm-pkg --no-link
-          nix run .#sync-wasm
-
-      # Build the Dioxus site with trunk
+      # Build the Dioxus site via crane/trunk (includes all WASM)
       - name: Build site
-        run: |
-          cd app/ui
-          nix develop --command trunk build --release
+        run: nix build .#info-ui --out-link result
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: site-build
-          path: app/ui/dist
+          path: result
           retention-days: 1
 
   deploy:
