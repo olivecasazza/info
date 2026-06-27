@@ -147,7 +147,7 @@ static PROJECTS: &[Category] = &[
                 ],
             },
             Project {
-                heading: "Ethernet 3D Pipes",
+                heading: "Conduit",
                 text: "Procedural 3D path generation with collision avoidance and random-walk routing.",
                 link: "/src/pipedream",
                 links: &[

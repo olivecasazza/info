@@ -191,7 +191,7 @@ impl PanelKind for Panel {
             Panel::HephaestusPage => "hephaestus page",
             Panel::HephaestusDemo => "hephaestus recording",
             Panel::FlockDemo => "flocking demo",
-            Panel::PipedreamDemo => "pipedream demo",
+            Panel::PipedreamDemo => "conduit demo",
             Panel::NotebookKinematics => "kinematics notebook",
             Panel::NotebookInverseKinematics => "inverse kinematics notebook",
             Panel::NotebookWigglystuff => "wigglystuff notebook",
@@ -1081,7 +1081,7 @@ fn pipedream_demo() -> Element {
             BevyCanvas {
                 module_path: "/wasm/pipedream/pipedream.js".to_string(),
                 canvas_id: "pipedream-canvas".to_string(),
-                loading_text: "loading pipedream...".to_string(),
+                loading_text: "loading conduit...".to_string(),
             }
             PipedreamControls { canvas_id: "pipedream-canvas".to_string() }
         }
