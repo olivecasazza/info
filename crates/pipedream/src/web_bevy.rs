@@ -120,10 +120,14 @@ impl WebHandle {
         let backing_h = (css_h / BACKING_SCALE).round().max(200.0);
         canvas.set_width(backing_w as u32);
         canvas.set_height(backing_h as u32);
-        let style = canvas.style();
-        let _ = style.set_property("width", "100%");
-        let _ = style.set_property("height", "100%");
-        let _ = style.set_property("image-rendering", "pixelated");
+        // Cast to HtmlElement to access style() method.
+        use wasm_bindgen::JsCast;
+        if let Some(el) = canvas.dyn_ref::<web_sys::HtmlElement>() {
+            let style = el.style();
+            let _ = style.set_property("width", "100%");
+            let _ = style.set_property("height", "100%");
+            let _ = style.set_property("image-rendering", "pixelated");
+        }
 
         App::new()
             .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -351,6 +355,15 @@ fn scatter_dir(seed: u32, idx: u32) -> [f32; 3] {
     [x / m, y / m, z / m]
 }
 
+/// Rotate a 2D point (x, y) around a center by `angle` radians. Returns rotated (x, y).
+fn rotate_2d(x: f32, y: f32, cx: f32, cy: f32, angle: f32) -> (f32, f32) {
+    let dx = x - cx;
+    let dy = y - cy;
+    let cos_a = angle.cos();
+    let sin_a = angle.sin();
+    (cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a)
+}
+
 /// Shade a color by a multiplier, preserving (or replacing) alpha.
 fn shade(c: Color32, f: f32, a: u8) -> Color32 {
     let [r, g, b, _] = c.to_array();
@@ -513,6 +526,11 @@ struct Site {
     center: IVec3,
     core: IVec3,
     aisle_aggs: Vec<IVec3>,
+    /// Rotation angle (radians) around the site center, applied during topology
+    /// generation so all positions are in world-space and routing works unchanged.
+    /// Stored for potential UI display / debugging.
+    #[allow(dead_code)]
+    rotation: f32,
 }
 
 struct PipeSim {
@@ -589,6 +607,31 @@ impl PipeSim {
             p.y.clamp(1, self.bounds.y - 2),
             p.z.clamp(1, self.bounds.z - 2),
         )
+    }
+
+    /// Rotate a horizontal facing direction by an angle (radians) in the XY plane.
+    /// Z-axis directions pass through unchanged.
+    fn rotate_facing(dir: Dir, angle: f32) -> Dir {
+        // Only rotate directions in the XY plane.
+        let (dx, dy) = match dir {
+            Dir::PosX => (1.0_f32, 0.0_f32),
+            Dir::NegX => (-1.0, 0.0),
+            Dir::PosY => (0.0, 1.0),
+            Dir::NegY => (0.0, -1.0),
+            Dir::PosZ | Dir::NegZ => return dir,
+        };
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+        let rx = dx * cos_a - dy * sin_a;
+        let ry = dx * sin_a + dy * cos_a;
+        // Snap to the nearest cardinal direction.
+        if rx.abs() > ry.abs() {
+            if rx > 0.0 { Dir::PosX } else { Dir::NegX }
+        } else if ry > 0.0 {
+            Dir::PosY
+        } else {
+            Dir::NegY
+        }
     }
 
     /// Renderer focus (world point that maps to screen center). Centered on the
@@ -697,6 +740,18 @@ impl PipeSim {
             (rng.rand_u32() as f32 / u32::MAX as f32 - 0.5) * 2.0 * mag
         };
 
+        // Clamp bounds for the inner loop (avoid borrowing self in closures).
+        let clamp_x = (1, self.bounds.x - 2);
+        let clamp_y = (1, self.bounds.y - 2);
+        let clamp_z = (1, self.bounds.z - 2);
+        let clamp_pt = |x: i32, y: i32, z: i32| -> IVec3 {
+            IVec3::new(
+                x.clamp(clamp_x.0, clamp_x.1),
+                y.clamp(clamp_y.0, clamp_y.1),
+                z.clamp(clamp_z.0, clamp_z.1),
+            )
+        };
+
         for s in 0..n {
             let (center_x, center_y) = if n <= 1 {
                 (campus_x, campus_y)
@@ -707,47 +762,50 @@ impl PipeSim {
                 (campus_x + r * ang.cos(), campus_y + r * ang.sin())
             };
 
+            // Random rotation for this site (full 360° range).
+            let site_rotation = (self.rng.rand_u32() as f32 / u32::MAX as f32) * two_pi;
+
+            // Helper to rotate a local position around the site center and clamp.
+            let rotate_and_clamp = |local_x: f32, local_y: f32, z: f32| -> IVec3 {
+                let (rx, ry) = rotate_2d(local_x, local_y, center_x, center_y, site_rotation);
+                clamp_pt(rx.round() as i32, ry.round() as i32, z as i32)
+            };
+
+            // Base local coords (before rotation) relative to site center.
             let x0 = center_x - block_w * 0.5;
             let y0 = center_y - block_h * 0.5;
 
             let mut site = Site {
-                center: self.clamp_point(IVec3::new(
+                center: clamp_pt(
                     center_x.round() as i32,
                     center_y.round() as i32,
                     ground_z as i32,
-                )),
+                ),
                 core: IVec3::new(0, 0, 0),
                 aisle_aggs: Vec::with_capacity(aisles),
+                rotation: site_rotation,
             };
 
             for a in 0..aisles {
                 let ay = y0 + aisle_pitch * a as f32;
                 // Aisle aggregation switch at the front (low x) of the row,
                 // raised onto an overhead tray.
-                let agg = self.clamp_point(IVec3::new(
-                    (x0 - 4.0) as i32,
-                    ay.round() as i32,
-                    (ground_z + 4.0) as i32,
-                ));
+                let agg = rotate_and_clamp(x0 - 4.0, ay, ground_z + 4.0);
                 site.aisle_aggs.push(agg);
 
                 for r in 0..racks {
                     let rx = x0 + rack_pitch * r as f32;
-                    let pos =
-                        self.clamp_point(IVec3::new(rx.round() as i32, ay.round() as i32, ground_z as i32));
+                    let pos = rotate_and_clamp(rx, ay, ground_z);
                     self.servers.push(pos);
-                    self.server_facings.push(Dir::PosX);
+                    // Server facing rotates with the site: original +X becomes +X rotated.
+                    self.server_facings.push(Self::rotate_facing(Dir::PosX, site_rotation));
                     self.server_site.push(s);
                     self.server_aisle.push(a);
                 }
             }
 
             // Site core: in front of the aisles, higher than the aggs.
-            site.core = self.clamp_point(IVec3::new(
-                (x0 - 8.0) as i32,
-                center_y.round() as i32,
-                (ground_z + 10.0) as i32,
-            ));
+            site.core = rotate_and_clamp(x0 - 8.0, center_y, ground_z + 10.0);
             self.sites.push(site);
         }
 
