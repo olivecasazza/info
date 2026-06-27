@@ -273,6 +273,11 @@ fn App() -> Element {
         }
     });
 
+    // FIXME(perf): use_effect reads `opened_initial_project()` as a reactive dependency, so after
+    // the first run calls `set(true)` it schedules another render which re-runs the effect
+    // (seeing true, returning early). That's one extra render + effect invocation during initial
+    // load. Replace with `use_hook` (like the layout-check above) — it runs exactly once and
+    // doesn't subscribe to any signal.
     use_effect(move || {
         if opened_initial_project() {
             return;
@@ -405,6 +410,10 @@ fn open_project_resources(mut ws: Workspace<Panel>, resources: &'static [Panel])
         return;
     }
 
+    // FIXME(perf): `ws.mode.set()` and `ws.panels.write()` are separate signal mutations, so
+    // Dioxus schedules two re-renders back-to-back on every project open (including the initial
+    // one at load time). Batch them — either write panels first and set mode after inside the
+    // same synchronous call stack, or use a Dioxus `batch()` scope if/when that API lands.
     ws.mode.set(Mode::Tiling);
 
     let mut panels = ws.panels;
@@ -434,6 +443,10 @@ fn projects_panel(ws: Workspace<Panel>) -> Element {
                                 class: "proj-link",
                                 href: "#",
                                 onclick: {
+                                    // FIXME(perf): `item.link` is `&'static str`, so
+                                    // `.to_string()` heap-allocates on every render for every
+                                    // project entry. Capture the static ref directly instead:
+                                    // `let link: &'static str = item.link;`
                                     let link = item.link.to_string();
                                     move |e: Event<MouseData>| {
                                         e.prevent_default();
@@ -1085,6 +1098,17 @@ fn bird_nix_demo() -> Element {
     }
 }
 
+// FIXME(perf): The iframe loads immediately when the panel component is created, not on
+// first view. For wigglystuff this fires pyodide.asm.wasm (~7MB) and python_stdlib.zip
+// (~6MB) downloads the moment the user opens any project that lists the wigglystuff panel
+// in its resource set — before they've clicked into it. Two options:
+//   1. Quick: add `loading: "lazy"` to the iframe so the browser defers until visible.
+//   2. Better: gate the entire rsx! on a signal that only becomes true when
+//      Panel::NotebookWigglystuff is actually activated in the layout, so the iframe
+//      element is never created until the user opens that panel. The Dioxus WASM runtime
+//      and the pyodide WASM runtime compete for the main thread at startup; deferring
+//      pyodide until the panel is opened would eliminate the concurrent contention that
+//      produces the 1622ms and 1079ms long tasks shortly after navigation.
 fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
     let url = if slug == "wigglystuff" {
         "/notebooks/wigglystuff-export/?v=20260619".to_string()

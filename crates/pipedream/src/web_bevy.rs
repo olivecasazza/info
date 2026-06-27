@@ -95,6 +95,13 @@ impl WebHandle {
 
     #[wasm_bindgen]
     pub async fn start(&self, canvas: web_sys::HtmlCanvasElement) -> Result<(), JsValue> {
+        // FIXME(perf): The trace shows a single 154ms blocking RunTask at startup with 0
+        // WASM compile events, while flock's trace shows v8.wasm.cachedModule (warm cache, 0ms).
+        // This spike is most likely a cold WASM instantiate/compile or first-frame render-pipeline
+        // init (WebGL shader compilation) landing on the main thread. Verify by inspecting the
+        // RunTask's children in the raw trace. Mitigation: ensure the pipedream .wasm module is
+        // preloaded with <link rel="preload"> and served with Cache-Control: immutable so
+        // subsequent loads hit the V8 module cache like flock does.
         let canvas_id = canvas.id();
         let selector = if canvas_id.is_empty() {
             "#bevy-canvas".to_string()
@@ -929,6 +936,10 @@ impl PipeSim {
             return;
         }
 
+        // FIXME(perf): Vec::remove(0) is O(n) — shifts every remaining route step on each
+        // simulation tick. With 12 flows × up to speed steps/frame this is significant shifting
+        // work for long inter-site routes. Change `routes: Vec<Vec<Dir>>` to
+        // `routes: Vec<VecDeque<Dir>>` and swap to pop_front() for O(1).
         let d = self.routes[flow].remove(0);
         let head = self.heads[flow];
         let next = head.add(d.vec());
@@ -961,6 +972,9 @@ impl PipeSim {
         // are long, so the budget scales with both trail length and flow count.
         let limit = self.trail * self.heads.len().max(1);
         if self.segments.len() > limit {
+            // FIXME(perf): Vec::remove(0) on the segments trail is O(n) per reap (n can reach
+            // trail × flows = 320 × 12 = 3840). Change `segments: Vec<Segment>` to
+            // `segments: VecDeque<Segment>` and use pop_front() for O(1) eviction.
             self.segments.remove(0);
         }
     }
@@ -1212,6 +1226,11 @@ fn refresh_fit(state: &mut PipedreamState) {
 /// pixelated backing scale) so the view expands to fit a resized panel. egui's
 /// `screen_rect` then tracks it and the auto-fit reframes automatically.
 fn sync_canvas_size(mut windows: Query<&mut Window>) {
+    // FIXME(perf): query_selector + parent_element + client_width/height runs every Bevy Update
+    // frame (~60/s), crossing the WASM→browser boundary each time. Flock avoids this entirely via
+    // fit_canvas_to_parent: true in WindowPlugin. Easiest fix: set fit_canvas_to_parent: true
+    // and remove this system. If the backing-scale downscaling needs to be preserved, throttle to
+    // every ~30 frames or hook a ResizeObserver on the JS side that posts to a shared AtomicU32.
     let selector = CANVAS_SELECTOR.with(|s| s.borrow().clone());
     if selector.is_empty() {
         return;
@@ -1304,6 +1323,17 @@ fn render_system(mut contexts: EguiContexts, mut state: ResMut<PipedreamState>) 
             // across the campus, separate passes for cables and servers would
             // let a far site's geometry paint over a near site's; one global
             // sort fixes occlusion everywhere.
+            // FIXME(perf): This is the primary driver of the 10× GC gap (1150 vs 141 events vs
+            // flock). A fresh Vec<IsoBoxCmd> is allocated every frame, filled with hundreds of
+            // commands (pipe segments alone = trail × flows ≈ 3840), sorted, and then dropped —
+            // triggering GC for every allocation including the per-face Vec in draw_box's
+            // Shape::convex_polygon calls. Flock avoids this entirely by updating a persistent GPU
+            // Mesh2d in place (insert_attribute). Two-part fix:
+            //   1. Move `cmds` into PipedreamState and call cmds.clear() each frame to reuse the
+            //      allocation across frames (eliminates the outer Vec churn).
+            //   2. Long-term: port rendering to a persistent Mesh2d like flock uses. The egui
+            //      painter path submits every box as individual CPU-side shape commands; a GPU
+            //      mesh would amortize this to a single draw call.
             let mut cmds: Vec<IsoBoxCmd> = Vec::new();
             push_infra_cmds(&state, &mut cmds);
             push_pipe_cmds(&state, &mut cmds);
@@ -1453,6 +1483,10 @@ fn push_server_cmds(state: &PipedreamState, cmds: &mut Vec<IsoBoxCmd>) {
         let ny = node.pos.y as f32;
         let nz = node.pos.z as f32;
         let facing = node.facing;
+        // FIXME(perf): server_parts() allocates Vec::with_capacity(6) on every call. With 60
+        // nodes this is 60 Vec allocations per frame, all dropped immediately after iteration.
+        // Pre-compute parts per facing variant (8 directions) at startup and cache in a [Vec<_>;
+        // 8] indexed by facing — then this is a slice borrow, zero allocation.
         let parts = server_parts(&state.palette, facing);
 
         for (idx, part) in parts.iter().enumerate() {
@@ -1601,6 +1635,11 @@ fn push_pipe_cmds(state: &PipedreamState, cmds: &mut Vec<IsoBoxCmd>) {
     }
 
     // Elbow cubes at direction changes so consecutive segment cuboids connect.
+    // FIXME(perf): two Vecs allocated and immediately dropped every frame purely as scratch space
+    // for elbow-joint tracking. Move seen_first and last_dir into PipeSim (or PipedreamState) as
+    // reusable scratch buffers; clear() and reuse across frames to eliminate this pair of
+    // allocations (pipe_count = 12 today but irrelevant — it's the per-frame alloc/drop cycle
+    // that shows up in GC, not the size).
     let mut seen_first: Vec<bool> = vec![false; pipe_count];
     let mut last_dir: Vec<Option<Dir>> = vec![None; pipe_count];
     for seg in &state.sim.segments {
