@@ -1,0 +1,18 @@
+{
+  "name": "flock",
+  "type": "module",
+  "collaborators": [
+    "Olive Casazza <olive@casazza.info>"
+  ],
+  "version": "0.1.0",
+  "files": [
+    "flock_bg.wasm",
+    "flock.js",
+    "flock.d.ts"
+  ],
+  "main": "flock.js",
+  "types": "flock.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

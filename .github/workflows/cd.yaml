@@ -60,8 +60,17 @@ jobs:
 
       - name: Create _redirects
         run: |
+          # Cloudflare Pages serves existing files first, but we need explicit rules
+          # to prevent the SPA fallback from catching missing dynamic imports
+          cat > dist/_redirects << 'EOF'
+          # Static assets - let them 404 if missing (don't serve HTML)
+          /notebooks/*/static/*  /notebooks/:splat/static/:splat  404
+          /*.js  /:splat.js  404
+          /*.css  /:splat.css  404
+          /*.wasm  /:splat.wasm  404
           # SPA fallback for client-side routes
-          echo "/*  /index.html  200" >> dist/_redirects
+          /*  /index.html  200
+          EOF
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
