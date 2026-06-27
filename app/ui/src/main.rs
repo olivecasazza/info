@@ -68,9 +68,15 @@ fn js_call_method(obj: &JsValue, method: &str) {
 
 fn apply_pipedream_pixelation(canvas_id: &str, factor: f32) {
     let factor = factor.clamp(1.0, 4.0);
-    let Some(window) = web_sys::window() else { return };
-    let Some(document) = window.document() else { return };
-    let Some(element) = document.get_element_by_id(canvas_id) else { return };
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(document) = window.document() else {
+        return;
+    };
+    let Some(element) = document.get_element_by_id(canvas_id) else {
+        return;
+    };
     let pct = 100.0 / factor;
     let style = format!(
         "width: {pct}% !important; height: {pct}% !important; display: block; transform: scale({factor}); transform-origin: top left; image-rendering: pixelated; image-rendering: crisp-edges;"
@@ -772,6 +778,7 @@ fn PipedreamControls(canvas_id: String) -> Element {
     let mut aisles = use_signal(|| 3_usize);
     let mut racks = use_signal(|| 5_usize);
     let mut trail = use_signal(|| 320_usize);
+    let mut site_spacing = use_signal(|| 1.0_f32);
 
     // Clone canvas_id for all closures
     let canvas_id_effect = canvas_id.clone();
@@ -783,6 +790,7 @@ fn PipedreamControls(canvas_id: String) -> Element {
     let canvas_id_aisles = canvas_id.clone();
     let canvas_id_racks = canvas_id.clone();
     let canvas_id_trail = canvas_id.clone();
+    let canvas_id_site_spacing = canvas_id.clone();
     let canvas_id_reset = canvas_id.clone();
 
     // Sync from handle on mount
@@ -815,6 +823,9 @@ fn PipedreamControls(canvas_id: String) -> Element {
                 }
                 if let Some(v) = js_get_usize(&handle, "trail") {
                     trail.set(v);
+                }
+                if let Some(v) = js_get_f32(&handle, "site_spacing") {
+                    site_spacing.set(v);
                 }
             }
         });
@@ -921,6 +932,18 @@ fn PipedreamControls(canvas_id: String) -> Element {
         }
     };
 
+    let on_site_spacing_change = {
+        let canvas_id = canvas_id_site_spacing.clone();
+        move |e: Event<FormData>| {
+            if let Ok(v) = e.value().parse::<f32>() {
+                site_spacing.set(v);
+                if let Some(handle) = get_bevy_handle(&canvas_id) {
+                    js_set(&handle, "site_spacing", &JsValue::from_f64(v as f64));
+                }
+            }
+        }
+    };
+
     let on_reset = {
         let canvas_id = canvas_id_reset.clone();
         move |_| {
@@ -939,6 +962,7 @@ fn PipedreamControls(canvas_id: String) -> Element {
             }
             if controls_visible() {
                 div { class: "controls-panel",
+                    ThroughputGraph { canvas_id: canvas_id.clone() }
                     div { class: "control-row",
                         label { "speed" }
                         input {
@@ -1024,6 +1048,18 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         span { class: "control-value", "{racks}" }
                     }
                     div { class: "control-row",
+                        label { "site spacing" }
+                        input {
+                            r#type: "range",
+                            min: "0.5",
+                            max: "3.0",
+                            step: "0.05",
+                            value: "{site_spacing}",
+                            oninput: on_site_spacing_change,
+                        }
+                        span { class: "control-value", "{site_spacing:.2}" }
+                    }
+                    div { class: "control-row",
                         label { "trail" }
                         input {
                             r#type: "range",
@@ -1043,6 +1079,119 @@ fn PipedreamControls(canvas_id: String) -> Element {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Throughput Graph for Pipedream
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Throughput data parsed from the Bevy handle
+#[derive(Clone, Default)]
+struct ThroughputData {
+    servers: f32,
+    aisle_aggs: f32,
+    site_cores: f32,
+    backbone: f32,
+    max: f32,
+}
+
+impl ThroughputData {
+    fn from_json(json: &str) -> Self {
+        let Ok(parsed) = js_sys::JSON::parse(json) else {
+            return Self::default();
+        };
+        Self {
+            servers: reflect_f32(&parsed, "servers"),
+            aisle_aggs: reflect_f32(&parsed, "aisle_aggs"),
+            site_cores: reflect_f32(&parsed, "site_cores"),
+            backbone: reflect_f32(&parsed, "backbone"),
+            max: reflect_f32(&parsed, "max").max(1.0),
+        }
+    }
+
+    fn bar_pct(&self, val: f32) -> f32 {
+        if self.max <= 0.0 {
+            0.0
+        } else {
+            (val / self.max * 100.0).min(100.0)
+        }
+    }
+}
+
+/// Real-time throughput visualization showing packets/sec per junction type
+#[component]
+fn ThroughputGraph(canvas_id: String) -> Element {
+    let mut data = use_signal(ThroughputData::default);
+
+    // Poll throughput data from the Bevy handle
+    use_effect({
+        let canvas_id = canvas_id.clone();
+        move || {
+            let canvas_id = canvas_id.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                loop {
+                    gloo_timers::future::TimeoutFuture::new(100).await;
+                    if let Some(handle) = get_bevy_handle(&canvas_id) {
+                        if let Some(json) = js_call_string(&handle, "throughput_json") {
+                            data.set(ThroughputData::from_json(&json));
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    let d = data();
+    let servers_pct = d.bar_pct(d.servers);
+    let aisle_pct = d.bar_pct(d.aisle_aggs);
+    let core_pct = d.bar_pct(d.site_cores);
+    let backbone_pct = d.bar_pct(d.backbone);
+
+    rsx! {
+        div { class: "throughput-graph",
+            div { class: "throughput-title", "throughput (packets/tick)" }
+            div { class: "throughput-bar-row",
+                span { class: "throughput-label", "servers" }
+                div { class: "throughput-bar-track",
+                    div {
+                        class: "throughput-bar-fill throughput-servers",
+                        style: "width: {servers_pct}%",
+                    }
+                }
+                span { class: "throughput-value", "{d.servers:.1}" }
+            }
+            div { class: "throughput-bar-row",
+                span { class: "throughput-label", "aisle agg" }
+                div { class: "throughput-bar-track",
+                    div {
+                        class: "throughput-bar-fill throughput-aisle",
+                        style: "width: {aisle_pct}%",
+                    }
+                }
+                span { class: "throughput-value", "{d.aisle_aggs:.1}" }
+            }
+            div { class: "throughput-bar-row",
+                span { class: "throughput-label", "site core" }
+                div { class: "throughput-bar-track",
+                    div {
+                        class: "throughput-bar-fill throughput-core",
+                        style: "width: {core_pct}%",
+                    }
+                }
+                span { class: "throughput-value", "{d.site_cores:.1}" }
+            }
+            div { class: "throughput-bar-row",
+                span { class: "throughput-label", "backbone" }
+                div { class: "throughput-bar-track",
+                    div {
+                        class: "throughput-bar-fill throughput-backbone",
+                        style: "width: {backbone_pct}%",
+                    }
+                }
+                span { class: "throughput-value", "{d.backbone:.1}" }
             }
         }
     }
@@ -2275,6 +2424,57 @@ const APP_CSS: &str = r#"
 .reset-btn:hover {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+/* Throughput graph */
+.throughput-graph {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+.throughput-title {
+  font-size: 10px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.throughput-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+.throughput-bar-row:last-child {
+  margin-bottom: 0;
+}
+.throughput-label {
+  color: var(--dim);
+  min-width: 54px;
+  text-align: right;
+}
+.throughput-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.throughput-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.1s ease-out;
+}
+.throughput-servers { background: var(--green); }
+.throughput-aisle { background: var(--yellow); }
+.throughput-core { background: var(--blue); }
+.throughput-backbone { background: var(--pink); }
+.throughput-value {
+  color: var(--fg);
+  min-width: 28px;
+  text-align: right;
+  font-family: monospace;
 }
 
 /* Cascade fan-out demo */

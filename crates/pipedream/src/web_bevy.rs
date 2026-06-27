@@ -33,6 +33,8 @@ struct ExternalConfig {
     trail: usize,
     show_ui: bool,
     reset_requested: bool,
+    /// Multiplier on the computed ring radius; 1.0 = auto-fit, >1 = spread sites apart.
+    site_spacing: f32,
 }
 
 impl Default for ExternalConfig {
@@ -48,6 +50,7 @@ impl Default for ExternalConfig {
             trail: 320,
             show_ui: false, // Hide egui by default; Dioxus controls are used instead
             reset_requested: false,
+            site_spacing: 1.0,
         }
     }
 }
@@ -63,6 +66,8 @@ thread_local! {
     /// CSS selector of the canvas Bevy is rendering into, captured at start() so
     /// the resize system can read the parent panel's live size.
     static CANVAS_SELECTOR: RefCell<String> = const { RefCell::new(String::new()) };
+    /// Throughput data exported from the simulation for the UI
+    static THROUGHPUT_JSON: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 fn mark_config_dirty() {
@@ -79,6 +84,14 @@ fn take_config_dirty() -> bool {
 
 fn get_external_config() -> ExternalConfig {
     EXTERNAL_CONFIG.with(|c| c.borrow().clone())
+}
+
+fn set_throughput_json(json: String) {
+    THROUGHPUT_JSON.with(|j| *j.borrow_mut() = json);
+}
+
+fn get_throughput_json() -> String {
+    THROUGHPUT_JSON.with(|j| j.borrow().clone())
 }
 
 /// WebHandle for Bevy-based pipedream WASM app.
@@ -134,8 +147,8 @@ impl WebHandle {
                 primary_window: Some(Window {
                     title: "Pipedream".into(),
                     canvas: Some(selector),
-                    resolution: WindowResolution::new(backing_w, backing_h)
-                        .with_scale_factor_override(1.0),
+                    resolution:
+                        WindowResolution::new(backing_w, backing_h).with_scale_factor_override(1.0),
                     fit_canvas_to_parent: false,
                     prevent_default_event_handling: false,
                     ..Default::default()
@@ -266,6 +279,23 @@ impl WebHandle {
     pub fn reset_pipes(&self) {
         EXTERNAL_CONFIG.with(|c| c.borrow_mut().reset_requested = true);
         mark_config_dirty();
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn site_spacing(&self) -> f32 {
+        EXTERNAL_CONFIG.with(|c| c.borrow().site_spacing)
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_site_spacing(&self, v: f32) {
+        EXTERNAL_CONFIG.with(|c| c.borrow_mut().site_spacing = v.clamp(0.5, 3.0));
+        mark_config_dirty();
+    }
+
+    /// Get throughput data as JSON for the UI visualization
+    #[wasm_bindgen]
+    pub fn throughput_json(&self) -> String {
+        get_throughput_json()
     }
 }
 
@@ -533,6 +563,106 @@ struct Site {
     rotation: f32,
 }
 
+//=============================================================================
+// Throughput tracking
+//=============================================================================
+
+/// Rolling window throughput tracker for each junction type.
+/// Tracks how many packets pass through each layer of the network topology.
+#[derive(Debug, Clone)]
+struct ThroughputTracker {
+    /// Counts per junction type for the current window: [servers, aisle_aggs, site_cores, backbone]
+    counts: [u32; 4],
+    /// Rolling history of counts per junction type (most recent first)
+    history: Vec<[u32; 4]>,
+    /// Max history length (number of windows to keep)
+    history_len: usize,
+    /// Ticks since last snapshot
+    ticks_since_snapshot: u32,
+    /// Ticks per snapshot (controls update frequency)
+    snapshot_interval: u32,
+}
+
+impl Default for ThroughputTracker {
+    fn default() -> Self {
+        Self {
+            counts: [0; 4],
+            history: Vec::new(),
+            history_len: 60, // Keep ~1 second of history at 60fps
+            ticks_since_snapshot: 0,
+            snapshot_interval: 1, // Snapshot every tick for responsiveness
+        }
+    }
+}
+
+impl ThroughputTracker {
+    fn reset(&mut self) {
+        self.counts = [0; 4];
+        self.history.clear();
+        self.ticks_since_snapshot = 0;
+    }
+
+    /// Record a packet passing through a junction type
+    /// Junction types: 0=server, 1=aisle_agg, 2=site_core, 3=backbone
+    fn record(&mut self, junction_type: usize) {
+        if junction_type < 4 {
+            self.counts[junction_type] = self.counts[junction_type].saturating_add(1);
+        }
+    }
+
+    /// Called each simulation tick to potentially snapshot current counts
+    fn tick(&mut self) {
+        self.ticks_since_snapshot += 1;
+        if self.ticks_since_snapshot >= self.snapshot_interval {
+            // Snapshot current counts and push to history
+            self.history.insert(0, self.counts);
+            if self.history.len() > self.history_len {
+                self.history.pop();
+            }
+            // Reset counts for next window
+            self.counts = [0; 4];
+            self.ticks_since_snapshot = 0;
+        }
+    }
+
+    /// Get average throughput per junction type over the history window
+    fn averages(&self) -> [f32; 4] {
+        if self.history.is_empty() {
+            return [0.0; 4];
+        }
+        let mut sums = [0u32; 4];
+        for snapshot in &self.history {
+            for i in 0..4 {
+                sums[i] = sums[i].saturating_add(snapshot[i]);
+            }
+        }
+        let n = self.history.len() as f32;
+        [
+            sums[0] as f32 / n,
+            sums[1] as f32 / n,
+            sums[2] as f32 / n,
+            sums[3] as f32 / n,
+        ]
+    }
+
+    /// Export throughput data as JSON string for the UI
+    fn to_json(&self) -> String {
+        let avgs = self.averages();
+        let max_avg = avgs.iter().copied().fold(0.0_f32, f32::max).max(1.0);
+        // Compute per-site throughput from history if available
+        // For now, just export the junction type averages
+        format!(
+            r#"{{"servers":{:.1},"aisle_aggs":{:.1},"site_cores":{:.1},"backbone":{:.1},"max":{:.1},"history_len":{}}}"#,
+            avgs[0],
+            avgs[1],
+            avgs[2],
+            avgs[3],
+            max_avg,
+            self.history.len()
+        )
+    }
+}
+
 struct PipeSim {
     bounds: IVec3,
     /// Backbone ring: one elevated node above each site, connected in a loop
@@ -558,6 +688,10 @@ struct PipeSim {
     n_sites: usize,
     aisles: usize,
     racks: usize,
+    /// Multiplier on the auto-computed ring radius (1.0 = default spacing).
+    site_spacing: f32,
+    /// Throughput tracking per junction type
+    throughput: ThroughputTracker,
 }
 
 impl PipeSim {
@@ -587,6 +721,8 @@ impl PipeSim {
             n_sites: sites,
             aisles,
             racks,
+            site_spacing: 1.0,
+            throughput: ThroughputTracker::default(),
         };
         s.reset(flows);
         s
@@ -626,7 +762,11 @@ impl PipeSim {
         let ry = dx * sin_a + dy * cos_a;
         // Snap to the nearest cardinal direction.
         if rx.abs() > ry.abs() {
-            if rx > 0.0 { Dir::PosX } else { Dir::NegX }
+            if rx > 0.0 {
+                Dir::PosX
+            } else {
+                Dir::NegX
+            }
         } else if ry > 0.0 {
             Dir::PosY
         } else {
@@ -719,7 +859,7 @@ impl PipeSim {
         let aisle_pitch = 5.5_f32;
         let block_w = rack_pitch * (racks as f32 - 1.0); // along x (racks)
         let block_h = aisle_pitch * (aisles as f32 - 1.0); // along y (aisles)
-        // Bounding radius of one site incl. its core stub (sits ~8 toward -x).
+                                                           // Bounding radius of one site incl. its core stub (sits ~8 toward -x).
         let site_radius = 0.5 * (block_w * block_w + block_h * block_h).sqrt() + 9.0;
 
         // Sites sit on a jittered ring at roughly equal distance from the campus
@@ -733,7 +873,8 @@ impl PipeSim {
             0.0
         } else {
             let non_overlap = site_radius * 1.12 / (std::f32::consts::PI / n as f32).sin();
-            non_overlap.min(budget - site_radius).max(site_radius)
+            let base = non_overlap.min(budget - site_radius).max(site_radius);
+            (base * self.site_spacing).clamp(site_radius * 0.5, budget - site_radius * 0.5)
         };
         let base_angle = (self.rng.rand_u32() as f32 / u32::MAX as f32) * two_pi;
         let jitter = |rng: &mut oorandom::Rand32, mag: f32| -> f32 {
@@ -756,7 +897,8 @@ impl PipeSim {
             let (center_x, center_y) = if n <= 1 {
                 (campus_x, campus_y)
             } else {
-                let ang = base_angle + (s as f32 / n as f32) * two_pi
+                let ang = base_angle
+                    + (s as f32 / n as f32) * two_pi
                     + jitter(&mut self.rng, two_pi / n as f32 * 0.18);
                 let r = ring_r + jitter(&mut self.rng, site_radius * 0.12);
                 (campus_x + r * ang.cos(), campus_y + r * ang.sin())
@@ -798,7 +940,8 @@ impl PipeSim {
                     let pos = rotate_and_clamp(rx, ay, ground_z);
                     self.servers.push(pos);
                     // Server facing rotates with the site: original +X becomes +X rotated.
-                    self.server_facings.push(Self::rotate_facing(Dir::PosX, site_rotation));
+                    self.server_facings
+                        .push(Self::rotate_facing(Dir::PosX, site_rotation));
                     self.server_site.push(s);
                     self.server_aisle.push(a);
                 }
@@ -831,6 +974,7 @@ impl PipeSim {
         self.dirs.clear();
         self.leaf_targets.clear();
         self.routes.clear();
+        self.throughput.reset();
 
         self.generate_topology();
 
@@ -862,14 +1006,7 @@ impl PipeSim {
         }
     }
 
-    /// Small deterministic per-flow lane offset so parallel cables in a shared
-    /// trunk separate into a bundle instead of collapsing onto one line.
-    fn lane(flow: usize) -> IVec3 {
-        let a = (flow % 5) as i32 - 2;
-        let b = ((flow / 5) % 5) as i32 - 2;
-        let c = (flow % 3) as i32 - 1;
-        IVec3::new(a, b, c)
-    }
+
 
     fn push_axis_steps(route: &mut Vec<Dir>, from: &mut IVec3, to: IVec3) {
         let mut axes = [
@@ -921,8 +1058,7 @@ impl PipeSim {
     /// Route a flow up the source server's branch (server → aisle agg → site
     /// core → backbone tap), around the backbone ring to the destination site's
     /// tap, then down the destination branch. Intra-site flows skip the ring.
-    fn build_route(&self, src: usize, dest: usize, flow: usize) -> Vec<Dir> {
-        let off = Self::lane(flow);
+    fn build_route(&self, src: usize, dest: usize, _flow: usize) -> Vec<Dir> {
         let s_site = self.server_site[src];
         let s_aisle = self.server_aisle[src];
         let d_site = self.server_site[dest];
@@ -931,25 +1067,28 @@ impl PipeSim {
         let src_pos = self.servers[src];
         let dest_pos = self.servers[dest];
 
+        // Route through exact switch positions so wires visually pass through
+        // the rendered switch cubes. Trunks shared by multiple flows overlap,
+        // which correctly shows cable bundles converging at each junction.
         let mut wps: Vec<IVec3> = Vec::new();
-        wps.push(self.clamp_point(self.sites[s_site].aisle_aggs[s_aisle].add(off)));
-        wps.push(self.clamp_point(self.sites[s_site].core.add(off)));
+        wps.push(self.sites[s_site].aisle_aggs[s_aisle]);
+        wps.push(self.sites[s_site].core);
         if s_site != d_site && self.backbone.len() == self.sites.len() {
             // Walk the ring from the source tap to the destination tap in the
             // shorter direction; every intermediate backbone node is a waypoint
             // so the cable hugs the perimeter loop.
             let n = self.backbone.len();
-            wps.push(self.clamp_point(self.backbone[s_site].add(off)));
+            wps.push(self.backbone[s_site]);
             let forward = (d_site + n - s_site) % n;
             let step: isize = if forward <= n - forward { 1 } else { -1 };
             let mut k = s_site;
             while k != d_site {
                 k = ((k as isize + step).rem_euclid(n as isize)) as usize;
-                wps.push(self.clamp_point(self.backbone[k].add(off)));
+                wps.push(self.backbone[k]);
             }
-            wps.push(self.clamp_point(self.sites[d_site].core.add(off)));
+            wps.push(self.sites[d_site].core);
         }
-        wps.push(self.clamp_point(self.sites[d_site].aisle_aggs[d_aisle].add(off)));
+        wps.push(self.sites[d_site].aisle_aggs[d_aisle]);
         wps.push(dest_pos);
 
         let mut route = Vec::new();
@@ -986,6 +1125,38 @@ impl PipeSim {
         for flow in 0..count {
             self.step_one(flow);
         }
+        // Update throughput tracker each simulation tick
+        self.throughput.tick();
+    }
+
+    /// Classify a position by junction type:
+    /// 0=server, 1=aisle_agg, 2=site_core, 3=backbone, None=transit
+    fn classify_position(&self, pos: IVec3) -> Option<usize> {
+        // Check backbone nodes first (smallest set, highest priority)
+        for &node in &self.backbone {
+            if manhattan(pos, node) <= 2 {
+                return Some(3);
+            }
+        }
+        // Check site cores
+        for site in &self.sites {
+            if manhattan(pos, site.core) <= 2 {
+                return Some(2);
+            }
+            // Check aisle aggregation switches
+            for &agg in &site.aisle_aggs {
+                if manhattan(pos, agg) <= 2 {
+                    return Some(1);
+                }
+            }
+        }
+        // Check servers
+        for &server in &self.servers {
+            if manhattan(pos, server) <= 1 {
+                return Some(0);
+            }
+        }
+        None
     }
 
     fn step_one(&mut self, flow: usize) {
@@ -1008,8 +1179,7 @@ impl PipeSim {
 
         self.advance(flow, next, d);
 
-        if self.routes[flow].is_empty()
-            || manhattan(self.heads[flow], self.leaf_targets[flow]) <= 1
+        if self.routes[flow].is_empty() || manhattan(self.heads[flow], self.leaf_targets[flow]) <= 1
         {
             self.respawn(flow);
         }
@@ -1025,6 +1195,11 @@ impl PipeSim {
         });
         self.heads[flow] = to;
         self.dirs[flow] = d;
+
+        // Track throughput: record when passing through junctions
+        if let Some(junction_type) = self.classify_position(to) {
+            self.throughput.record(junction_type);
+        }
 
         // FIFO trail reaping so the volume never saturates. Inter-site routes
         // are long, so the budget scales with both trail length and flow count.
@@ -1158,16 +1333,19 @@ fn sync_external_config(mut state: ResMut<PipedreamState>) {
     let topo_changed = ext.flows != state.flows
         || ext.sites != state.sites
         || ext.aisles != state.aisles
-        || ext.racks != state.racks;
+        || ext.racks != state.racks
+        || ext.site_spacing != state.site_spacing;
 
     if topo_changed {
         state.flows = ext.flows;
         state.sites = ext.sites;
         state.aisles = ext.aisles;
         state.racks = ext.racks;
+        state.site_spacing = ext.site_spacing;
         state.sim.n_sites = ext.sites;
         state.sim.aisles = ext.aisles;
         state.sim.racks = ext.racks;
+        state.sim.site_spacing = ext.site_spacing;
         let flows = state.flows;
         state.sim.reset(flows);
         refresh_fit(&mut state);
@@ -1193,6 +1371,7 @@ struct PipedreamState {
     sites: usize,
     aisles: usize,
     racks: usize,
+    site_spacing: f32,
     speed: f32,
     /// User zoom multiplier applied on top of the per-frame auto-fit scale.
     zoom: f32,
@@ -1253,6 +1432,7 @@ impl Default for PipedreamState {
             sites: ext.sites,
             aisles: ext.aisles,
             racks: ext.racks,
+            site_spacing: ext.site_spacing,
             speed: ext.speed,
             zoom: ext.scale,
             fit_center,
@@ -1348,6 +1528,9 @@ fn simulation_step(time: Res<Time>, mut state: ResMut<PipedreamState>) {
         state.sim.step();
         state.accumulator -= 1.0;
     }
+
+    // Export throughput data for the UI (~60fps is fine for this)
+    set_throughput_json(state.sim.throughput.to_json());
 }
 
 fn render_system(mut contexts: EguiContexts, mut state: ResMut<PipedreamState>) {
@@ -1762,7 +1945,10 @@ fn ui_system(
                     "aisles" => 1..=6,
                     _ => 1..=8,
                 };
-                if ui.add(egui::Slider::new(&mut v, range).text(label)).changed() {
+                if ui
+                    .add(egui::Slider::new(&mut v, range).text(label))
+                    .changed()
+                {
                     set(v);
                     mark_config_dirty();
                 }

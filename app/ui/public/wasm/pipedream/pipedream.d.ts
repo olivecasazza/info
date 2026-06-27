@@ -13,12 +13,17 @@ export class WebHandle {
     reset_pipes(): void;
     spawn_at_norm(_x: number, _y: number): void;
     start(canvas: HTMLCanvasElement): Promise<void>;
+    /**
+     * Get throughput data as JSON for the UI visualization
+     */
+    throughput_json(): string;
     aisles: number;
     flows: number;
     pixel: number;
     racks: number;
     scale: number;
     show_ui: boolean;
+    site_spacing: number;
     sites: number;
     speed: number;
     trail: number;
@@ -47,14 +52,17 @@ export interface InitOutput {
     readonly webhandle_set_racks: (a: number, b: number) => void;
     readonly webhandle_set_scale: (a: number, b: number) => void;
     readonly webhandle_set_show_ui: (a: number, b: number) => void;
+    readonly webhandle_set_site_spacing: (a: number, b: number) => void;
     readonly webhandle_set_sites: (a: number, b: number) => void;
     readonly webhandle_set_speed: (a: number, b: number) => void;
     readonly webhandle_set_trail: (a: number, b: number) => void;
     readonly webhandle_show_ui: (a: number) => number;
+    readonly webhandle_site_spacing: (a: number) => number;
     readonly webhandle_sites: (a: number) => number;
     readonly webhandle_spawn_at_norm: (a: number, b: number, c: number) => void;
     readonly webhandle_speed: (a: number) => number;
     readonly webhandle_start: (a: number, b: any) => any;
+    readonly webhandle_throughput_json: (a: number) => [number, number];
     readonly webhandle_trail: (a: number) => number;
     readonly wasm_bindgen__convert__closures_____invoke__h38ceabc43d4134bc: (a: number, b: number, c: any) => [number, number];
     readonly wasm_bindgen__convert__closures_____invoke__hf1bbae459f7296f8: (a: number, b: number, c: any, d: any) => void;
