@@ -216,11 +216,7 @@ const PIPEDREAM_RESOURCES: &[Panel] = &[Panel::PipedreamDemo];
 const KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookKinematics];
 const INVERSE_KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookInverseKinematics];
 const WIGGLYSTUFF_RESOURCES: &[Panel] = &[Panel::NotebookWigglystuff];
-const PANEL_KIT_RESOURCES: &[Panel] = &[
-    Panel::PanelKitPage,
-    Panel::PanelKitWebDemo,
-    Panel::PanelKitTuiDemo,
-];
+const PANEL_KIT_RESOURCES: &[Panel] = &[Panel::PanelKitTuiDemo];
 const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::BirdNixPage,
     Panel::BirdNixDemo,
@@ -233,8 +229,6 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::NotebookKinematics,
     Panel::NotebookInverseKinematics,
     Panel::NotebookWigglystuff,
-    Panel::PanelKitPage,
-    Panel::PanelKitWebDemo,
     Panel::PanelKitTuiDemo,
 ];
 const SIDEBAR_TILE_WIDTH: f64 = 35.0;
@@ -1872,10 +1866,17 @@ fn panel_kit_web_demo() -> Element {
 
 fn panel_kit_tui_demo() -> Element {
     rsx! {
-        iframe {
-            src: "/wasm/panel-kit-tui/browser_tui.html",
-            class: "featured-iframe",
-            title: "panel-kit terminal demo",
+        div { class: "panel-kit-demo-wrapper",
+            div { class: "panel-kit-info-overlay",
+                h2 { "panel-kit" }
+                p { "A window tiling layout manager for Rust and WASM. Supports floating/tiling workspaces, drag-to-reorder, minimize dock, and layout persistence. Works in browsers (Dioxus) and terminals (Ratatui)." }
+                p { class: "dim", "Try dragging and resizing panels below. State persists across reloads." }
+            }
+            iframe {
+                src: "/wasm/panel-kit-tui/browser_tui.html",
+                class: "featured-iframe panel-kit-tui-frame",
+                title: "panel-kit terminal demo",
+            }
         }
     }
 }
@@ -1991,6 +1992,31 @@ const APP_CSS: &str = r#"
 .notebook-iframe {
   background: #0a0a0a;
 }
+
+.panel-kit-demo-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+.panel-kit-info-overlay {
+  padding: 0.75rem 1rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.panel-kit-info-overlay h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.1rem;
+  color: var(--green);
+  font-weight: 400;
+}
+.panel-kit-info-overlay p {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.panel-kit-info-overlay .dim { color: var(--dim); margin: 0; }
+.panel-kit-tui-frame { flex: 1; min-height: 0; }
 
 .featured-info {
   padding: 1rem;
