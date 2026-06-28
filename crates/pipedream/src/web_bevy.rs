@@ -143,18 +143,25 @@ impl WebHandle {
         }
 
         App::new()
-            .add_plugins(DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "Pipedream".into(),
-                    canvas: Some(selector),
-                    resolution:
-                        WindowResolution::new(backing_w, backing_h).with_scale_factor_override(1.0),
-                    fit_canvas_to_parent: false,
-                    prevent_default_event_handling: false,
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }))
+            .add_plugins(
+                DefaultPlugins
+                    .set(WindowPlugin {
+                        primary_window: Some(Window {
+                            title: "Conduit".into(),
+                            canvas: Some(selector),
+                            resolution: WindowResolution::new(backing_w, backing_h)
+                                .with_scale_factor_override(1.0),
+                            fit_canvas_to_parent: false,
+                            prevent_default_event_handling: false,
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    })
+                    .set(bevy::log::LogPlugin {
+                        filter: "wgpu=error,naga=error,bevy_render=error,bevy_core_pipeline=error,bevy_pbr=error".into(),
+                        ..Default::default()
+                    }),
+            )
             .add_plugins(EguiPlugin)
             .add_plugins(BevyCorePlugins)
             .add_plugins(PipedreamPlugin)

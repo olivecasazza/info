@@ -182,16 +182,23 @@ impl WebHandle {
         };
 
         App::new()
-            .add_plugins(DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "Flock".into(),
-                    canvas: Some(selector),
-                    fit_canvas_to_parent: true,
-                    prevent_default_event_handling: false,
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }))
+            .add_plugins(
+                DefaultPlugins
+                    .set(WindowPlugin {
+                        primary_window: Some(Window {
+                            title: "Flock".into(),
+                            canvas: Some(selector),
+                            fit_canvas_to_parent: true,
+                            prevent_default_event_handling: false,
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    })
+                    .set(bevy::log::LogPlugin {
+                        filter: "wgpu=error,naga=error,bevy_render=error,bevy_core_pipeline=error,bevy_pbr=error".into(),
+                        ..Default::default()
+                    }),
+            )
             .add_plugins(EguiPlugin)
             .add_plugins(BevyCorePlugins)
             .add_plugins(FlockPlugin)
