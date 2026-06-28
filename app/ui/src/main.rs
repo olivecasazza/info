@@ -551,22 +551,29 @@ fn FlockControls(canvas_id: String) -> Element {
         move || {
             let canvas_id = canvas_id.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                gloo_timers::future::TimeoutFuture::new(500).await;
-                if let Some(handle) = get_bevy_handle(&canvas_id) {
-                    if let Some(v) = js_get_f32(&handle, "timestep") {
-                        timestep.set(v);
-                    }
-                    if let Some(v) = js_get_u32(&handle, "max_flock_size") {
-                        max_flock_size.set(v);
-                    }
-                    if let Some(v) = js_get_bool(&handle, "enable_randomization") {
-                        enable_randomization.set(v);
-                    }
-                    if let Some(v) = js_get_usize(&handle, "current_flock_size") {
-                        current_flock_size.set(v);
-                    }
-                    if let Some(json) = js_call_string(&handle, "species_json") {
-                        species.set(parse_species_json(&json));
+                // Retry loop - WASM may take time to initialize
+                for _ in 0..10 {
+                    gloo_timers::future::TimeoutFuture::new(300).await;
+                    if let Some(handle) = get_bevy_handle(&canvas_id) {
+                        if let Some(v) = js_get_f32(&handle, "timestep") {
+                            timestep.set(v);
+                        }
+                        if let Some(v) = js_get_u32(&handle, "max_flock_size") {
+                            max_flock_size.set(v);
+                        }
+                        if let Some(v) = js_get_bool(&handle, "enable_randomization") {
+                            enable_randomization.set(v);
+                        }
+                        if let Some(v) = js_get_usize(&handle, "current_flock_size") {
+                            current_flock_size.set(v);
+                        }
+                        if let Some(json) = js_call_string(&handle, "species_json") {
+                            let parsed = parse_species_json(&json);
+                            if !parsed.is_empty() {
+                                species.set(parsed);
+                                break;
+                            }
+                        }
                     }
                 }
             });
