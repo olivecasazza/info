@@ -1323,10 +1323,19 @@ inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
         article { class: "project-article",
             header {
                 h1 { "bird-nix" }
-                p { "Raymond Smullyan's To Mock a Mockingbird, expressed as a pure Nix combinator library." }
+                p {
+                    a { class: "link", href: "https://en.wikipedia.org/wiki/Raymond_Smullyan", target: "_blank", "Raymond Smullyan" }
+                    "'s "
+                    a { class: "link", href: "https://en.wikipedia.org/wiki/To_Mock_a_Mockingbird", target: "_blank", "To Mock a Mockingbird" }
+                    ", expressed as a pure Nix combinator library."
+                }
             }
             section { class: "article-section",
-                p { "The project implements the birds of combinatory logic - I, M, K, KI, B, C, L, W, S, V, and Y - as ordinary Nix lambdas. There are no builtins tricks or evaluator extensions; the combinators are one-line functions, and the rest of the library is built on top of them." }
+                p {
+                    "The project implements the birds of "
+                    a { class: "link", href: "https://en.wikipedia.org/wiki/Combinatory_logic", target: "_blank", "combinatory logic" }
+                    " — I, M, K, KI, B, C, L, W, S, V, and Y — as ordinary Nix lambdas. There are no builtins tricks or evaluator extensions; the combinators are one-line functions, and the rest of the library is built on top of them."
+                }
                 p { "Around those primitives is a small language layer: a DSL, AST compiler, pretty-printer, property-based tests, and a tvix-eval WASM playground. The goal is to make the reduction rules inspectable while still proving that the Nix expressions behave like their combinatory logic counterparts." }
             }
             section { class: "article-section",
