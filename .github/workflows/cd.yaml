@@ -79,3 +79,23 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4"
           command: pages deploy dist --project-name=info
+
+      # spot.casazza.io is a Pages custom domain on this project. It MUST be
+      # registered via the Pages API (not a hand-made CNAME — that trips
+      # Cloudflare error 1014); Cloudflare then provisions the DNS itself. This
+      # runs here because only the CI CLOUDFLARE_API_TOKEN carries Pages:Edit
+      # (the terraform deploy-access token is zone-scoped). Idempotent: a
+      # re-add returns a benign "already exists", so it's safe every deploy.
+      - name: Ensure spot.casazza.io custom domain
+        run: |
+          code=$(curl -s -o /tmp/dom.json -w '%{http_code}' -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/pages/projects/info/domains" \
+            -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --data '{"name":"spot.casazza.io"}')
+          echo "HTTP $code"; cat /tmp/dom.json
+          if grep -q '"success":true' /tmp/dom.json || grep -qiE 'already|exist|duplicate' /tmp/dom.json; then
+            echo "spot.casazza.io custom domain ensured"
+          else
+            echo "ERROR: could not register custom domain"; exit 1
+          fi
