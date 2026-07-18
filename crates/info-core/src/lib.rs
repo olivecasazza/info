@@ -151,10 +151,11 @@ static PROJECTS: &[Category] = &[
                 text: "Reinforcement-learned quadruped locomotion, replayed in the browser: the training physics (Rust/Rapier) compiled to WASM with in-browser ONNX inference, plus a dev-log of every reward exploit along the way.",
                 link: "/src/spot",
                 links: &[
-                    Link { label: "live gym", url: "https://spot.casazza.io" },
-                    Link { label: "demo", url: "/src/spot" },
+                    // demo opens the full gym in a new tab (external URL ->
+                    // target=_blank); the in-page panel shows a renderer-only embed.
+                    Link { label: "demo", url: "https://spot.casazza.io" },
                     Link { label: "source", url: "https://github.com/olivecasazza/skypilot-env" },
-                    Link { label: "training dashboard", url: "https://spot-walk.casazza.io" },
+                    Link { label: "walk replay", url: "https://app.rerun.io/?url=https://storage.googleapis.com/nixlab-spot-reruns/demos/spot-walk-current.rrd" },
                 ],
             },
             Project {

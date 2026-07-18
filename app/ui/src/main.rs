@@ -1328,7 +1328,12 @@ static SPOT_POLICY_IDX: GlobalSignal<usize> = Signal::global(|| SPOT_DEFAULT_POL
 /// Live Rerun training dashboard (RerunDashboard CR `spot-walk`, exposed via
 /// the nixlab Cloudflare tunnel). NOTE: behind Cloudflare Zero Trust Access —
 /// viewable by the owner, not anonymously public.
-const SPOT_RERUN_URL: &str = "https://spot-walk.casazza.io";
+// The live per-behavior dashboards (spot-walk.casazza.io) have 0 loggers when
+// no training is streaming, so they render empty. Point at a recorded .rrd in
+// the public bucket loaded by the hosted Rerun viewer instead — that always
+// shows the walk replay. Bucket CORS allows app.rerun.io.
+const SPOT_RERUN_URL: &str =
+    "https://app.rerun.io/?url=https://storage.googleapis.com/nixlab-spot-reruns/demos/spot-walk-current.rrd";
 
 fn spot_gym_url(p: &SpotPolicy) -> String {
     // The gym is served standalone at spot.casazza.io (in-cluster nginx, engine
@@ -1338,7 +1343,7 @@ fn spot_gym_url(p: &SpotPolicy) -> String {
     // reads ?policy from its own URL; the policy itself is fetched from the
     // bucket, which allows the spot.casazza.io origin.
     format!(
-        "https://spot.casazza.io/?policy={bucket}/{id}/{id}.onnx{params}",
+        "https://spot.casazza.io/?embed=1&policy={bucket}/{id}/{id}.onnx{params}",
         bucket = SPOT_POLICY_BUCKET,
         id = p.id,
         params = p.params,
@@ -1567,12 +1572,12 @@ fn spot_page() -> Element {
                 }
                 ul {
                     li {
-                        a { class: "link", href: "{SPOT_RERUN_URL}", target: "_blank", "spot-walk.casazza.io" }
-                        " — live walk-training dashboard (Cloudflare Access-gated; ask for access)."
+                        a { class: "link", href: "{SPOT_RERUN_URL}", target: "_blank", "walk replay (Rerun)" }
+                        " — a recorded training rollout in the hosted Rerun viewer."
                     }
                     li {
                         "Milestone policies: "
-                        a { class: "link", href: "https://storage.googleapis.com/nixlab-spot-public/policies/walk_v59_3m/walk_v59_3m.onnx", target: "_blank", "public GCS bucket" }
+                        a { class: "link", href: "https://storage.googleapis.com/nixlab-spot-reruns/policies/walk_v59_3m/walk_v59_3m.onnx", target: "_blank", "public GCS bucket" }
                         " — each ONNX ships with its observation-normalization stats; the demo panel fetches them at load."
                     }
                 }
