@@ -1331,8 +1331,14 @@ static SPOT_POLICY_IDX: GlobalSignal<usize> = Signal::global(|| SPOT_DEFAULT_POL
 const SPOT_RERUN_URL: &str = "https://spot-walk.casazza.io";
 
 fn spot_gym_url(p: &SpotPolicy) -> String {
+    // The gym is served standalone at spot.casazza.io (in-cluster nginx, engine
+    // wasm same-origin). Point the demo iframe there rather than the Pages
+    // /spot-gym bundle, which loaded the engine cross-origin from GCS and broke
+    // when viewed from an origin outside the bucket's CORS list. The engine
+    // reads ?policy from its own URL; the policy itself is fetched from the
+    // bucket, which allows the spot.casazza.io origin.
     format!(
-        "/spot-gym/?policy={bucket}/{id}/{id}.onnx{params}",
+        "https://spot.casazza.io/?policy={bucket}/{id}/{id}.onnx{params}",
         bucket = SPOT_POLICY_BUCKET,
         id = p.id,
         params = p.params,
@@ -1579,7 +1585,7 @@ fn spot_page() -> Element {
                         " — spot-physics, the wasm gym, and the training stack."
                     }
                     li {
-                        a { class: "link", href: "/spot-gym/", target: "_blank", "full-screen gym" }
+                        a { class: "link", href: "https://spot.casazza.io/", target: "_blank", "full-screen gym" }
                         " — the demo in its own tab (add " code { "?policy=<url>" } " to bring your own)."
                     }
                 }
