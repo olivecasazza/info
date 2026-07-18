@@ -147,6 +147,17 @@ static PROJECTS: &[Category] = &[
                 ],
             },
             Project {
+                heading: "Spot Gym",
+                text: "Reinforcement-learned quadruped locomotion, replayed in the browser: the training physics (Rust/Rapier) compiled to WASM with in-browser ONNX inference, plus a dev-log of every reward exploit along the way.",
+                link: "/src/spot",
+                links: &[
+                    Link { label: "live gym", url: "https://spot.casazza.io" },
+                    Link { label: "demo", url: "/src/spot" },
+                    Link { label: "source", url: "https://github.com/olivecasazza/skypilot-env" },
+                    Link { label: "training dashboard", url: "https://spot-walk.casazza.io" },
+                ],
+            },
+            Project {
                 heading: "Conduit",
                 text: "Procedural 3D path generation with collision avoidance and random-walk routing.",
                 link: "/src/pipedream",
