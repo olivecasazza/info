@@ -176,6 +176,8 @@ enum Panel {
     HephaestusDemo,
     FlockDemo,
     PipedreamDemo,
+    SpotPage,
+    SpotDemo,
     NotebookKinematics,
     NotebookInverseKinematics,
     NotebookWigglystuff,
@@ -198,6 +200,8 @@ impl PanelKind for Panel {
             Panel::HephaestusDemo => "hephaestus recording",
             Panel::FlockDemo => "flocking demo",
             Panel::PipedreamDemo => "conduit demo",
+            Panel::SpotPage => "spot gym page",
+            Panel::SpotDemo => "spot gym demo",
             Panel::NotebookKinematics => "kinematics notebook",
             Panel::NotebookInverseKinematics => "inverse kinematics notebook",
             Panel::NotebookWigglystuff => "wigglystuff notebook",
@@ -213,6 +217,7 @@ const CONSORTIUM_RESOURCES: &[Panel] = &[Panel::ConsortiumPage, Panel::Consortiu
 const HEPHAESTUS_RESOURCES: &[Panel] = &[Panel::HephaestusPage, Panel::HephaestusDemo];
 const FLOCK_RESOURCES: &[Panel] = &[Panel::FlockDemo];
 const PIPEDREAM_RESOURCES: &[Panel] = &[Panel::PipedreamDemo];
+const SPOT_RESOURCES: &[Panel] = &[Panel::SpotPage, Panel::SpotDemo];
 const KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookKinematics];
 const INVERSE_KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookInverseKinematics];
 const WIGGLYSTUFF_RESOURCES: &[Panel] = &[Panel::NotebookWigglystuff];
@@ -226,6 +231,8 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::HephaestusDemo,
     Panel::FlockDemo,
     Panel::PipedreamDemo,
+    Panel::SpotPage,
+    Panel::SpotDemo,
     Panel::NotebookKinematics,
     Panel::NotebookInverseKinematics,
     Panel::NotebookWigglystuff,
@@ -319,6 +326,8 @@ fn panel_body(kind: Panel, ws: Workspace<Panel>) -> Element {
         Panel::HephaestusDemo => hephaestus_demo(),
         Panel::FlockDemo => flock_demo(),
         Panel::PipedreamDemo => pipedream_demo(),
+        Panel::SpotPage => spot_page(),
+        Panel::SpotDemo => spot_demo(),
         Panel::NotebookKinematics => notebook_panel("kinematics", "Kinematics"),
         Panel::NotebookInverseKinematics => notebook_panel(
             "inverse-kinematic-approximations",
@@ -338,6 +347,7 @@ fn resources_for_project(link: &str) -> &'static [Panel] {
         "/src/hephaestus" => HEPHAESTUS_RESOURCES,
         "/src/flock" => FLOCK_RESOURCES,
         "/src/pipedream" => PIPEDREAM_RESOURCES,
+        "/src/spot" | "/src/spot/" => SPOT_RESOURCES,
         "/src/panel-kit" => PANEL_KIT_RESOURCES,
         "/projects/notebooks/kinematics" => KINEMATICS_RESOURCES,
         "/projects/notebooks/inverse-kinematic-approximations" => INVERSE_KINEMATICS_RESOURCES,
@@ -1238,6 +1248,346 @@ fn pipedream_demo() -> Element {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Spot Gym — policy catalog, demo panel, and development-log page
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Public GCS bucket serving curated milestone policies. Provisioned via
+/// terranix in nixlab (`nix/tofu/gcp/default.nix`, bucket `nixlab-spot-public`)
+/// and populated by `nix/tofu/gcp/sync-spot-public.sh` (manual rsync from the
+/// training bucket). Objects: `policies/<id>/<id>.onnx` + sibling
+/// `.obs_mean.npy` / `.obs_std.npy` normalization stats.
+const SPOT_POLICY_BUCKET: &str = "https://storage.googleapis.com/nixlab-spot-reruns/policies";
+
+/// One curated milestone policy for the dropdown.
+///
+/// `params` carries the physics query params the gym needs for parity with
+/// how that policy was trained:
+/// - v54+ (actuator envelope era): `&tau=6&wfree=7`
+/// - v59+ (seeded-gait era):       `&gaitref=0.25&ema=0.3&tau=6&wfree=7`
+/// - earlier policies:             none (legacy flat-torque physics)
+#[derive(Clone, Copy, PartialEq)]
+struct SpotPolicy {
+    /// GCS folder + file stem, e.g. `walk_v58_3m`.
+    id: &'static str,
+    /// Human-readable dropdown label.
+    label: &'static str,
+    /// Extra query params appended to the gym URL (may be empty).
+    params: &'static str,
+}
+
+const SPOT_POLICIES: &[SpotPolicy] = &[
+    SpotPolicy {
+        id: "walk_v44",
+        label: "v44 — the bounce-twitch exploit",
+        params: "",
+    },
+    SpotPolicy {
+        id: "walk_v49_6m",
+        label: "v49 @6M — noise-gait (press N to sample)",
+        params: "",
+    },
+    SpotPolicy {
+        id: "walk_v50_3m",
+        label: "v50 @3M — first true deterministic walker",
+        params: "",
+    },
+    SpotPolicy {
+        id: "walk_v52_3m",
+        label: "v52 @3M — first goal-gate pass (tripod creep)",
+        params: "",
+    },
+    SpotPolicy {
+        id: "walk_v58_3m",
+        label: "v58 @3M — honest-physics walker",
+        params: "&tau=6&wfree=7",
+    },
+    SpotPolicy {
+        id: "walk_v59_3m",
+        label: "v59 @3M — seeded trot, latest",
+        params: "&gaitref=0.25&ema=0.3&tau=6&wfree=7",
+    },
+];
+
+// Indices into SPOT_POLICIES, used by inline links in the writeup.
+const SPOT_P_V44: usize = 0;
+const SPOT_P_V49: usize = 1;
+const SPOT_P_V50: usize = 2;
+const SPOT_P_V52: usize = 3;
+const SPOT_P_V58: usize = 4;
+const SPOT_P_V59: usize = 5;
+const SPOT_DEFAULT_POLICY: usize = SPOT_P_V59;
+
+/// Selected policy index, shared between the writeup panel (inline "watch
+/// it" links) and the demo panel (dropdown + iframe). Changing it reloads
+/// the gym iframe: the Bevy app reads `?policy=`/physics params from its
+/// page's query string once at startup and cannot be restarted in-place,
+/// so an iframe navigation IS the policy switch.
+static SPOT_POLICY_IDX: GlobalSignal<usize> = Signal::global(|| SPOT_DEFAULT_POLICY);
+
+/// Live Rerun training dashboard (RerunDashboard CR `spot-walk`, exposed via
+/// the nixlab Cloudflare tunnel). NOTE: behind Cloudflare Zero Trust Access —
+/// viewable by the owner, not anonymously public.
+const SPOT_RERUN_URL: &str = "https://spot-walk.casazza.io";
+
+fn spot_gym_url(p: &SpotPolicy) -> String {
+    format!(
+        "/spot-gym/?policy={bucket}/{id}/{id}.onnx{params}",
+        bucket = SPOT_POLICY_BUCKET,
+        id = p.id,
+        params = p.params,
+    )
+}
+
+/// Inline link in the writeup that loads a specific policy in the demo panel.
+#[component]
+fn SpotPolicyLink(idx: usize, label: &'static str) -> Element {
+    let active = SPOT_POLICY_IDX() == idx;
+    rsx! {
+        a {
+            class: if active { "policy-link policy-link-active" } else { "policy-link" },
+            href: "#",
+            title: "load this policy in the demo panel",
+            onclick: move |e: Event<MouseData>| {
+                e.prevent_default();
+                *SPOT_POLICY_IDX.write() = idx;
+            },
+            "▶ {label}"
+        }
+    }
+}
+
+fn spot_demo() -> Element {
+    let idx = SPOT_POLICY_IDX().min(SPOT_POLICIES.len() - 1);
+    let policy = &SPOT_POLICIES[idx];
+    let src = spot_gym_url(policy);
+
+    rsx! {
+        div { class: "spot-demo",
+            div { class: "spot-demo-bar",
+                label { r#for: "spot-policy-select", "policy" }
+                select {
+                    id: "spot-policy-select",
+                    class: "spot-policy-select",
+                    onchange: move |e: Event<FormData>| {
+                        if let Ok(i) = e.value().parse::<usize>() {
+                            if i < SPOT_POLICIES.len() {
+                                *SPOT_POLICY_IDX.write() = i;
+                            }
+                        }
+                    },
+                    for (i, p) in SPOT_POLICIES.iter().enumerate() {
+                        option { value: "{i}", selected: i == idx, "{p.label}" }
+                    }
+                }
+            }
+            iframe {
+                key: "{src}",
+                src: "{src}",
+                class: "featured-iframe spot-gym-frame",
+                title: "spot gym",
+            }
+            div { class: "spot-demo-hint",
+                "click the sim first · WASD/QE drive · 1-6 slow-mo · 0 pause · N stochastic · right-drag god-hand"
+            }
+        }
+    }
+}
+
+fn spot_page() -> Element {
+    rsx! {
+        article { class: "project-article",
+            header {
+                h1 { "spot gym" }
+                p {
+                    "Teaching a 3 kg quadruped to walk with reinforcement learning — and replaying every wrong turn. "
+                    "The panel next to this one runs the actual training physics in your browser: the same Rust "
+                    code { "spot-physics" }
+                    " crate (Rapier) that the cluster trains against, compiled to WASM with in-browser ONNX inference (tract). "
+                    "What you see is what the policy was graded on."
+                }
+            }
+            section { class: "article-section",
+                h2 { "how to use the demo" }
+                p {
+                    "Pick a checkpoint from the " b { "policy dropdown" } " — each entry is a milestone from the "
+                    "iteration log below, fetched from a public GCS bucket at load. Every ▶ link in this writeup "
+                    "loads that policy in the demo panel. The gym restarts on each switch (the Bevy app reads its "
+                    "policy URL and physics parameters once at startup)."
+                }
+                ul {
+                    li { b { "W/S" } " — command forward/backward velocity, " b { "A/D" } " — yaw, " b { "Q/E" } " — strafe. The policy tracks your command; it does not replay a recording." }
+                    li { b { "digits 1–6" } " — slow motion (1 = slowest), " b { "0" } " — pause. Added specifically to expose the bounce-twitch exploit, which looks like walking at full speed." }
+                    li { b { "N" } " — toggle stochastic action sampling. Early policies hid their gait in the noise: deterministic (mean) actions stand still, sampled actions walk. Try it on v49." }
+                    li { b { "right-drag" } " — god-hand: grab and yank the robot to test recovery." }
+                }
+                p { class: "muted",
+                    "Physics parity params ride along per policy: v54+ policies were trained under a torque-speed "
+                    "actuator envelope (τ=6 N·m, ω_free=7 rad/s ⇒ " code { "&tau=6&wfree=7" } "); v59+ additionally "
+                    "use a scripted trot reference and action filter (" code { "&gaitref=0.25&ema=0.3" } "). The "
+                    "dropdown encodes the right parameters for each checkpoint — mismatched physics makes a policy "
+                    "look broken when it isn't."
+                }
+            }
+            section { class: "article-section",
+                h2 { "broken foundations" }
+                p {
+                    "The first weeks of \"the policy doesn't walk\" turned out to be mostly not about the policy. "
+                    "Two foundation bugs poisoned everything downstream:"
+                }
+                ul {
+                    li {
+                        b { "The checkpoint-restore phantom. " }
+                        "RLlib's " code { "config-rebuild + restore_from_path" } " silently returned a fresh-init "
+                        "network — every evaluation and every ONNX export was measuring an " i { "untrained" }
+                        " net. Multiple \"fixes\" (log-std floors, entropy schedules) were chasing this ghost. The "
+                        "trained policy had walked all along; loading via "
+                        code { "Policy.from_checkpoint" } " ended the saga in one line."
+                    }
+                    li {
+                        b { "Fictional feet. " }
+                        "The URDF's foot colliders sat at a CAD offset that never reached the ground — the robot "
+                        "was standing on its lower-leg boxes while the reward code counted foot contacts on links "
+                        "that never touched anything. Real spheres at the foot origins fixed contacts, standing "
+                        "height, and the contact observations in one shot."
+                    }
+                }
+                p {
+                    "Lesson that held for the rest of the project: before blaming learning, prove the measurement. "
+                    "Every subsequent iteration got a diagnostic script first, a reward change second."
+                }
+            }
+            section { class: "article-section",
+                h2 { "the exploit museum" }
+                p {
+                    "With honest measurements, training \"worked\" — and PPO proceeded to find every way to farm "
+                    "the reward without walking. Each exploit below was defeated by a structural change to the "
+                    "objective or the physics, not by patching its symptom. All of them are loadable:"
+                }
+                div { class: "table-wrap",
+                    table { class: "bird-table spot-timeline",
+                        thead {
+                            tr {
+                                th { "exploit" }
+                                th { "what it did" }
+                                th { "structural fix" }
+                            }
+                        }
+                        tbody {
+                            tr {
+                                td { SpotPolicyLink { idx: SPOT_P_V44, label: "v44 bounce-twitch" } }
+                                td { "All four feet planted, body vibrating to skid forward; +2.3 m without one step. Watch it in slow motion (press 2)." }
+                                td { "Non-shaping foot-slip penalty on contact-phase foot velocity; air-time reward retargeted to real swings." }
+                            }
+                            tr {
+                                td { SpotPolicyLink { idx: SPOT_P_V49, label: "v49 noise-gait" } }
+                                td { "Policy mean ≈ 0, σ driven to the ceiling — the \"gait\" was exploration noise. Deterministic mode stands still; press N and it walks." }
+                                td { "Cap log-σ so the noise cannot be the gait: the mean must carry it from step 0." }
+                            }
+                            tr {
+                                td { SpotPolicyLink { idx: SPOT_P_V50, label: "v50 first walker" } }
+                                td { "The σ-cap worked: first true deterministic walker (+1.64 m). Then more training eroded it — gaits peak early and churn." }
+                                td { "Fast lr decay to lock gaits in once found; export ONNX at every milestone (checkpoints get garbage-collected; the ONNX is the durable artifact)." }
+                            }
+                            tr {
+                                td { SpotPolicyLink { idx: SPOT_P_V52, label: "v52 goal-gate pass" } }
+                                td { "First 10 s upright + ≥1 m — but as a tripod: one foot parked in the air, three legs creeping." }
+                                td { "Flight penalty killed bounding; a held-foot penalty (any foot airborne >0.5 s) killed the tripod." }
+                            }
+                            tr {
+                                td { span { class: "policy-inline-note", "v56–v57 stand-farm" } }
+                                td { "Under realistic motors, walking got expensive — standing still collected ~70% of tracking income plus survival bonuses. Not exported; it just stands there." }
+                                td { "Gate all auxiliary rewards on realized base speed, raise the command floor: standing pays ~nothing." }
+                            }
+                        }
+                    }
+                }
+            }
+            section { class: "article-section",
+                h2 { "honest physics" }
+                p {
+                    "Half the exploits were only physically possible because the simulated motors were absurd: a "
+                    "flat 200 N·m torque limit on a robot whose thighs statically need ~1. The "
+                    SpotPolicyLink { idx: SPOT_P_V58, label: "v58 honest-physics walker" }
+                    " is the first policy trained under a real actuator model:"
+                }
+                ul {
+                    li {
+                        code { "τ(ω) = τ_stall · max(0, 1 − |ω|/ω_free)" }
+                        " — a torque-speed envelope (τ_stall = 6 N·m, ω_free = 7 rad/s, hobby-servo class), "
+                        "re-clamped every 200 Hz physics substep. The browser gym applies the same envelope via "
+                        code { "?tau=6&wfree=7" } "."
+                    }
+                    li {
+                        "A friction-surrogate " i { "action noise" } " in domain randomization turned out to be a "
+                        "hidden fall-generator: it ratcheted standing robots onto their bellies, producing phantom "
+                        "falls in every run to date — and it also masked the stand-farm exploit. Removed; the "
+                        "browser never had it, so parity improved too."
+                    }
+                    li {
+                        "The envelope initially cut torque to zero past free speed — including motor damping — so "
+                        "unpowered joints overspeed, squared-velocity rewards exploded, and one run diverged to NaN "
+                        "weights. Fix: back-EMF braking floor plus source-clamped joint velocities."
+                    }
+                }
+            }
+            section { class: "article-section",
+                h2 { "seeding the gait" }
+                p {
+                    "Even honest walkers were stance-heavy shufflers. The research consensus: jitter and gait "
+                    "collapse are universal in reward-shaped PPO, and from-scratch smooth gaits have taken ~300 M "
+                    "samples on comparable robots — 30× this project's budget. So "
+                    SpotPolicyLink { idx: SPOT_P_V59, label: "v59, the latest policy" }
+                    ", stops asking PPO to invent locomotion:"
+                }
+                ul {
+                    li { "A scripted trot reference (diagonal pairs, half-period phase offset) drives the legs open-loop; it walks ~0.5 m in 10 s with zero learning." }
+                    li { "The policy learns a " i { "residual" } " on that reference — the reference is invisible in the observations, so the net learns corrections, not the clock." }
+                    li { "Phase-indexed imitation reward plus a second-order (jerk) action penalty; per-episode terrain mixture (flat / random heightfield) replaces a curriculum callback that never actually reached the workers." }
+                }
+                p { class: "muted",
+                    "Open-loop sanity check before training: the bare reference at amplitude 0.25 rad walks forward "
+                    "upright for the full 10 s. If your prior can't walk, your residual won't either."
+                }
+            }
+            section { class: "article-section",
+                h2 { "watch it train" }
+                p {
+                    "Training streams live to Rerun dashboards on the cluster (one per behavior: walk, terrain, "
+                    "climb, balance, sprint). The runs are orchestrated by KubeRay with PBT, on bare-metal GPU "
+                    "nodes that "
+                    a { class: "link", href: "/src/hephaestus", "hephaestus" }
+                    " powers on and off as trials queue — the training fleet literally reboots itself to scale."
+                }
+                ul {
+                    li {
+                        a { class: "link", href: "{SPOT_RERUN_URL}", target: "_blank", "spot-walk.casazza.io" }
+                        " — live walk-training dashboard (Cloudflare Access-gated; ask for access)."
+                    }
+                    li {
+                        "Milestone policies: "
+                        a { class: "link", href: "https://storage.googleapis.com/nixlab-spot-public/policies/walk_v59_3m/walk_v59_3m.onnx", target: "_blank", "public GCS bucket" }
+                        " — each ONNX ships with its observation-normalization stats; the demo panel fetches them at load."
+                    }
+                }
+            }
+            section { class: "article-section",
+                h2 { "links" }
+                ul {
+                    li {
+                        a { class: "link", href: "https://github.com/olivecasazza/skypilot-env", target: "_blank", "source" }
+                        " — spot-physics, the wasm gym, and the training stack."
+                    }
+                    li {
+                        a { class: "link", href: "/spot-gym/", target: "_blank", "full-screen gym" }
+                        " — the demo in its own tab (add " code { "?policy=<url>" } " to bring your own)."
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn bird_nix_demo() -> Element {
     rsx! {
         iframe {
@@ -1947,6 +2297,7 @@ const APP_CSS: &str = r#"
 .panel-flocking-demo .panel-body,
 .panel-pipedream-demo .panel-body,
 .panel-bird-nix-demo .panel-body,
+.panel-spot-gym-demo .panel-body,
 .panel-kinematics-notebook .panel-body,
 .panel-inverse-kinematics-notebook .panel-body,
 .panel-wigglystuff-notebook .panel-body {
@@ -1961,7 +2312,8 @@ const APP_CSS: &str = r#"
 .mobile .panel-wigglystuff-notebook .panel-body,
 .mobile .panel-flocking-demo .panel-body,
 .mobile .panel-pipedream-demo .panel-body,
-.mobile .panel-bird-nix-demo .panel-body {
+.mobile .panel-bird-nix-demo .panel-body,
+.mobile .panel-spot-gym-demo .panel-body {
   max-height: none;
   min-height: 60vh;
 }
@@ -2367,6 +2719,71 @@ const APP_CSS: &str = r#"
 .project-figure figcaption {
   color: var(--dim);
   font-size: 12px;
+}
+
+/* Spot gym demo panel */
+.spot-demo {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.spot-demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.spot-demo-bar label {
+  color: var(--dim);
+}
+.spot-policy-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line2);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: inherit;
+}
+.spot-policy-select:hover,
+.spot-policy-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.spot-gym-frame {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.spot-demo-hint {
+  color: var(--dim);
+  font-size: 10px;
+  text-align: center;
+}
+.policy-link {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.policy-link:hover {
+  color: var(--accent);
+}
+.policy-link-active {
+  color: var(--accent);
+}
+.policy-inline-note {
+  color: var(--dim);
+  white-space: nowrap;
+}
+.spot-timeline td {
+  vertical-align: top;
 }
 
 /* Demo controls overlay */
