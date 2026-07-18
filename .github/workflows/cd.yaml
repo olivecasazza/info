@@ -94,7 +94,10 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"name":"spot.casazza.io"}')
           echo "HTTP $code"; cat /tmp/dom.json
-          if grep -q '"success":true' /tmp/dom.json || grep -qiE 'already|exist|duplicate' /tmp/dom.json; then
+          # First add returns "success": true (note the space); a re-add on a
+          # domain that already exists returns success:false with an
+          # "already exists" error. Accept both; fail on anything else.
+          if grep -qE '"success":[[:space:]]*true' /tmp/dom.json || grep -qiE 'already|exist|duplicate' /tmp/dom.json; then
             echo "spot.casazza.io custom domain ensured"
           else
             echo "ERROR: could not register custom domain"; exit 1
