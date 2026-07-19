@@ -1252,11 +1252,12 @@ fn pipedream_demo() -> Element {
 // Spot Gym — policy catalog, demo panel, and development-log page
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Public GCS bucket serving curated milestone policies. Provisioned via
-/// terranix in nixlab (`nix/tofu/gcp/default.nix`, bucket `nixlab-spot-public`)
-/// and populated by `nix/tofu/gcp/sync-spot-public.sh` (manual rsync from the
-/// training bucket). Objects: `policies/<id>/<id>.onnx` + sibling
-/// `.obs_mean.npy` / `.obs_std.npy` normalization stats.
+/// Public GCS bucket serving curated milestone policies. This is the training
+/// bucket `nixlab-spot-reruns` (public read + CORS via terranix in nixlab,
+/// `nix/tofu/gcp/default.nix`); its `policies/` prefix holds the milestones
+/// directly — there is no separate `nixlab-spot-public` bucket (that name was
+/// aspirational and never provisioned). Objects: `policies/<id>/<id>.onnx` +
+/// sibling `.obs_mean.npy` / `.obs_std.npy` normalization stats.
 const SPOT_POLICY_BUCKET: &str = "https://storage.googleapis.com/nixlab-spot-reruns/policies";
 
 /// One curated milestone policy for the dropdown.
