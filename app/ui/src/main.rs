@@ -168,16 +168,12 @@ enum Panel {
     Info,
     Projects,
     Featured,
-    BirdNixPage,
-    BirdNixDemo,
-    ConsortiumPage,
-    ConsortiumDemo,
-    HephaestusPage,
-    HephaestusDemo,
+    BirdNix,
+    Consortium,
+    Hephaestus,
     FlockDemo,
     PipedreamDemo,
-    SpotPage,
-    SpotDemo,
+    Spot,
     NotebookKinematics,
     NotebookInverseKinematics,
     NotebookWigglystuff,
@@ -192,16 +188,12 @@ impl PanelKind for Panel {
             Panel::Info => "info",
             Panel::Projects => "projects",
             Panel::Featured => "featured",
-            Panel::BirdNixPage => "bird-nix page",
-            Panel::BirdNixDemo => "bird-nix demo",
-            Panel::ConsortiumPage => "consortium page",
-            Panel::ConsortiumDemo => "consortium demo",
-            Panel::HephaestusPage => "hephaestus page",
-            Panel::HephaestusDemo => "hephaestus recording",
+            Panel::BirdNix => "bird-nix",
+            Panel::Consortium => "consortium",
+            Panel::Hephaestus => "hephaestus",
             Panel::FlockDemo => "flocking demo",
             Panel::PipedreamDemo => "conduit demo",
-            Panel::SpotPage => "spot gym page",
-            Panel::SpotDemo => "spot gym demo",
+            Panel::Spot => "spot gym",
             Panel::NotebookKinematics => "kinematics notebook",
             Panel::NotebookInverseKinematics => "inverse kinematics notebook",
             Panel::NotebookWigglystuff => "wigglystuff notebook",
@@ -212,27 +204,23 @@ impl PanelKind for Panel {
     }
 }
 
-const BIRD_NIX_RESOURCES: &[Panel] = &[Panel::BirdNixPage, Panel::BirdNixDemo];
-const CONSORTIUM_RESOURCES: &[Panel] = &[Panel::ConsortiumPage, Panel::ConsortiumDemo];
-const HEPHAESTUS_RESOURCES: &[Panel] = &[Panel::HephaestusPage, Panel::HephaestusDemo];
+const BIRD_NIX_RESOURCES: &[Panel] = &[Panel::BirdNix];
+const CONSORTIUM_RESOURCES: &[Panel] = &[Panel::Consortium];
+const HEPHAESTUS_RESOURCES: &[Panel] = &[Panel::Hephaestus];
 const FLOCK_RESOURCES: &[Panel] = &[Panel::FlockDemo];
 const PIPEDREAM_RESOURCES: &[Panel] = &[Panel::PipedreamDemo];
-const SPOT_RESOURCES: &[Panel] = &[Panel::SpotPage, Panel::SpotDemo];
+const SPOT_RESOURCES: &[Panel] = &[Panel::Spot];
 const KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookKinematics];
 const INVERSE_KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookInverseKinematics];
 const WIGGLYSTUFF_RESOURCES: &[Panel] = &[Panel::NotebookWigglystuff];
 const PANEL_KIT_RESOURCES: &[Panel] = &[Panel::PanelKitTuiDemo];
 const ALL_PROJECT_RESOURCES: &[Panel] = &[
-    Panel::BirdNixPage,
-    Panel::BirdNixDemo,
-    Panel::ConsortiumPage,
-    Panel::ConsortiumDemo,
-    Panel::HephaestusPage,
-    Panel::HephaestusDemo,
+    Panel::BirdNix,
+    Panel::Consortium,
+    Panel::Hephaestus,
     Panel::FlockDemo,
     Panel::PipedreamDemo,
-    Panel::SpotPage,
-    Panel::SpotDemo,
+    Panel::Spot,
     Panel::NotebookKinematics,
     Panel::NotebookInverseKinematics,
     Panel::NotebookWigglystuff,
@@ -318,16 +306,12 @@ fn panel_body(kind: Panel, ws: Workspace<Panel>) -> Element {
         Panel::Info => info_body(),
         Panel::Projects => projects_panel(ws),
         Panel::Featured => featured_body(),
-        Panel::BirdNixPage => bird_nix_page(),
-        Panel::BirdNixDemo => bird_nix_demo(),
-        Panel::ConsortiumPage => consortium_page(),
-        Panel::ConsortiumDemo => consortium_demo(),
-        Panel::HephaestusPage => hephaestus_page(),
-        Panel::HephaestusDemo => hephaestus_demo(),
+        Panel::BirdNix => bird_nix(),
+        Panel::Consortium => consortium(),
+        Panel::Hephaestus => hephaestus(),
         Panel::FlockDemo => flock_demo(),
         Panel::PipedreamDemo => pipedream_demo(),
-        Panel::SpotPage => spot_page(),
-        Panel::SpotDemo => spot_demo(),
+        Panel::Spot => spot(),
         Panel::NotebookKinematics => notebook_panel("kinematics", "Kinematics"),
         Panel::NotebookInverseKinematics => notebook_panel(
             "inverse-kinematic-approximations",
@@ -1319,13 +1303,6 @@ const SPOT_P_V58: usize = 4;
 const SPOT_P_V59: usize = 5;
 const SPOT_DEFAULT_POLICY: usize = SPOT_P_V59;
 
-/// Selected policy index, shared between the writeup panel (inline "watch
-/// it" links) and the demo panel (dropdown + iframe). Changing it reloads
-/// the gym iframe: the Bevy app reads `?policy=`/physics params from its
-/// page's query string once at startup and cannot be restarted in-place,
-/// so an iframe navigation IS the policy switch.
-static SPOT_POLICY_IDX: GlobalSignal<usize> = Signal::global(|| SPOT_DEFAULT_POLICY);
-
 /// Live Rerun training dashboard (RerunDashboard CR `spot-walk`, exposed via
 /// the nixlab Cloudflare tunnel). NOTE: behind Cloudflare Zero Trust Access —
 /// viewable by the owner, not anonymously public.
@@ -1351,82 +1328,59 @@ fn spot_gym_url(p: &SpotPolicy) -> String {
     )
 }
 
-/// Inline link in the writeup that loads a specific policy in the demo panel.
+/// Inline link in the writeup that opens a specific policy in the full gym.
 #[component]
 fn SpotPolicyLink(idx: usize, label: &'static str) -> Element {
-    let active = SPOT_POLICY_IDX() == idx;
+    let policy = &SPOT_POLICIES[idx];
+    let href = spot_gym_url(policy);
     rsx! {
         a {
-            class: if active { "policy-link policy-link-active" } else { "policy-link" },
-            href: "#",
-            title: "load this policy in the demo panel",
-            onclick: move |e: Event<MouseData>| {
-                e.prevent_default();
-                *SPOT_POLICY_IDX.write() = idx;
-            },
+            class: "policy-link",
+            href: "{href}",
+            target: "_blank",
+            title: "open this policy in the full gym",
             "▶ {label}"
         }
     }
 }
 
-fn spot_demo() -> Element {
-    let idx = SPOT_POLICY_IDX().min(SPOT_POLICIES.len() - 1);
-    let policy = &SPOT_POLICIES[idx];
-    let src = spot_gym_url(policy);
+fn spot() -> Element {
+    let default_policy = &SPOT_POLICIES[SPOT_DEFAULT_POLICY];
+    let sample_src = spot_gym_url(default_policy);
 
-    rsx! {
-        div { class: "spot-demo",
-            div { class: "spot-demo-bar",
-                label { r#for: "spot-policy-select", "policy" }
-                select {
-                    id: "spot-policy-select",
-                    class: "spot-policy-select",
-                    onchange: move |e: Event<FormData>| {
-                        if let Ok(i) = e.value().parse::<usize>() {
-                            if i < SPOT_POLICIES.len() {
-                                *SPOT_POLICY_IDX.write() = i;
-                            }
-                        }
-                    },
-                    for (i, p) in SPOT_POLICIES.iter().enumerate() {
-                        option { value: "{i}", selected: i == idx, "{p.label}" }
-                    }
-                }
-            }
-            iframe {
-                key: "{src}",
-                src: "{src}",
-                class: "featured-iframe spot-gym-frame",
-                title: "spot gym",
-            }
-            div { class: "spot-demo-hint",
-                "click the sim first · WASD/QE drive · 1-6 slow-mo · 0 pause · N stochastic · right-drag god-hand"
-            }
-        }
-    }
-}
-
-fn spot_page() -> Element {
     rsx! {
         article { class: "project-article",
             header {
                 h1 { "spot gym" }
                 p {
                     "Teaching a 3 kg quadruped to walk with reinforcement learning — and replaying every wrong turn. "
-                    "The panel next to this one runs the actual training physics in your browser: the same Rust "
+                    "The same Rust "
                     code { "spot-physics" }
                     " crate (Rapier) that the cluster trains against, compiled to WASM with in-browser ONNX inference (tract). "
                     "What you see is what the policy was graded on."
                 }
             }
             section { class: "article-section",
-                h2 { "how to use the demo" }
-                p {
-                    "Pick a checkpoint from the " b { "policy dropdown" } " — each entry is a milestone from the "
-                    "iteration log below, fetched from a public GCS bucket at load. Every ▶ link in this writeup "
-                    "loads that policy in the demo panel. The gym restarts on each switch (the Bevy app reads its "
-                    "policy URL and physics parameters once at startup)."
+                h2 { "gym" }
+                figure { class: "project-figure spot-embed",
+                    iframe {
+                        src: "{sample_src}",
+                        class: "featured-iframe spot-gym-frame",
+                        title: "spot gym - latest policy",
+                    }
+                    figcaption { "v59, the latest policy, loaded in-article. Click the sim first, then drive it with WASD/QE." }
                 }
+                div { class: "demo-cta",
+                    a { class: "link demo-cta-link", href: "https://spot.casazza.io/", target: "_blank",
+                        "open the full gym →"
+                    }
+                    p { class: "muted demo-cta-note",
+                        "spot.casazza.io · full-screen · every policy in the dropdown"
+                    }
+                }
+            }
+            section { class: "article-section",
+                h2 { "controls" }
                 ul {
                     li { b { "W/S" } " — command forward/backward velocity, " b { "A/D" } " — yaw, " b { "Q/E" } " — strafe. The policy tracks your command; it does not replay a recording." }
                     li { b { "digits 1–6" } " — slow motion (1 = slowest), " b { "0" } " — pause. Added specifically to expose the bounce-twitch exploit, which looks like walking at full speed." }
@@ -1579,7 +1533,7 @@ fn spot_page() -> Element {
                     li {
                         "Milestone policies: "
                         a { class: "link", href: "https://storage.googleapis.com/nixlab-spot-reruns/policies/walk_v59_3m/walk_v59_3m.onnx", target: "_blank", "public GCS bucket" }
-                        " — each ONNX ships with its observation-normalization stats; the demo panel fetches them at load."
+                        " — each ONNX ships with its observation-normalization stats; the full gym fetches them at load."
                     }
                 }
             }
@@ -1596,16 +1550,6 @@ fn spot_page() -> Element {
                     }
                 }
             }
-        }
-    }
-}
-
-fn bird_nix_demo() -> Element {
-    rsx! {
-        iframe {
-            src: "https://olivecasazza.github.io/bird-nix/",
-            class: "featured-iframe",
-            title: "bird-nix demo",
         }
     }
 }
@@ -1636,50 +1580,7 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
     }
 }
 
-fn consortium_demo() -> Element {
-    rsx! {
-        figure { class: "project-figure recording-figure",
-            div {
-                id: "asciinema-container",
-                class: "asciinema-container",
-                onmounted: move |_| {
-                    let _ = web_sys::window().and_then(|w: web_sys::Window| {
-                        let doc = w.document()?;
-                        let js = concat!(
-                            "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
-                            " document.getElementById('asciinema-container'), {",
-                            "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
-                            "  theme: 'monokai', fontSize: '11px', fit: false,",
-                            "  idleTimeLimit: 2, controls: false",
-                            "});"
-                        ).to_string();
-                        if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
-                            let script = doc.create_element("script").ok()?;
-                            script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
-                            let link = doc.create_element("link").ok()?;
-                            link.set_attribute("rel", "stylesheet").ok()?;
-                            link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
-                            doc.head()?.append_child(&link).ok()?;
-                            doc.head()?.append_child(&script).ok()?;
-                            let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
-                                let _ = js_sys::eval(&js);
-                            }).into_js_value();
-                            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
-                                cb.as_ref().unchecked_ref(), 500,
-                            );
-                            std::mem::forget(cb);
-                        } else {
-                            let _ = js_sys::eval(&js);
-                        }
-                        Some(())
-                    });
-                },
-            }
-            figcaption { "Live cascade deploy: cast deploy --on mm[01-05] --cascade --cascade-fanout 2 against the nixlab Mac Mini fleet." }
-        }
-    }
-}
-fn bird_nix_page() -> Element {
+fn bird_nix() -> Element {
     const INSTALL: &str = r#"inputs.bird-nix.url = "github:olivecasazza/bird-nix";
 
 # As a full library:
@@ -1687,6 +1588,9 @@ let bn = inputs.bird-nix.lib {}; in bn.I "hello"
 
 # Or just the combinators:
 inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
+    const SAMPLE: &str = r#"let bn = inputs.bird-nix.lib {}; in
+  bn.S bn.K bn.K
+# S K K = I — the starling/kestrel identity, evaluated live in the playground."#;
 
     rsx! {
         article { class: "project-article",
@@ -1750,7 +1654,18 @@ inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
             }
             section { class: "article-section",
                 h2 { "play" }
-                p { "The separate bird-nix demo panel opens the full playground: real Nix compiled to WASM with tvix-eval, wired into a browser REPL. The page panel keeps the discussion and install notes available while the demo panel is used interactively." }
+                p {
+                    "The full playground runs real Nix in your browser: tvix-eval compiled to WASM, wired into a REPL with the bird-nix library preloaded, a step-by-step reducer, and the pretty-printer for the resulting AST. It's hosted on GitHub Pages and updated on every push to main."
+                }
+                pre { class: "code-block", code { "{SAMPLE}" } }
+                div { class: "demo-cta",
+                    a { class: "link demo-cta-link", href: "https://olivecasazza.github.io/bird-nix/", target: "_blank",
+                        "open the playground →"
+                    }
+                    p { class: "muted demo-cta-note",
+                        "github-pages deployment · tvix-eval WASM · live REPL"
+                    }
+                }
             }
             section { class: "article-section",
                 h2 { "install" }
@@ -1760,7 +1675,7 @@ inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
                 h2 { "links" }
                 ul {
                     li { a { class: "link", href: "https://github.com/olivecasazza/bird-nix", target: "_blank", "source" } " - github.com/olivecasazza/bird-nix" }
-                    li { a { class: "link", href: "https://olivecasazza.github.io/bird-nix/", target: "_blank", "demo" } " - full playground" }
+                    li { a { class: "link", href: "https://olivecasazza.github.io/bird-nix/", target: "_blank", "playground" } " - full REPL on GitHub Pages" }
                     li { a { class: "link", href: "https://hydra.casazza.io/jobset/bird-nix/main", target: "_blank", "Hydra" } " - CI builds" }
                 }
             }
@@ -1768,7 +1683,7 @@ inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
     }
 }
 
-fn consortium_page() -> Element {
+fn consortium() -> Element {
     const INSTALL: &str = r#"nix run github:olivecasazza/consortium#claw -- -w 'node[01-16]' uptime
 cargo install consortium-cli
 pip install consortium"#;
@@ -1802,6 +1717,48 @@ task.run("node[01-16]")"#;
                 p { "A Rust reimplementation of the ClusterShell toolchain. Tokio dispatch core, persistent SSH multiplexers, workspace crates, user-facing binaries, and PyO3 bindings for existing ClusterShell scripts." }
             }
             section { class: "article-section",
+                h2 { "recording - nixlab Mac Mini fan-out" }
+                figure { class: "project-figure recording-figure",
+                    div {
+                        id: "asciinema-consortium-container",
+                        class: "asciinema-container",
+                        onmounted: move |_| {
+                            let _ = web_sys::window().and_then(|w: web_sys::Window| {
+                                let doc = w.document()?;
+                                let js = concat!(
+                                    "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
+                                    " document.getElementById('asciinema-consortium-container'), {",
+                                    "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
+                                    "  theme: 'monokai', fontSize: '11px', fit: false,",
+                                    "  idleTimeLimit: 2, controls: false",
+                                    "});"
+                                ).to_string();
+                                if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
+                                    let script = doc.create_element("script").ok()?;
+                                    script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
+                                    let link = doc.create_element("link").ok()?;
+                                    link.set_attribute("rel", "stylesheet").ok()?;
+                                    link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
+                                    doc.head()?.append_child(&link).ok()?;
+                                    doc.head()?.append_child(&script).ok()?;
+                                    let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
+                                        let _ = js_sys::eval(&js);
+                                    }).into_js_value();
+                                    let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                        cb.as_ref().unchecked_ref(), 500,
+                                    );
+                                    std::mem::forget(cb);
+                                } else {
+                                    let _ = js_sys::eval(&js);
+                                }
+                                Some(())
+                            });
+                        },
+                    }
+                    figcaption { "Live cascade deploy: cast deploy --on mm[01-05] --cascade --cascade-fanout 2 against the nixlab Mac Mini fleet. pinch exercises the parser, claw fans out uptime across mm01-mm05, molt -b coalesces a kernel-version sweep, cast health probes the NixOS build hosts, and cast eval prints the deployment plan without applying it." }
+                }
+            }
+            section { class: "article-section",
                 h2 { "scope" }
                 p { "Replaces clush, clubak, cluset/nodeset plus the Python library, and adds cast for NixOS fleet deployment. Adapter crates resolve node sets from Slurm, Ray, Ansible, SkyPilot, or Nix flakes while the dispatcher stays scheduler-agnostic." }
             }
@@ -1830,11 +1787,6 @@ task.run("node[01-16]")"#;
                 p { "That test harness is the compatibility contract. The Rust core can be refactored freely, but changes that break parser behavior, grouped output, or Python API parity are blocked at CI." }
             }
             section { class: "article-section",
-                h2 { "recording - nixlab Mac Mini fan-out" }
-                p { "The separate consortium recording panel shows pinch exercising the parser, claw fanning out uptime across mm01-mm05, molt -b coalescing a kernel-version sweep, cast health probing the NixOS build hosts, and cast eval printing the deployment plan without applying it." }
-                p { "Keeping the recording in its own panel lets the writeup remain readable while the terminal playback can be inspected beside it." }
-            }
-            section { class: "article-section",
                 h2 { "install" }
                 pre { class: "code-block", code { "{INSTALL}" } }
             }
@@ -1855,7 +1807,7 @@ task.run("node[01-16]")"#;
     }
 }
 
-fn hephaestus_page() -> Element {
+fn hephaestus() -> Element {
     const CRD: &str = r#"apiVersion: heph.nixlab.io/v1alpha1
 kind: MetalMachinePool
 metadata: { name: ml-training, namespace: heph-system }
@@ -1897,6 +1849,48 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
                 p { "A bare-metal lifecycle and autoscaling operator for Kubernetes, written in Rust against kube-rs. Treats physical hosts as first-class K8s objects and reconciles power + pool size through their BMCs." }
             }
             section { class: "article-section",
+                h2 { "recording - nixlab IPMI scale-up/down" }
+                figure { class: "project-figure recording-figure",
+                    div {
+                        id: "asciinema-heph-container",
+                        class: "asciinema-container",
+                        onmounted: move |_| {
+                            let _ = web_sys::window().and_then(|w: web_sys::Window| {
+                                let doc = w.document()?;
+                                let js = concat!(
+                                    "AsciinemaPlayer.create('/projects-media/hephaestus-demo.cast',",
+                                    " document.getElementById('asciinema-heph-container'), {",
+                                    "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
+                                    "  theme: 'monokai', fontSize: '11px', fit: false,",
+                                    "  idleTimeLimit: 3, controls: false",
+                                    "});"
+                                ).to_string();
+                                if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
+                                    let script = doc.create_element("script").ok()?;
+                                    script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
+                                    let link = doc.create_element("link").ok()?;
+                                    link.set_attribute("rel", "stylesheet").ok()?;
+                                    link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
+                                    doc.head()?.append_child(&link).ok()?;
+                                    doc.head()?.append_child(&script).ok()?;
+                                    let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
+                                        let _ = js_sys::eval(&js);
+                                    }).into_js_value();
+                                    let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                        cb.as_ref().unchecked_ref(), 500,
+                                    );
+                                    std::mem::forget(cb);
+                                } else {
+                                    let _ = js_sys::eval(&js);
+                                }
+                                Some(())
+                            });
+                        },
+                    }
+                    figcaption { "Real 3 → 0 → 3 power cycle: kubectl patch metalmachinepool hpc-workers against nixlab ProLiant hosts. The operator sends IPMI power-off to all three simultaneously, waits for them to reach Available, then powers them back on. Firmware POST dominates — the controller's reconcile loop runs in milliseconds." }
+                }
+            }
+            section { class: "article-section",
                 h2 { "why" }
                 p { "Kubernetes scales pods. Cluster-autoscaler scales cloud instances. Neither does anything for the bare-metal host: a saturated on-prem pool means someone in the rack or clicking a vendor BMC web UI. Existing tools (Metal3, Tinkerbell) target hyperscale provisioning pipelines and pull in their own CRD ecosystems. Hephaestus is intentionally smaller: it keeps a labelled host pool at a target replica count by power-cycling the underlying BMCs." }
                 p { "The operator sits between Kubernetes scheduling intent and the physical machines in a lab or HPC fleet. Instead of treating bare-metal nodes as static inventory, it allows a pool to scale up for queued work and drain back down when the pool is no longer needed." }
@@ -1919,7 +1913,6 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
             section { class: "article-section",
                 h2 { "case study - nixlab fleet" }
                 p { "Live in production on the nixlab cluster. Manages three ProLiant workers (hp01-03) plus five Mac Mini agents (mm01-05). Power events flow through IPMI for the ProLiants and Wake-on-LAN for the Macs (no BMC). The hpc-workers pool scales 0 → 3 ProLiants when SkyPilot tasks queue up, and scales back to zero when the pool is idle. End-to-end from kubectl patch metalmachinepool to a Ready node sits around 90 s, dominated by firmware POST + PXE — the controller itself reconciles in tens of milliseconds." }
-                p { "The separate recording panel shows a real 3 → 0 → 3 power cycle captured against hp01-hp03: the operator sends IPMI power-off to all three hosts simultaneously, waits for them to reach Available, then powers them back on. The firmware POST dominates — the controller's reconcile loop runs in milliseconds." }
             }
             section { class: "article-section",
                 h2 { "install" }
@@ -1934,50 +1927,6 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
                 }
                 p { class: "muted", "Source repository is private. Contact for access." }
             }
-        }
-    }
-}
-
-fn hephaestus_demo() -> Element {
-    rsx! {
-        figure { class: "project-figure recording-figure",
-            div {
-                id: "asciinema-heph-container",
-                class: "asciinema-container",
-                onmounted: move |_| {
-                    let _ = web_sys::window().and_then(|w: web_sys::Window| {
-                        let doc = w.document()?;
-                        let js = concat!(
-                            "AsciinemaPlayer.create('/projects-media/hephaestus-demo.cast',",
-                            " document.getElementById('asciinema-heph-container'), {",
-                            "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
-                            "  theme: 'monokai', fontSize: '11px', fit: false,",
-                            "  idleTimeLimit: 3, controls: false",
-                            "});"
-                        ).to_string();
-                        if doc.query_selector("script[src*='asciinema-player']").ok().flatten().is_none() {
-                            let script = doc.create_element("script").ok()?;
-                            script.set_attribute("src", "/projects-media/asciinema-player.min.js").ok()?;
-                            let link = doc.create_element("link").ok()?;
-                            link.set_attribute("rel", "stylesheet").ok()?;
-                            link.set_attribute("href", "/projects-media/asciinema-player.css").ok()?;
-                            doc.head()?.append_child(&link).ok()?;
-                            doc.head()?.append_child(&script).ok()?;
-                            let cb = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
-                                let _ = js_sys::eval(&js);
-                            }).into_js_value();
-                            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
-                                cb.as_ref().unchecked_ref(), 500,
-                            );
-                            std::mem::forget(cb);
-                        } else {
-                            let _ = js_sys::eval(&js);
-                        }
-                        Some(())
-                    });
-                },
-            }
-            figcaption { "Real IPMI scale-up/down: kubectl patch metalmachinepool hpc-workers replicas 3→0→3 against nixlab ProLiant hosts." }
         }
     }
 }
@@ -2308,8 +2257,6 @@ const APP_CSS: &str = r#"
 
 .panel-flocking-demo .panel-body,
 .panel-pipedream-demo .panel-body,
-.panel-bird-nix-demo .panel-body,
-.panel-spot-gym-demo .panel-body,
 .panel-kinematics-notebook .panel-body,
 .panel-inverse-kinematics-notebook .panel-body,
 .panel-wigglystuff-notebook .panel-body {
@@ -2323,9 +2270,7 @@ const APP_CSS: &str = r#"
 .mobile .panel-inverse-kinematics-notebook .panel-body,
 .mobile .panel-wigglystuff-notebook .panel-body,
 .mobile .panel-flocking-demo .panel-body,
-.mobile .panel-pipedream-demo .panel-body,
-.mobile .panel-bird-nix-demo .panel-body,
-.mobile .panel-spot-gym-demo .panel-body {
+.mobile .panel-pipedream-demo .panel-body {
   max-height: none;
   min-height: 60vh;
 }
@@ -2522,10 +2467,6 @@ const APP_CSS: &str = r#"
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.ws-root:not(.mobile) .panel-consortium-demo,
-.ws-root:not(.mobile) .panel-hephaestus-recording {
-  --panel-min-h: 120px;
 }
 .asciinema-container {
   flex: 1;
@@ -2733,49 +2674,35 @@ const APP_CSS: &str = r#"
   font-size: 12px;
 }
 
-/* Spot gym demo panel */
-.spot-demo {
-  width: 100%;
-  height: 100%;
-  flex: 1;
-  min-height: 0;
+/* Spot gym in-article embed */
+.spot-embed {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-.spot-demo-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-}
-.spot-demo-bar label {
-  color: var(--dim);
-}
-.spot-policy-select {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--line2);
-  border-radius: 3px;
-  padding: 3px 6px;
-  font-size: 11px;
-  font-family: inherit;
-}
-.spot-policy-select:hover,
-.spot-policy-select:focus {
-  border-color: var(--accent);
-  outline: none;
+  gap: 6px;
+  min-height: 0;
 }
 .spot-gym-frame {
+  width: 100%;
+  height: 360px;
   border: 1px solid var(--line);
   border-radius: 4px;
 }
-.spot-demo-hint {
-  color: var(--dim);
-  font-size: 10px;
-  text-align: center;
+.demo-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg2);
+}
+.demo-cta-link {
+  font-size: 13px;
+  font-weight: 500;
+}
+.demo-cta-note {
+  font-size: 11px;
+  margin: 0;
 }
 .policy-link {
   color: var(--green);
@@ -2785,9 +2712,6 @@ const APP_CSS: &str = r#"
   white-space: nowrap;
 }
 .policy-link:hover {
-  color: var(--accent);
-}
-.policy-link-active {
   color: var(--accent);
 }
 .policy-inline-note {
