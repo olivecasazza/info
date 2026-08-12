@@ -1013,8 +1013,6 @@ impl PipeSim {
         }
     }
 
-
-
     fn push_axis_steps(route: &mut Vec<Dir>, from: &mut IVec3, to: IVec3) {
         let mut axes = [
             (0usize, (to.x - from.x).abs()),
@@ -1382,6 +1380,11 @@ struct PipedreamState {
     speed: f32,
     /// User zoom multiplier applied on top of the per-frame auto-fit scale.
     zoom: f32,
+    /// Yaw rotation (radians) applied in screen space around the panel center
+    /// after the isometric projection. `0.0` is the default top-down view;
+    /// positive values rotate clockwise. Normalized to `(-PI, PI]` on each
+    /// input so the float doesn't drift from continuous accumulation.
+    yaw: f32,
     /// Cached campus screen-extent (center, half) at unit scale; refreshed on
     /// reset and consumed by the auto-fit in render_system.
     fit_center: (f32, f32),
@@ -1442,6 +1445,7 @@ impl Default for PipedreamState {
             site_spacing: ext.site_spacing,
             speed: ext.speed,
             zoom: ext.scale,
+            yaw: 0.0,
             fit_center,
             fit_half,
             accumulator: 0.0,
@@ -1540,12 +1544,40 @@ fn simulation_step(time: Res<Time>, mut state: ResMut<PipedreamState>) {
     set_throughput_json(state.sim.throughput.to_json());
 }
 
-fn render_system(mut contexts: EguiContexts, mut state: ResMut<PipedreamState>) {
+fn render_system(
+    mut contexts: EguiContexts,
+    mut state: ResMut<PipedreamState>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+) {
     let ctx = contexts.ctx_mut();
     ctx.tessellation_options_mut(|opts| {
         opts.feathering = false;
         opts.feathering_size_in_pixels = 0.0;
     });
+
+    // Yaw rotation around the panel center. Arrow keys (or A/D) rotate by
+    // 15° steps; yaw is normalized to (-PI, PI] so repeated input doesn't
+    // accumulate float drift.
+    let yaw_step = std::f32::consts::PI / 12.0;
+    let mut yaw_delta = 0.0_f32;
+    if keyboard.just_pressed(KeyCode::ArrowLeft) || keyboard.just_pressed(KeyCode::KeyA) {
+        yaw_delta -= yaw_step;
+    }
+    if keyboard.just_pressed(KeyCode::ArrowRight) || keyboard.just_pressed(KeyCode::KeyD) {
+        yaw_delta += yaw_step;
+    }
+    if yaw_delta != 0.0 {
+        let mut y = state.yaw + yaw_delta;
+        // Wrap to (-PI, PI].
+        let two_pi = std::f32::consts::TAU;
+        y = (y + std::f32::consts::PI).rem_euclid(two_pi) - std::f32::consts::PI;
+        // rem_euclid returns >= 0; if exactly PI, remap to -PI so the range
+        // stays (-PI, PI].
+        if y == std::f32::consts::PI {
+            y = -std::f32::consts::PI;
+        }
+        state.yaw = y;
+    }
 
     // Auto-fit: choose the scale that makes the cached campus extent fill the
     // panel, then recenter its bbox. Recomputed every frame so a resized panel
@@ -1595,6 +1627,23 @@ fn render_system(mut contexts: EguiContexts, mut state: ResMut<PipedreamState>) 
             for cmd in cmds {
                 draw_box(&state, &painter, rect, cmd.center, cmd.size, cmd.faces);
             }
+
+            // Yaw readout, drawn on top of everything so it stays legible at
+            // any rotation. Drawn unrotated (text is added straight to the
+            // painter, not via draw_box) so the label never spins with the
+            // scene.
+            let deg = state.yaw.to_degrees();
+            let label = format!("yaw: {:+.0}°", deg);
+            let fg = state.palette.infra[2]; // near-white backbone color
+            let font = egui::FontId::monospace(13.0);
+            let galley = ui.fonts(|f| f.layout_no_wrap(label, font, fg));
+            let anchor = rect.left_top() + egui::vec2(8.0, 8.0);
+            painter.rect_filled(
+                egui::Rect::from_min_size(anchor, galley.size() + egui::vec2(8.0, 4.0)),
+                2.0,
+                state.palette.bg,
+            );
+            painter.galley(anchor + egui::vec2(4.0, 2.0), galley, fg);
         });
 }
 
@@ -1610,18 +1659,30 @@ fn draw_box(
     let center_pt = rect.center();
     let shift = center_pt.to_vec2() + state.renderer.offset;
     let iso = |x: f32, y: f32, z: f32| -> Pos2 { state.renderer.project(x, y, z) + shift };
+    // Yaw is applied in screen space around `center_pt` AFTER the iso projection,
+    // so rotating the whole scene doesn't disturb the per-box depth sort order.
+    let yaw = state.yaw;
+    let rot = |p: Pos2| -> Pos2 {
+        if yaw == 0.0 {
+            p
+        } else {
+            let d = p - center_pt;
+            let (s, c) = yaw.sin_cos();
+            center_pt + egui::vec2(d.x * c - d.y * s, d.x * s + d.y * c)
+        }
+    };
 
     let (cx, cy, cz) = (center[0], center[1], center[2]);
     let (sx, sy, sz) = (size[0] * 0.5, size[1] * 0.5, size[2] * 0.5);
 
-    let t_back = iso(cx - sx, cy - sy, cz + sz);
-    let t_right = iso(cx + sx, cy - sy, cz + sz);
-    let t_front = iso(cx + sx, cy + sy, cz + sz);
-    let t_left = iso(cx - sx, cy + sy, cz + sz);
+    let t_back = rot(iso(cx - sx, cy - sy, cz + sz));
+    let t_right = rot(iso(cx + sx, cy - sy, cz + sz));
+    let t_front = rot(iso(cx + sx, cy + sy, cz + sz));
+    let t_left = rot(iso(cx - sx, cy + sy, cz + sz));
 
-    let b_right = iso(cx + sx, cy - sy, cz - sz);
-    let b_front = iso(cx + sx, cy + sy, cz - sz);
-    let b_left = iso(cx - sx, cy + sy, cz - sz);
+    let b_right = rot(iso(cx + sx, cy - sy, cz - sz));
+    let b_front = rot(iso(cx + sx, cy + sy, cz - sz));
+    let b_left = rot(iso(cx - sx, cy + sy, cz - sz));
 
     // Right face (+X)
     painter.add(Shape::convex_polygon(
