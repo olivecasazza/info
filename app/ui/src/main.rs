@@ -1920,7 +1920,7 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
             }
             section { class: "article-section",
                 h2 { "case study - nixlab fleet" }
-                p { "Live in production on the nixlab cluster. Manages three ProLiant workers (hp01-03) plus five Mac Mini agents (mm01-05). Power events flow through IPMI for the ProLiants and Wake-on-LAN for the Macs (no BMC). The hpc-workers pool scales 0 → 3 ProLiants when SkyPilot tasks queue up, and scales back to zero when the pool is idle. End-to-end from kubectl patch metalmachinepool to a Ready node sits around 90 s, dominated by firmware POST + PXE — the controller itself reconciles in tens of milliseconds." }
+                p { "Live in production on the nixlab cluster. Manages three ProLiant workers (hp01-03) plus a multi-GPU node (8× GPU) for heavier training jobs, alongside five Mac Mini agents (mm01-05) that handle CI dispatch. Power events flow through IPMI for the ProLiants and the GPU node, and Wake-on-LAN for the Macs (no BMC). The hpc-workers pool scales 0 → 3 ProLiants when SkyPilot tasks queue up, and the gpu-pool brings the 8× GPU node online only when training jobs actually need it — both drain back to zero when idle. End-to-end from kubectl patch metalmachinepool to a Ready node sits around 90 s, dominated by firmware POST + PXE — the controller itself reconciles in tens of milliseconds." }
             }
             section { class: "article-section",
                 h2 { "install" }
