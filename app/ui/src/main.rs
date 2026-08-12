@@ -228,7 +228,7 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
 ];
 const SIDEBAR_TILE_WIDTH: f64 = 35.0;
 const PROJECT_TILE_WIDTH: f64 = 100.0 - SIDEBAR_TILE_WIDTH;
-const TOP_ROW_TILE_BASIS: f64 = 60.0;
+const TOP_ROW_TILE_BASIS: f64 = 50.0;
 const BOTTOM_ROW_TILE_BASIS: f64 = 100.0 - TOP_ROW_TILE_BASIS;
 
 fn default_layout() -> Vec<PanelWin<Panel>> {
