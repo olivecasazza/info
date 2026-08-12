@@ -1657,6 +1657,14 @@ inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
                 p {
                     "The full playground runs real Nix in your browser: tvix-eval compiled to WASM, wired into a REPL with the bird-nix library preloaded, a step-by-step reducer, and the pretty-printer for the resulting AST. It's hosted on GitHub Pages and updated on every push to main."
                 }
+                figure { class: "project-figure bird-nix-repl",
+                    iframe {
+                        src: "https://olivecasazza.github.io/bird-nix/",
+                        class: "featured-iframe bird-nix-repl-frame",
+                        title: "bird-nix REPL",
+                    }
+                    figcaption { "Live REPL embedded in-article. Open the playground below for the full reducer and pretty-printer." }
+                }
                 pre { class: "code-block", code { "{SAMPLE}" } }
                 div { class: "demo-cta",
                     a { class: "link demo-cta-link", href: "https://olivecasazza.github.io/bird-nix/", target: "_blank",
@@ -2684,6 +2692,13 @@ const APP_CSS: &str = r#"
 .spot-gym-frame {
   width: 100%;
   height: 360px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+/* Bird-nix REPL in-article embed */
+.bird-nix-repl-frame {
+  width: 100%;
+  height: 420px;
   border: 1px solid var(--line);
   border-radius: 4px;
 }
