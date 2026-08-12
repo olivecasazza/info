@@ -2691,7 +2691,8 @@ const APP_CSS: &str = r#"
 }
 .spot-gym-frame {
   width: 100%;
-  height: 360px;
+  aspect-ratio: 1 / 1;
+  max-height: 70vh;
   border: 1px solid var(--line);
   border-radius: 4px;
 }
