@@ -2699,7 +2699,9 @@ const APP_CSS: &str = r#"
 /* Bird-nix REPL in-article embed */
 .bird-nix-repl-frame {
   width: 100%;
-  height: 420px;
+  /* ponytail: panel-kit tiling needs vertical room; vh scales, min-height stops the squish */
+  height: 85vh;
+  min-height: 720px;
   border: 1px solid var(--line);
   border-radius: 4px;
 }
