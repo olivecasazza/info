@@ -8,12 +8,10 @@
 fn main() -> std::io::Result<()> {
     use std::time::Duration;
 
-    use crossterm::event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, MouseButton, MouseEventKind,
-    };
+    use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode};
     use crossterm::execute;
     use info_tui::{App, Panel};
-    use panel_kit_tui::{TuiMouseButton, TuiMouseEvent, TuiMouseEventKind};
+    use panel_kit_tui::input::{crossterm_key_chord, crossterm_pointer_event};
 
     let store = Some(std::env::temp_dir().join("info-tui-layout.json"));
     let mut app = App::new(store);
@@ -21,56 +19,58 @@ fn main() -> std::io::Result<()> {
     let mut terminal = ratatui::init();
     let _ = execute!(std::io::stdout(), EnableMouseCapture);
 
-    let res = loop {
-        if let Err(e) = terminal.draw(|f| app.draw(f)) {
-            break Err(e);
+    let result = loop {
+        let mut render_result = Ok(());
+        if let Err(error) = terminal.draw(|frame| render_result = app.draw(frame)) {
+            break Err(error);
         }
+        if let Err(error) = render_result {
+            break Err(std::io::Error::other(error));
+        }
+
         match event::poll(Duration::from_millis(100)) {
             Ok(true) => match event::read() {
-                Ok(Event::Key(k)) => match k.code {
-                    KeyCode::Char('q') | KeyCode::Esc => break Ok(()),
-                    KeyCode::Char('1') => app.ws.restore_panel(Panel::Projects),
-                    KeyCode::Char('2') => app.ws.restore_panel(Panel::Info),
-                    KeyCode::Char('3') => app.ws.restore_panel(Panel::Background),
-                    KeyCode::Up => app.scroll_projects(-1),
-                    KeyCode::Down => app.scroll_projects(1),
-                    _ => {}
-                },
-                // crossterm distinguishes Drag(button) from Moved, so no
-                // press-tracking is needed (unlike the ratzilla path).
-                Ok(Event::Mouse(m)) => {
-                    let kind = match m.kind {
-                        MouseEventKind::Down(MouseButton::Left) => {
-                            Some(TuiMouseEventKind::Down(TuiMouseButton::Primary))
+                Ok(Event::Key(key)) => {
+                    let action = match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => break Ok(()),
+                        KeyCode::Char('1') => app.restore_panel(Panel::Projects),
+                        KeyCode::Char('2') => app.restore_panel(Panel::Info),
+                        KeyCode::Char('3') => app.restore_panel(Panel::Background),
+                        KeyCode::Up => {
+                            app.scroll_projects(-1);
+                            Ok(())
                         }
-                        MouseEventKind::Up(MouseButton::Left) => {
-                            Some(TuiMouseEventKind::Up(TuiMouseButton::Primary))
+                        KeyCode::Down => {
+                            app.scroll_projects(1);
+                            Ok(())
                         }
-                        MouseEventKind::Drag(MouseButton::Left) => {
-                            Some(TuiMouseEventKind::Drag(TuiMouseButton::Primary))
-                        }
-                        MouseEventKind::Moved => Some(TuiMouseEventKind::Moved),
-                        _ => None,
+                        _ => match crossterm_key_chord(key) {
+                            Some(chord) => app.handle_key_chord(chord),
+                            None => Ok(()),
+                        },
                     };
-                    if let Some(kind) = kind {
-                        app.ws.handle_mouse(TuiMouseEvent {
-                            kind,
-                            x: m.column as f64,
-                            y: m.row as f64,
-                        });
+                    if let Err(error) = action {
+                        break Err(std::io::Error::other(error));
+                    }
+                }
+                Ok(Event::Mouse(mouse)) => {
+                    if let Some(pointer) = crossterm_pointer_event(mouse) {
+                        if let Err(error) = app.handle_pointer(pointer) {
+                            break Err(std::io::Error::other(error));
+                        }
                     }
                 }
                 Ok(_) => {}
-                Err(e) => break Err(e),
+                Err(error) => break Err(error),
             },
             Ok(false) => {}
-            Err(e) => break Err(e),
+            Err(error) => break Err(error),
         }
     };
 
     let _ = execute!(std::io::stdout(), DisableMouseCapture);
     ratatui::restore();
-    res
+    result
 }
 
 #[cfg(target_arch = "wasm32")]

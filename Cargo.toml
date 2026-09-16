@@ -28,7 +28,7 @@ serde = { version = "1", features = ["derive"] }
 # Panel workspace library — local sibling checkout.
 # Nix builds recreate this path via prePatch; local dev just works.
 panel-kit = { path = "../panel-kit", features = ["bevy"] }
-panel-kit-core = { path = "../panel-kit/crates/panel-kit-core" }
+panel-kit-core = { path = "../panel-kit/crates/panel-kit-core", features = ["spec-json"] }
 panel-kit-tui = { path = "../panel-kit/crates/panel-kit-tui" }
 
 [profile.release]

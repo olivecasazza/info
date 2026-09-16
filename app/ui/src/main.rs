@@ -10,12 +10,15 @@
 
 use dioxus::prelude::*;
 use panel_kit::{
-    get_bevy_handle, use_workspace, BevyCanvas, LayoutBuilder, Mode, PanelKind, PanelWin,
-    TilingFlow, WinState, Workspace, BEVY_CSS, CSS,
+    bevy::{get_bevy_handle, BevyCanvas, BEVY_CSS},
+    LayoutBuilder, PanelKind, PanelWin, WinState, CSS,
 };
+use panel_kit_core::frame::{Placement, TileFillOrder};
+use panel_kit_core::{Mode, SurfaceClass};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
+mod workspace;
 fn main() {
     dioxus::launch(App);
 }
@@ -226,24 +229,14 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::NotebookWigglystuff,
     Panel::PanelKitTuiDemo,
 ];
-const SIDEBAR_TILE_WIDTH: f64 = 35.0;
-const PROJECT_TILE_WIDTH: f64 = 100.0 - SIDEBAR_TILE_WIDTH;
-const TOP_ROW_TILE_BASIS: f64 = 50.0;
-const BOTTOM_ROW_TILE_BASIS: f64 = 100.0 - TOP_ROW_TILE_BASIS;
 
 fn default_layout() -> Vec<PanelWin<Panel>> {
     let mut b = LayoutBuilder::new();
     vec![
         b.at(Panel::Info, 16.0, 16.0, 360.0, 360.0)
-            .with_tile(2, 2)
-            .with_tile_flex(TOP_ROW_TILE_BASIS, 1.0)
-            .with_tile_cross(SIDEBAR_TILE_WIDTH)
-            .with_tile_min(240.0, 240.0),
+            .with_tile(2, 2),
         b.at(Panel::Projects, 16.0, 392.0, 360.0, 260.0)
-            .with_tile(2, 1)
-            .with_tile_flex(BOTTOM_ROW_TILE_BASIS, 1.0)
-            .with_tile_cross(SIDEBAR_TILE_WIDTH)
-            .with_tile_min(220.0, 170.0),
+            .with_tile(2, 1),
     ]
 }
 
@@ -255,56 +248,107 @@ const LAYOUT_KEY: &str = "info_layout_v10";
 
 #[component]
 fn App() -> Element {
-    let mut ws = use_workspace(LAYOUT_KEY, default_layout);
-    let mut opened_initial_project = use_signal(|| false);
+    let workspace = workspace::state::use_panel_workspace(
+        LAYOUT_KEY,
+        default_layout,
+        Mode::Tiling,
+        workspace::catalog::app_catalog,
+        TileFillOrder::ColumnMajor,
+    );
+    workspace::state::mount_viewport_observer(&workspace);
 
-    use_hook(|| {
-        let has_saved: bool = web_sys::window()
-            .and_then(|w: web_sys::Window| w.local_storage().ok().flatten())
-            .and_then(|s: web_sys::Storage| s.get_item(LAYOUT_KEY).ok().flatten())
-            .is_some();
-        if !has_saved {
-            ws.mode.set(Mode::Tiling);
+    use_hook({
+        let workspace = workspace.clone();
+        move || {
+            let route_resources = current_path_resources();
+            if !route_resources.is_empty() {
+                open_project_resources(&workspace, route_resources);
+            } else if let Some((_, project)) = random_project() {
+                open_project_resources(&workspace, resources_for_project(project.link));
+            }
         }
     });
 
-    // FIXME(perf): use_effect reads `opened_initial_project()` as a reactive dependency, so after
-    // the first run calls `set(true)` it schedules another render which re-runs the effect
-    // (seeing true, returning early). That's one extra render + effect invocation during initial
-    // load. Replace with `use_hook` (like the layout-check above) — it runs exactly once and
-    // doesn't subscribe to any signal.
-    use_effect(move || {
-        if opened_initial_project() {
-            return;
-        }
-        opened_initial_project.set(true);
+    let emit = workspace::events::workspace_event_handler(&workspace);
+    let snapshot = workspace.snapshot.read();
+    let mut scratch = workspace.scratch.borrow_mut();
+    let frame = workspace::state::project_workspace(&workspace, &snapshot, &mut scratch);
+    let root_class = panel_kit::widgets::root::root_class(&frame);
+    let workspace_class = workspace::state::workspace_area_class(&frame);
+    let workspace_style = frame
+        .tile_grid
+        .map(panel_kit::widgets::root::tile_grid_style)
+        .unwrap_or_default();
 
-        let route_resources = current_path_resources();
-        if !route_resources.is_empty() {
-            open_project_resources(ws, route_resources);
-        } else if let Some((_, project)) = random_project() {
-            open_project_resources(ws, resources_for_project(project.link));
-        }
-    });
+    let pointer_move_workspace = workspace.clone();
+    let pointer_up_workspace = workspace.clone();
+    let pointer_cancel_workspace = workspace.clone();
+    let key_workspace = workspace.clone();
+    let wheel_workspace = workspace.clone();
 
     rsx! {
         style { {CSS} }
         style { {BEVY_CSS} }
         style { {APP_CSS} }
         div {
-            class: ws.root_class(),
-            onmousemove: move |e| ws.handle_mouse_move(&e),
-            onmouseup: move |_| ws.handle_mouse_up(),
-            {ws.render_with_tiling_flow(TilingFlow::Column, move |kind, _maximized| panel_body(kind, ws))}
-            {ws.dock()}
+            class: "{root_class}",
+            tabindex: "0",
+            onpointermove: move |event: PointerEvent| {
+                workspace::events::handle_pointer_move(&pointer_move_workspace, &event)
+            },
+            onpointerup: move |event: PointerEvent| {
+                workspace::events::handle_pointer_up(&pointer_up_workspace, &event)
+            },
+            onpointercancel: move |event: PointerEvent| {
+                workspace::events::handle_pointer_up(&pointer_cancel_workspace, &event)
+            },
+            onkeydown: move |event: KeyboardEvent| {
+                workspace::events::handle_key(&key_workspace, &event)
+            },
+            div {
+                class: "{workspace_class}",
+                style: "{workspace_style}",
+                onwheel: move |event: WheelEvent| {
+                    workspace::events::handle_wheel(&wheel_workspace, &event)
+                },
+                for panel in frame.panels.iter().copied() {
+                    if let Some(meta) = workspace.catalog.get(panel.key) {
+                        {
+                            let panel_class = format!("panel-{}", meta.slug);
+                            panel_kit::widgets::panel::panel_shell(
+                                panel,
+                                Some(&panel_class),
+                                rsx! {
+                                    {panel_kit::widgets::panel::panel_chrome_with_events(
+                                        panel,
+                                        meta,
+                                        emit,
+                                        Some(panel_kit::widgets::panel::traffic_lights(panel, emit)),
+                                        None,
+                                    )}
+                                    {panel_kit::widgets::panel::panel_body(render_panel_body(
+                                        panel.key,
+                                        &workspace,
+                                    ))}
+                                    {panel_kit::widgets::panel::resize_grip(panel, emit)}
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+            {panel_kit::widgets::dock::dock(frame.dock, &workspace.catalog, emit, None)}
         }
     }
 }
 
-fn panel_body(kind: Panel, ws: Workspace<Panel>) -> Element {
+fn render_panel_body(
+    kind: Panel,
+    workspace: &workspace::state::PanelWorkspace<Panel>,
+) -> Element {
     match kind {
         Panel::Info => info_body(),
-        Panel::Projects => projects_panel(ws),
+        Panel::Projects => projects_panel(workspace),
         Panel::Featured => featured_body(),
         Panel::BirdNix => bird_nix(),
         Panel::Consortium => consortium(),
@@ -363,18 +407,12 @@ fn current_path_resources() -> &'static [Panel] {
 fn resource_panel_default(kind: Panel, index: usize, total: usize, z: i32) -> PanelWin<Panel> {
     let total = total.max(1);
     let primary = index == 0;
-    let secondary_count = total.saturating_sub(1).max(1);
-    // Keep the right-hand project column's row heights aligned with the
-    // left-hand info/projects column. Row 1 is the featured/opened resource;
-    // row 2 is shared by any additional resources for that project.
-    let primary_basis = TOP_ROW_TILE_BASIS;
-    let secondary_basis = BOTTOM_ROW_TILE_BASIS / secondary_count as f64;
-    let (basis, grow, min_w, min_h, tile_w, tile_h) = if total == 1 {
-        (100.0, 1.0, 280.0, 220.0, 4, 3)
+    let (tile_w, tile_h) = if total == 1 {
+        (4, 3)
     } else if primary {
-        (primary_basis, 2.0, 280.0, 220.0, 2, 3)
+        (2, 3)
     } else {
-        (secondary_basis, 1.0, 240.0, 150.0, 2, 2)
+        (2, 2)
     };
 
     PanelWin {
@@ -387,45 +425,39 @@ fn resource_panel_default(kind: Panel, index: usize, total: usize, z: i32) -> Pa
         z,
         tile_w: 1,
         tile_h: 2,
-        tile_basis_pct: None,
-        tile_grow: None,
-        tile_cross_pct: None,
-        tile_min_w: None,
-        tile_min_h: None,
     }
     .with_tile(tile_w, tile_h)
-    .with_tile_flex(basis, grow)
-    .with_tile_cross(PROJECT_TILE_WIDTH)
-    .with_tile_min(min_w, min_h)
 }
 
-fn open_project_resources(mut ws: Workspace<Panel>, resources: &'static [Panel]) {
+fn open_project_resources(
+    workspace: &workspace::state::PanelWorkspace<Panel>,
+    resources: &'static [Panel],
+) {
     if resources.is_empty() {
         return;
     }
 
-    // FIXME(perf): `ws.mode.set()` and `ws.panels.write()` are separate signal mutations, so
-    // Dioxus schedules two re-renders back-to-back on every project open (including the initial
-    // one at load time). Batch them — either write panels first and set mode after inside the
-    // same synchronous call stack, or use a Dioxus `batch()` scope if/when that API lands.
-    ws.mode.set(Mode::Tiling);
+    workspace::state::mutate_snapshot(workspace, |snapshot| {
+        snapshot.preferred_mode = Mode::Tiling;
+        snapshot
+            .panels
+            .retain(|panel| !ALL_PROJECT_RESOURCES.contains(&panel.kind));
 
-    let mut panels = ws.panels;
-    let mut ps = panels.write();
-    ps.retain(|panel| !ALL_PROJECT_RESOURCES.contains(&panel.kind));
-
-    let mut z = ps.iter().map(|p| p.z).max().unwrap_or(0) + 1;
-    for (index, kind) in resources.iter().copied().enumerate() {
-        ps.push(resource_panel_default(kind, index, resources.len(), z));
-        z += 1;
-    }
+        let mut z = snapshot.panels.iter().map(|panel| panel.z).max().unwrap_or(0) + 1;
+        for (index, kind) in resources.iter().copied().enumerate() {
+            snapshot
+                .panels
+                .push(resource_panel_default(kind, index, resources.len(), z));
+            z += 1;
+        }
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Projects Panel — Always shows the list
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn projects_panel(ws: Workspace<Panel>) -> Element {
+fn projects_panel(workspace: &workspace::state::PanelWorkspace<Panel>) -> Element {
     rsx! {
         div { class: "info-projects",
             for cat in info_core::projects() {
@@ -437,14 +469,14 @@ fn projects_panel(ws: Workspace<Panel>) -> Element {
                                 class: "proj-link",
                                 href: "#",
                                 onclick: {
-                                    // FIXME(perf): `item.link` is `&'static str`, so
-                                    // `.to_string()` heap-allocates on every render for every
-                                    // project entry. Capture the static ref directly instead:
-                                    // `let link: &'static str = item.link;`
-                                    let link = item.link.to_string();
-                                    move |e: Event<MouseData>| {
-                                        e.prevent_default();
-                                        open_project_resources(ws, resources_for_project(&link));
+                                    let workspace = workspace.clone();
+                                    let link = item.link;
+                                    move |event: Event<MouseData>| {
+                                        event.prevent_default();
+                                        open_project_resources(
+                                            &workspace,
+                                            resources_for_project(link),
+                                        );
                                     }
                                 },
                                 "{item.heading}"
@@ -2030,163 +2062,110 @@ fn demo_default_layout() -> Vec<PanelWin<DemoPanel>> {
 }
 
 fn panel_kit_web_demo() -> Element {
-    let ws = use_workspace("panel_kit_web_demo_workspace", demo_default_layout);
-    let mut tip = use_signal(|| Option::<(f64, f64)>::None);
+    let workspace = workspace::state::use_panel_workspace(
+        "panel_kit_web_demo_workspace",
+        demo_default_layout,
+        Mode::Floating,
+        workspace::catalog::demo_catalog,
+        TileFillOrder::RowMajor,
+    );
+    workspace::state::mount_viewport_observer(&workspace);
+    let tip = use_signal(|| Option::<(f64, f64)>::None);
+    let emit = workspace::events::workspace_event_handler(&workspace);
 
-    let mode_label = match ws.effective_mode() {
+    let snapshot = workspace.snapshot.read();
+    let mut scratch = workspace.scratch.borrow_mut();
+    let frame = workspace::state::project_workspace(&workspace, &snapshot, &mut scratch);
+    let root_class = panel_kit::widgets::root::root_class(&frame);
+    let workspace_class = workspace::state::workspace_area_class(&frame);
+    let workspace_style = frame
+        .tile_grid
+        .map(panel_kit::widgets::root::tile_grid_style)
+        .unwrap_or_default();
+    let mode_label = match frame.mode {
         Mode::Floating => "floating",
         Mode::Tiling => "tiling",
     };
+    let is_mobile = frame.surface.class == SurfaceClass::Compact;
 
-    let body = move |kind: DemoPanel, maximized: bool| -> Element {
-        match kind {
-            DemoPanel::Notes => rsx! {
-                p { "Type below, then press " b { "t" } " — the mode shortcut is "
-                    "suppressed by the " code { "is_editing()" } " gate while this "
-                    "textarea has focus. Click elsewhere and " b { "t" } " toggles "
-                    "tiling⇄floating." }
-                textarea { class: "notes", placeholder: "type here…" }
-            },
-            DemoPanel::Preview => rsx! {
-                p { "The body closure receives " code { "(kind, maximized)" } "." }
-                p { "This panel is currently "
-                    b { if maximized { "maximized" } else { "not maximized" } }
-                    " — press the green light to flip it." }
-            },
-            DemoPanel::Status => {
-                let (vw, vh) = *ws.viewport.read();
-                let drag_txt = match *ws.drag.read() {
-                    Some(d) => format!(
-                        "{} panel #{}",
-                        match d.kind {
-                            panel_kit::DragKind::Move => "moving",
-                            panel_kit::DragKind::Resize => "resizing",
-                        },
-                        d.idx
-                    ),
-                    None => "none".to_string(),
-                };
-                let tile_drag_txt = match *ws.tile_drag.read() {
-                    Some(k) => format!("reordering “{}”", k.title()),
-                    None => "none".to_string(),
-                };
-                let rows: Vec<String> = ws
-                    .panels
-                    .read()
-                    .iter()
-                    .map(|p| {
-                        let st = match p.state {
-                            WinState::Floating => "floating",
-                            WinState::Minimized => "minimized",
-                            WinState::Maximized => "maximized",
-                        };
-                        format!(
-                            "{}: x={:.0} y={:.0} w={:.0} h={:.0} z={} ({})",
-                            p.kind.title(),
-                            p.x,
-                            p.y,
-                            p.w,
-                            p.h,
-                            p.z,
-                            st
-                        )
-                    })
-                    .collect();
-                rsx! {
-                    p {
-                        "mode: " b { "{mode_label}" }
-                        " · viewport: " b { "{vw:.0}×{vh:.0}" }
-                        " · is_mobile: " b { "{ws.is_mobile.read()}" }
-                        " · viewport_is_mobile(): " b { "{panel_kit::viewport_is_mobile()}" }
-                    }
-                    p { "drag: " b { "{drag_txt}" } " · tile drag: " b { "{tile_drag_txt}" } }
-                    p { "stored geometry (clamping never rewrites it — shrink the "
-                        "window and these numbers hold; grow it back and panels "
-                        "spring back):" }
-                    ul { class: "status-list",
-                        for r in rows {
-                            li { "{r}" }
-                        }
-                    }
-                    p {
-                        span {
-                            class: "tip-target",
-                            onmousemove: move |e: MouseEvent| {
-                                let c = e.client_coordinates();
-                                tip.set(Some(panel_kit::tip_pos(c.x, c.y, 228.0, 96.0)));
-                            },
-                            onmouseleave: move |_| tip.set(None),
-                            "ⓘ hover me for a tip_pos tooltip"
-                        }
-                        " — try it with the window scrolled so the cursor is "
-                        "near the left or bottom edge."
-                    }
-                    p { "layout persists to localStorage under "
-                        code { "panel_kit_web_demo_workspace" } " — reload to verify." }
-                }
-            }
-            DemoPanel::Help => rsx! {
-                p { b { "This panel started minimized" } " (a dock chip) via "
-                    code { "WinState::Minimized" } " in the default layout." }
-                ul { class: "status-list",
-                    li { "red light: toggle floating⇄tiling" }
-                    li { "yellow light: minimize to the dock" }
-                    li { "green light: maximize / restore" }
-                    li { "floating: drag the header to move, the corner to resize, "
-                         "mousedown to raise (z-order)" }
-                    li { "tiling: drag a header over another panel to reorder" }
-                    li { "narrow the window under 760px for the mobile stack" }
-                }
-            },
-        }
-    };
+    let pointer_move_workspace = workspace.clone();
+    let pointer_up_workspace = workspace.clone();
+    let pointer_cancel_workspace = workspace.clone();
+    let key_workspace = workspace.clone();
+    let wheel_workspace = workspace.clone();
+    let reset_workspace = workspace.clone();
 
     rsx! {
         div {
             style: "width: 100%; height: 100%; position: relative; overflow: hidden;",
-            onmousedown: move |e| e.stop_propagation(),
-            onmousemove: move |e| e.stop_propagation(),
-            onmouseup: move |e| e.stop_propagation(),
+            onpointerdown: move |event: PointerEvent| event.stop_propagation(),
+            onpointermove: move |event: PointerEvent| event.stop_propagation(),
+            onpointerup: move |event: PointerEvent| event.stop_propagation(),
+            onpointercancel: move |event: PointerEvent| event.stop_propagation(),
             style { {DEMO_CSS} }
             div {
-                class: ws.root_class(),
+                class: "{root_class}",
                 tabindex: "0",
-                onmousemove: move |e: MouseEvent| ws.handle_mouse_move(&e),
-                onmouseup: move |_| ws.handle_mouse_up(),
-                onkeydown: move |e: KeyboardEvent| {
-                    if panel_kit::is_editing() {
-                        return;
-                    }
-                    if let dioxus::events::Key::Character(c) = e.key() {
-                        if c == "t" {
-                            let mut mode = ws.mode;
-                            let next = if *mode.read() == Mode::Tiling {
-                                Mode::Floating
-                            } else {
-                                Mode::Tiling
-                            };
-                            mode.set(next);
-                        }
-                    }
+                onpointermove: move |event: PointerEvent| {
+                    workspace::events::handle_pointer_move(&pointer_move_workspace, &event)
+                },
+                onpointerup: move |event: PointerEvent| {
+                    workspace::events::handle_pointer_up(&pointer_up_workspace, &event)
+                },
+                onpointercancel: move |event: PointerEvent| {
+                    workspace::events::handle_pointer_up(&pointer_cancel_workspace, &event)
+                },
+                onkeydown: move |event: KeyboardEvent| {
+                    event.stop_propagation();
+                    workspace::events::handle_key(&key_workspace, &event);
                 },
                 header { class: "topbar",
                     h1 { "panel-kit workspace demo" }
                     span { class: "hint", "mode: {mode_label} · press t to toggle · drag, resize, traffic lights" }
                     button {
-                        onclick: move |_| {
-                            if let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
-                                let _ = storage.remove_item("panel_kit_web_demo_workspace");
-                            }
-                            let mut panels = ws.panels;
-                            panels.set(demo_default_layout());
-                            let mut mode = ws.mode;
-                            mode.set(Mode::Floating);
-                        },
+                        onclick: move |_| workspace::state::reset_workspace(&reset_workspace),
                         "reset layout"
                     }
                 }
-                {ws.render(body)}
-                {ws.dock()}
+                div {
+                    class: "{workspace_class}",
+                    style: "{workspace_style}",
+                    onwheel: move |event: WheelEvent| {
+                        event.stop_propagation();
+                        workspace::events::handle_wheel(&wheel_workspace, &event);
+                    },
+                    for panel in frame.panels.iter().copied() {
+                        if let Some(meta) = workspace.catalog.get(panel.key) {
+                            {
+                                let panel_class = format!("panel-{}", meta.slug);
+                                let maximized = matches!(panel.placement, Placement::Maximized);
+                                panel_kit::widgets::panel::panel_shell(
+                                    panel,
+                                    Some(&panel_class),
+                                    rsx! {
+                                        {panel_kit::widgets::panel::panel_chrome_with_events(
+                                            panel,
+                                            meta,
+                                            emit,
+                                            Some(panel_kit::widgets::panel::traffic_lights(panel, emit)),
+                                            None,
+                                        )}
+                                        {panel_kit::widgets::panel::panel_body(demo_panel_body(
+                                            panel.key,
+                                            maximized,
+                                            &snapshot,
+                                            mode_label,
+                                            is_mobile,
+                                            tip,
+                                        ))}
+                                        {panel_kit::widgets::panel::resize_grip(panel, emit)}
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                {panel_kit::widgets::dock::dock(frame.dock, &workspace.catalog, emit, None)}
                 if let Some((x, y)) = tip() {
                     div { class: "tip-overlay", style: "left:{x}px; top:{y}px;",
                         b { "tip_pos in action" }
@@ -2196,6 +2175,119 @@ fn panel_kit_web_demo() -> Element {
                 }
             }
         }
+    }
+}
+
+fn demo_panel_body(
+    kind: DemoPanel,
+    maximized: bool,
+    snapshot: &panel_kit_core::reducer::Snapshot<DemoPanel>,
+    mode_label: &'static str,
+    is_mobile: bool,
+    mut tip: Signal<Option<(f64, f64)>>,
+) -> Element {
+    match kind {
+        DemoPanel::Notes => rsx! {
+            p { "Type below, then press " b { "t" } " — the mode shortcut is "
+                "suppressed by the " code { "is_editing()" } " gate while this "
+                "textarea has focus. Click elsewhere and " b { "t" } " toggles "
+                "tiling⇄floating." }
+            textarea { class: "notes", placeholder: "type here…" }
+        },
+        DemoPanel::Preview => rsx! {
+            p { "The body renderer receives " code { "(kind, maximized)" } "." }
+            p { "This panel is currently "
+                b { if maximized { "maximized" } else { "not maximized" } }
+                " — press the green light to flip it." }
+        },
+        DemoPanel::Status => {
+            let viewport = snapshot.viewport;
+            let drag_txt = match snapshot.drag {
+                Some(drag) => format!(
+                    "{} panel #{}",
+                    match drag.kind {
+                        panel_kit_core::DragKind::Move => "moving",
+                        panel_kit_core::DragKind::Resize => "resizing",
+                    },
+                    drag.idx
+                ),
+                None => "none".to_string(),
+            };
+            let tile_drag_txt = match snapshot.tile_drag {
+                Some(key) => format!("reordering “{}”", key.title()),
+                None => "none".to_string(),
+            };
+            let rows = snapshot
+                .panels
+                .iter()
+                .map(|panel| {
+                    let state = match panel.state {
+                        WinState::Floating => "floating",
+                        WinState::Minimized => "minimized",
+                        WinState::Maximized => "maximized",
+                    };
+                    format!(
+                        "{}: x={:.0} y={:.0} w={:.0} h={:.0} z={} ({})",
+                        panel.kind.title(),
+                        panel.x,
+                        panel.y,
+                        panel.w,
+                        panel.h,
+                        panel.z,
+                        state
+                    )
+                })
+                .collect::<Vec<_>>();
+            rsx! {
+                p {
+                    "mode: " b { "{mode_label}" }
+                    " · viewport: " b { "{viewport.width:.0}×{viewport.height:.0}" }
+                    " · compact surface: " b { "{is_mobile}" }
+                }
+                p { "drag: " b { "{drag_txt}" } " · tile drag: " b { "{tile_drag_txt}" } }
+                p { "stored geometry (clamping never rewrites it — shrink the "
+                    "window and these numbers hold; grow it back and panels "
+                    "spring back):" }
+                ul { class: "status-list",
+                    for row in rows {
+                        li { "{row}" }
+                    }
+                }
+                p {
+                    span {
+                        class: "tip-target",
+                        onmousemove: move |event: MouseEvent| {
+                            let coordinates = event.client_coordinates();
+                            tip.set(Some(panel_kit::tip_pos(
+                                coordinates.x,
+                                coordinates.y,
+                                228.0,
+                                96.0,
+                            )));
+                        },
+                        onmouseleave: move |_| tip.set(None),
+                        "ⓘ hover me for a tip_pos tooltip"
+                    }
+                    " — try it with the window scrolled so the cursor is "
+                    "near the left or bottom edge."
+                }
+                p { "layout persists to localStorage under "
+                    code { "panel_kit_web_demo_workspace" } " — reload to verify." }
+            }
+        }
+        DemoPanel::Help => rsx! {
+            p { b { "This panel started minimized" } " (a dock chip) via "
+                code { "WinState::Minimized" } " in the default layout." }
+            ul { class: "status-list",
+                li { "red light: toggle floating⇄tiling" }
+                li { "yellow light: minimize to the dock" }
+                li { "green light: maximize / restore" }
+                li { "floating: drag the header to move, the corner to resize, "
+                     "mousedown to raise (z-order)" }
+                li { "tiling: drag a header over another panel to reorder" }
+                li { "narrow the window under 760px for the mobile stack" }
+            }
+        },
     }
 }
 
@@ -2257,7 +2349,7 @@ const APP_CSS: &str = r#"
   overflow: hidden;
 }
 
-.ws-root:not(.mobile) .panel-featured .panel-body {
+.ws-root:not(.compact) .panel-featured .panel-body {
   display: flex;
   overflow: hidden;
   padding: 1.55rem .4rem .4rem;
@@ -2274,11 +2366,11 @@ const APP_CSS: &str = r#"
 }
 
 /* Mobile: let notebook/demo panels expand */
-.mobile .panel-kinematics-notebook .panel-body,
-.mobile .panel-inverse-kinematics-notebook .panel-body,
-.mobile .panel-wigglystuff-notebook .panel-body,
-.mobile .panel-flocking-demo .panel-body,
-.mobile .panel-pipedream-demo .panel-body {
+.compact .panel-kinematics-notebook .panel-body,
+.compact .panel-inverse-kinematics-notebook .panel-body,
+.compact .panel-wigglystuff-notebook .panel-body,
+.compact .panel-flocking-demo .panel-body,
+.compact .panel-pipedream-demo .panel-body {
   max-height: none;
   min-height: 60vh;
 }

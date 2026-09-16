@@ -8,6 +8,7 @@ description = "Dioxus web frontend for the info site — panel-kit workspace, co
 [dependencies]
 dioxus = { version = "0.6", features = ["web"] }
 panel-kit = { workspace = true }
+panel-kit-core = { workspace = true }
 info-core = { workspace = true }
 serde = { workspace = true }
 web-sys = { version = "0.3", features = ["Window", "Storage"] }

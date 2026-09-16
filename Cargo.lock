@@ -3376,6 +3376,7 @@ dependencies = [
  "info-core",
  "js-sys",
  "panel-kit",
+ "panel-kit-core",
  "serde",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -4554,13 +4555,14 @@ dependencies = [
 
 [[package]]
 name = "panel-kit"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "dioxus",
  "gloo-storage",
  "js-sys",
  "panel-kit-core",
  "serde",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -4568,17 +4570,20 @@ dependencies = [
 
 [[package]]
 name = "panel-kit-core"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]
 name = "panel-kit-tui"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
+ "crossterm",
  "panel-kit-core",
  "ratatui",
+ "ratzilla",
  "serde",
  "serde_json",
 ]
@@ -5396,6 +5401,7 @@ version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
 dependencies = [
+ "indexmap",
  "itoa",
  "memchr",
  "serde",

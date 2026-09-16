@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     
 <script type="module">
-import init, * as bindings from '/wasm/panel-kit-tui/panel-kit-tui-631e0bc23f37def5.js';
-const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/panel-kit-tui-631e0bc23f37def5_bg.wasm' });
+import init, * as bindings from '/wasm/panel-kit-tui/info-tui-2c813c660cd907cf.js';
+const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/info-tui-2c813c660cd907cf_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -15,32 +15,18 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
-    <title>panel-kit TUI browser canary</title>
+    <title>olive casazza — terminal</title>
     <style>
       :root {
-        background: #121e2a;
+        background: #000;
         color: #d1d5db;
         font-family: "Fira Code", "JetBrains Mono", monospace;
         font-size: 14px;
         cursor: default;
       }
-      * {
-        box-sizing: border-box;
-        user-select: none;
-      }
-      html,
-      body {
-        width: 100%;
-        height: 100%;
-        margin: 0;
-        overflow: hidden;
-      }
-      body {
-        display: block;
-        background: #000;
-        cursor: default;
-      }
-      #panel-kit-tui {
+      * { box-sizing: border-box; user-select: none; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #000; }
+      #info-tui {
         width: 100vw;
         height: 100vh;
         height: 100dvh;
@@ -48,39 +34,20 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         cursor: default;
         user-select: none;
       }
-      #panel-kit-tui canvas {
-        display: block;
-        width: 100%;
-        height: 100%;
-        outline: none;
-        cursor: default;
-        user-select: none;
-      }
-      #panel-kit-tui_ratzilla_grid,
-      #grid {
-        width: 100%;
-        height: 100%;
-        cursor: default;
-        user-select: none;
-      }
-      pre {
-        margin: 0;
-        padding: 0;
-        border: 0;
-        font-family: "Fira Code", "JetBrains Mono", monospace;
-        font-size: 1rem;
-        line-height: normal;
-        cursor: default;
-        user-select: none;
-      }
-      span {
-        line-height: normal;
-        cursor: default;
-        user-select: none;
-      }
+      #info-tui_ratzilla_grid, #grid { width: 100%; height: 100%; }
+      pre { margin: 0; padding: 0; border: 0; font-family: inherit; font-size: 1rem; line-height: normal; }
+      span { line-height: normal; }
     </style>
-  <link rel="modulepreload" href="/wasm/panel-kit-tui/panel-kit-tui-631e0bc23f37def5.js" crossorigin="anonymous" integrity="sha384-9OCmDX3OiNSpSfZcWOG5K8lDWo65xUO0Zt36G1woVLF1kosDU+hcGiJZde04ECMn"><link rel="preload" href="/wasm/panel-kit-tui/panel-kit-tui-631e0bc23f37def5_bg.wasm" crossorigin="anonymous" integrity="sha384-x/1HnQYCHfXkTjaVUcdP+itTweuaSHaQbgVyer+2RVhcB+cFTZ43JptFbt/CagMX" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/wasm/panel-kit-tui/info-tui-2c813c660cd907cf.js" crossorigin="anonymous" integrity="sha384-Wf+wvBcEfzNV/5t6uta0+WY0f8c67itvbpjOPnGLzjOI5F8VY0ijgztsWxCSyquh"><link rel="preload" href="/wasm/panel-kit-tui/info-tui-2c813c660cd907cf_bg.wasm" crossorigin="anonymous" integrity="sha384-ts8IDW+CgDy3G5RkEbWq1hc9aG2QbS0APdX1gnCronrYVL+DhmEsdCNQI9gLxYfy" as="fetch" type="application/wasm"></head>
   <body>
-    <main id="panel-kit-tui" aria-label="panel-kit TUI browser canary"></main>
+    <main id="info-tui" aria-label="info terminal"></main>
+    <script>
+      const notifyResize = () => requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      window.visualViewport?.addEventListener("resize", notifyResize);
+      window.addEventListener("orientationchange", notifyResize);
+      window.addEventListener("TrunkApplicationStarted", notifyResize);
+    </script>
   </body>
 </html>
