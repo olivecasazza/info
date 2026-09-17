@@ -315,7 +315,7 @@ fn App() -> Element {
                     if let Some(meta) = workspace.catalog.get(panel.key) {
                         {
                             let panel_class = format!("panel-{}", meta.slug);
-                            panel_kit::widgets::panel::panel_shell(
+                            panel_kit::widgets::panel::panel_shell_with_events(
                                 panel,
                                 Some(&panel_class),
                                 rsx! {
@@ -332,6 +332,7 @@ fn App() -> Element {
                                     ))}
                                     {panel_kit::widgets::panel::resize_grip(panel, emit)}
                                 },
+                                emit,
                             )
                         }
                     }
@@ -407,12 +408,18 @@ fn current_path_resources() -> &'static [Panel] {
 fn resource_panel_default(kind: Panel, index: usize, total: usize, z: i32) -> PanelWin<Panel> {
     let total = total.max(1);
     let primary = index == 0;
+    // Keep the right-hand project column's row heights aligned with the
+    // left-hand info/projects column: the left column is info (2 rows) over
+    // projects (1 row), so project resources stack into the same 3-row band
+    // one column over. A lone random project takes the full column height;
+    // the featured resource takes the top two rows and any additional
+    // resources share the bottom row.
     let (tile_w, tile_h) = if total == 1 {
-        (4, 3)
-    } else if primary {
         (2, 3)
-    } else {
+    } else if primary {
         (2, 2)
+    } else {
+        (2, 1)
     };
 
     PanelWin {
@@ -2139,7 +2146,7 @@ fn panel_kit_web_demo() -> Element {
                             {
                                 let panel_class = format!("panel-{}", meta.slug);
                                 let maximized = matches!(panel.placement, Placement::Maximized);
-                                panel_kit::widgets::panel::panel_shell(
+                                panel_kit::widgets::panel::panel_shell_with_events(
                                     panel,
                                     Some(&panel_class),
                                     rsx! {
@@ -2160,6 +2167,7 @@ fn panel_kit_web_demo() -> Element {
                                         ))}
                                         {panel_kit::widgets::panel::resize_grip(panel, emit)}
                                     },
+                                    emit,
                                 )
                             }
                         }
