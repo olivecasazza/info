@@ -234,7 +234,7 @@ fn default_layout() -> Vec<PanelWin<Panel>> {
     let mut b = LayoutBuilder::new();
     vec![
         b.at(Panel::Info, 16.0, 16.0, 360.0, 360.0)
-            .with_tile(2, 2),
+            .with_tile(2, 1),
         b.at(Panel::Projects, 16.0, 392.0, 360.0, 260.0)
             .with_tile(2, 1),
     ]
@@ -415,9 +415,9 @@ fn resource_panel_default(kind: Panel, index: usize, total: usize, z: i32) -> Pa
     // the featured resource takes the top two rows and any additional
     // resources share the bottom row.
     let (tile_w, tile_h) = if total == 1 {
-        (2, 3)
-    } else if primary {
         (2, 2)
+    } else if primary {
+        (2, 1)
     } else {
         (2, 1)
     };
@@ -2311,6 +2311,9 @@ fn panel_kit_tui_demo() -> Element {
                 src: "/wasm/panel-kit-tui/browser_tui.html",
                 class: "featured-iframe panel-kit-tui-frame",
                 title: "panel-kit terminal demo",
+                onload: |_| {
+                    let _ = web_sys::window().and_then(|w| w.dispatch_event(&web_sys::Event::new("resize").unwrap()).ok());
+                },
             }
         }
     }
@@ -2791,7 +2794,7 @@ const APP_CSS: &str = r#"
 }
 .spot-gym-frame {
   width: 100%;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 16 / 9;
   max-height: 70vh;
   border: 1px solid var(--line);
   border-radius: 4px;
