@@ -4555,7 +4555,7 @@ dependencies = [
 
 [[package]]
 name = "panel-kit"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "dioxus",
  "gloo-storage",
@@ -4570,7 +4570,7 @@ dependencies = [
 
 [[package]]
 name = "panel-kit-core"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4578,7 +4578,7 @@ dependencies = [
 
 [[package]]
 name = "panel-kit-tui"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "crossterm",
  "panel-kit-core",
