@@ -3,15 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-    
-<script type="module">
-import init, * as bindings from '/wasm/panel-kit-tui/panel-kit-tui-v2.js';
-const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/panel-kit-tui-v2_bg.wasm' });
-
-window.wasmBindings = bindings;
-
-dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
-</script>
     <title>panel-kit TUI browser canary</title>
     <style>
       :root {
@@ -53,8 +44,16 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         user-select: none;
       }
     </style>
-  <link rel="modulepreload" href="/wasm/panel-kit-tui/panel-kit-tui-v2.js" crossorigin="anonymous"><link rel="preload" href="/wasm/panel-kit-tui/panel-kit-tui-v2_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
+    <link rel="modulepreload" href="/wasm/panel-kit-tui/panel-kit-tui-v2.js" crossorigin="anonymous">
+    <link rel="preload" href="/wasm/panel-kit-tui/panel-kit-tui-v2_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm">
+  </head>
   <body>
     <main id="panel-kit-tui" aria-label="panel-kit TUI browser canary"></main>
+    <script type="module">
+      import init, * as bindings from '/wasm/panel-kit-tui/panel-kit-tui-v2.js';
+      const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/panel-kit-tui-v2_bg.wasm' });
+      window.wasmBindings = bindings;
+      dispatchEvent(new CustomEvent("TrunkApplicationStarted", { detail: { wasm } }));
+    </script>
   </body>
 </html>

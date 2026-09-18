@@ -435,3 +435,4 @@ fn background_lines(theme: &ResolvedTuiTheme) -> Vec<Line<'static>> {
     }
     output
 }
+
