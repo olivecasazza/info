@@ -2368,6 +2368,7 @@ const APP_CSS: &str = r#"
 
 .panel-flocking-demo .panel-body,
 .panel-pipedream-demo .panel-body,
+.panel-panel-kit-tui-demo .panel-body,
 .panel-kinematics-notebook .panel-body,
 .panel-inverse-kinematics-notebook .panel-body,
 .panel-wigglystuff-notebook .panel-body {
