@@ -2360,6 +2360,15 @@ const APP_CSS: &str = r#"
   overflow: hidden;
 }
 
+/* Embedded TUI demos need a real flex sizing context. Without one the
+   percentage-height wrapper is content-sized by .panel-body, so its iframe
+   can collapse or overflow when the panel is resized. */
+.panel-panel-kit-terminal-demo .panel-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+}
+
 .ws-root:not(.compact) .panel-featured .panel-body {
   display: flex;
   overflow: hidden;
@@ -2433,8 +2442,12 @@ const APP_CSS: &str = r#"
 .panel-kit-demo-wrapper {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 .panel-kit-info-overlay {
   padding: 0.75rem 1rem;
@@ -2453,7 +2466,15 @@ const APP_CSS: &str = r#"
   line-height: 1.4;
 }
 .panel-kit-info-overlay .dim { color: var(--dim); margin: 0; }
-.panel-kit-tui-frame { flex: 1; min-height: 0; }
+.panel-kit-tui-frame {
+  display: block;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+}
 
 .featured-info {
   padding: 1rem;
