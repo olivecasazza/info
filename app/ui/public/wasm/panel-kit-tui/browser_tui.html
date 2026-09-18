@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     
 <script type="module">
-import init, * as bindings from '/wasm/panel-kit-tui/info-tui-2c813c660cd907cf.js';
-const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/info-tui-2c813c660cd907cf_bg.wasm' });
-
+import init, * as bindings from '/wasm/panel-kit-tui/info-tui-v2.js';
+const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/info-tui-v2_bg.wasm' });
 
 window.wasmBindings = bindings;
 
@@ -37,7 +36,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       pre { margin: 0; padding: 0; border: 0; font-family: inherit; font-size: 1rem; line-height: normal; }
       span { line-height: normal; }
     </style>
-  <link rel="modulepreload" href="/wasm/panel-kit-tui/info-tui-2c813c660cd907cf.js" crossorigin="anonymous" integrity="sha384-Wf+wvBcEfzNV/5t6uta0+WY0f8c67itvbpjOPnGLzjOI5F8VY0ijgztsWxCSyquh"><link rel="preload" href="/wasm/panel-kit-tui/info-tui-2c813c660cd907cf_bg.wasm" crossorigin="anonymous" integrity="sha384-ts8IDW+CgDy3G5RkEbWq1hc9aG2QbS0APdX1gnCronrYVL+DhmEsdCNQI9gLxYfy" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/wasm/panel-kit-tui/info-tui-v2.js" crossorigin="anonymous" integrity="sha384-ouQoawqP7NpwgtK7mmYb9UHr/0Ag0weouNt7/nO08JR0K/tymYAiKxSGcmF6n7yP"><link rel="preload" href="/wasm/panel-kit-tui/info-tui-v2_bg.wasm" crossorigin="anonymous" integrity="sha384-ESMpv1/vkiU8ct4dmWND0nJO/uSWJvvHLCs/5yxD/EnqNW4fRuqrpzYR+j3krUCv" as="fetch" type="application/wasm"></head>
   <body>
     <main id="info-tui" aria-label="info terminal"></main>
     <script>
