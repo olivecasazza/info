@@ -68,11 +68,11 @@
     "panel-kit": {
       "flake": false,
       "locked": {
-        "lastModified": 1789619199,
-        "narHash": "sha256-CgwnUIA9FfQhRCi4itT7lSBQixvwyRqoj+z/zSzYd8g=",
+        "lastModified": 1789751893,
+        "narHash": "sha256-5a/I1rqr4kGqZxgziWOWo9PCNhbtw0jbDSNoIdXDtBk=",
         "owner": "olivecasazza",
         "repo": "panel-kit",
-        "rev": "4aad83c86285c83706e380c054a2b317ff8c6f69",
+        "rev": "09ec08327ccfb2481a2ab702d59d8738c46401de",
         "type": "github"
       },
       "original": {
