@@ -240,7 +240,7 @@ fn default_layout() -> Vec<PanelWin<Panel>> {
     ]
 }
 
-const LAYOUT_KEY: &str = "info_layout_v10";
+const LAYOUT_KEY: &str = "info_layout_v12";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App
