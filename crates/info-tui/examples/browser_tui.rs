@@ -23,7 +23,9 @@ mod browser {
     use panel_kit_tui::input::{ratzilla_key_chord, RatzillaPointerTranslator};
     use ratzilla::event::{KeyCode, KeyEvent, MouseEvent};
     use ratzilla::{
-        backend::cursor::CursorShape, backend::dom::DomBackendOptions, DomBackend, WebRenderer,
+        backend::cursor::CursorShape,
+        backend::webgl2::{FontAtlasConfig, WebGl2Backend, WebGl2BackendOptions},
+        WebRenderer,
     };
 
     struct Ui {
@@ -73,10 +75,15 @@ mod browser {
 
     pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-        let backend = DomBackend::new_with_options(DomBackendOptions::new(
-            Some("info-tui".into()),
-            CursorShape::None,
-        ))?;
+        let backend = WebGl2Backend::new_with_options(
+            WebGl2BackendOptions::new()
+                .grid_id("info-tui")
+                .cursor_shape(CursorShape::None)
+                .font_atlas_config(FontAtlasConfig::dynamic(
+                    &["Fira Code", "JetBrains Mono", "monospace"],
+                    14.0,
+                )),
+        )?;
         let mut terminal = ratatui::Terminal::new(backend)?;
         let ui = Rc::new(RefCell::new(Ui::new()));
 

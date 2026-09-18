@@ -32,11 +32,9 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         cursor: default;
         user-select: none;
       }
-      #info-tui_ratzilla_grid, #grid { width: 100%; height: 100%; }
-      pre { margin: 0; padding: 0; border: 0; font-family: inherit; font-size: 1rem; line-height: normal; }
-      span { line-height: normal; }
+      #info-tui canvas { display: block; width: 100%; height: 100%; outline: none; }
     </style>
-  <link rel="modulepreload" href="/wasm/panel-kit-tui/info-tui-v2.js" crossorigin="anonymous" integrity="sha384-ouQoawqP7NpwgtK7mmYb9UHr/0Ag0weouNt7/nO08JR0K/tymYAiKxSGcmF6n7yP"><link rel="preload" href="/wasm/panel-kit-tui/info-tui-v2_bg.wasm" crossorigin="anonymous" integrity="sha384-ESMpv1/vkiU8ct4dmWND0nJO/uSWJvvHLCs/5yxD/EnqNW4fRuqrpzYR+j3krUCv" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/wasm/panel-kit-tui/info-tui-v2.js" crossorigin="anonymous" integrity="sha384-ozfMHcWpl4mYvLG/31xATb301YWVyZmNmS8OBJHZkZcs0rCBth/us0d8e34dmlks"><link rel="preload" href="/wasm/panel-kit-tui/info-tui-v2_bg.wasm" crossorigin="anonymous" integrity="sha384-CitxizzpUx40yVL//pMcd2xqb2qYKvPkdB+yzW+fa5yBZyZS/wOMT+4GJbjam7SM" as="fetch" type="application/wasm"></head>
   <body>
     <main id="info-tui" aria-label="info terminal"></main>
     <script>
