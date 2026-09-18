@@ -2444,6 +2444,7 @@ const APP_CSS: &str = r#"
   flex-direction: column;
   position: absolute;
   inset: 0;
+  padding-top: var(--panel-head-h, 22px);
   width: 100%;
   height: 100%;
   min-width: 0;
