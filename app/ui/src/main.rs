@@ -2527,9 +2527,10 @@ const APP_CSS: &str = r#"
 
 /* Project detail pages */
 .project-article {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 2px 4px 18px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px 12px 18px;
   font-size: 13px;
   line-height: 1.58;
 }
