@@ -44,14 +44,14 @@
         user-select: none;
       }
     </style>
-    <link rel="modulepreload" href="/wasm/panel-kit-tui/panel-kit-tui-adbfb68.js" crossorigin="anonymous">
-    <link rel="preload" href="/wasm/panel-kit-tui/panel-kit-tui-adbfb68_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm">
+    <link rel="modulepreload" href="/wasm/panel-kit-tui/panel-kit-tui-0e52a3f.js" crossorigin="anonymous">
+    <link rel="preload" href="/wasm/panel-kit-tui/panel-kit-tui-0e52a3f_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm">
   </head>
   <body>
     <main id="panel-kit-tui" aria-label="panel-kit TUI browser canary"></main>
     <script type="module">
-      import init, * as bindings from '/wasm/panel-kit-tui/panel-kit-tui-adbfb68.js';
-      const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/panel-kit-tui-adbfb68_bg.wasm' });
+      import init, * as bindings from '/wasm/panel-kit-tui/panel-kit-tui-0e52a3f.js';
+      const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/panel-kit-tui-0e52a3f_bg.wasm' });
       window.wasmBindings = bindings;
       dispatchEvent(new CustomEvent("TrunkApplicationStarted", { detail: { wasm } }));
     </script>
