@@ -102,6 +102,11 @@ pub(crate) fn reduce_workspace_event<K: PanelKind>(
     {
         log_layout_error("save layout", workspace.storage_key, &error);
     }
+    if changed {
+        if let Some(window) = web_sys::window() {
+            let _ = window.dispatch_event(&web_sys::Event::new("resize").unwrap());
+        }
+    }
 
     changed
 }

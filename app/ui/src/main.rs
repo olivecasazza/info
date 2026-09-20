@@ -1251,26 +1251,38 @@ fn featured_body() -> Element {
 
 fn flock_demo() -> Element {
     rsx! {
-        div { class: "featured-demo",
+        div {
+            key: "flock-demo-container",
+            class: "featured-demo",
             BevyCanvas {
+                key: "flock-canvas-element",
                 module_path: "/wasm/flock/flock.js".to_string(),
                 canvas_id: "flock-canvas".to_string(),
                 loading_text: "loading flock...".to_string(),
             }
-            FlockControls { canvas_id: "flock-canvas".to_string() }
+            FlockControls {
+                key: "flock-controls-element",
+                canvas_id: "flock-canvas".to_string(),
+            }
         }
     }
 }
 
 fn pipedream_demo() -> Element {
     rsx! {
-        div { class: "featured-demo",
+        div {
+            key: "pipedream-demo-container",
+            class: "featured-demo",
             BevyCanvas {
+                key: "pipedream-canvas-element",
                 module_path: "/wasm/pipedream/pipedream.js".to_string(),
                 canvas_id: "pipedream-canvas".to_string(),
                 loading_text: "loading conduit...".to_string(),
             }
-            PipedreamControls { canvas_id: "pipedream-canvas".to_string() }
+            PipedreamControls {
+                key: "pipedream-controls-element",
+                canvas_id: "pipedream-canvas".to_string(),
+            }
         }
     }
 }
