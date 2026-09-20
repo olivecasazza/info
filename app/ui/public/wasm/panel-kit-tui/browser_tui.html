@@ -6,26 +6,39 @@
     <title>panel-kit TUI browser canary</title>
     <style>
       :root {
-        background: #121e2a;
-        color: #d1d5db;
-        font-family: "Fira Code", "JetBrains Mono", monospace;
-        font-size: 14px;
+        --bg: #0a0a0a;
+        --panel: #0d0d0d;
+        --fg: #ededed;
+        --dim: #7a7a7a;
+        --line: #262626;
+        --line2: #5f5f5f;
+        --accent: #5ef38c;
+        --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--mono);
+        font-size: 13px;
         cursor: default;
       }
       * {
         box-sizing: border-box;
         user-select: none;
+        scrollbar-width: thin;
+        scrollbar-color: var(--line2) transparent;
       }
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-thumb { background: var(--line2); }
+      ::-webkit-scrollbar-track { background: transparent; }
       html,
       body {
         width: 100%;
         height: 100%;
         margin: 0;
         overflow: hidden;
+        background: var(--bg);
       }
       body {
         display: block;
-        background: #000;
         cursor: default;
       }
       #panel-kit-tui {
@@ -42,16 +55,17 @@
         outline: none;
         cursor: default;
         user-select: none;
+        background: var(--bg);
       }
     </style>
-    <link rel="modulepreload" href="/wasm/panel-kit-tui/panel-kit-tui-513b9b9.js" crossorigin="anonymous">
-    <link rel="preload" href="/wasm/panel-kit-tui/panel-kit-tui-513b9b9_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm">
+    <link rel="modulepreload" href="/wasm/panel-kit-tui/panel-kit-tui-ca71f33.js" crossorigin="anonymous">
+    <link rel="preload" href="/wasm/panel-kit-tui/panel-kit-tui-ca71f33_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm">
   </head>
   <body>
     <main id="panel-kit-tui" aria-label="panel-kit TUI browser canary"></main>
     <script type="module">
-      import init, * as bindings from '/wasm/panel-kit-tui/panel-kit-tui-513b9b9.js';
-      const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/panel-kit-tui-513b9b9_bg.wasm' });
+      import init, * as bindings from '/wasm/panel-kit-tui/panel-kit-tui-ca71f33.js';
+      const wasm = await init({ module_or_path: '/wasm/panel-kit-tui/panel-kit-tui-ca71f33_bg.wasm' });
       window.wasmBindings = bindings;
       dispatchEvent(new CustomEvent("TrunkApplicationStarted", { detail: { wasm } }));
     </script>

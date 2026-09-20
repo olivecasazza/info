@@ -298,7 +298,7 @@ impl App {
             clamp: &Clamp::CELLS,
             command_step: CommandStep::CELLS,
             tile: &TileMetrics::CELLS,
-            snap: SnapPolicy::default(),
+            snap: SnapPolicy::CELLS,
         };
         let reduction = reduce(&mut self.snapshot, event, context);
         if let Some(store) = &self.store {
