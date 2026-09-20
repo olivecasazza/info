@@ -285,6 +285,45 @@ fn App() -> Element {
     let pointer_cancel_workspace = workspace.clone();
     let key_workspace = workspace.clone();
     let wheel_workspace = workspace.clone();
+    let visible = frame.panels.iter().copied().map(|p| (p, false));
+    let hidden = snapshot.panels.iter().copied().enumerate()
+        .filter(|(idx, p)| {
+            (p.kind == Panel::Projects || p.kind == Panel::Featured)
+                && frame.panels.iter().all(|vis| vis.source_index != *idx)
+        })
+        .map(|(idx, p)| {
+            let region = panel_kit_core::Region::new(p.x, p.y, p.w, p.h);
+            (
+                panel_kit_core::frame::PanelProjection {
+                    source_index: idx,
+                    key: p.kind,
+                    region,
+                    placement: panel_kit_core::frame::Placement::Floating,
+                    z: p.z,
+                    state: p.state,
+                    focused: snapshot.focused == Some(p.kind),
+                    pointer_dragging: snapshot.drag.map(|d| d.idx) == Some(idx),
+                    tile_dragging: snapshot.tile_drag == Some(p.kind),
+                    chrome: panel_kit_core::frame::PanelChromeProjection {
+                        outer: region,
+                        body: region,
+                        header_hit: panel_kit_core::Region::default(),
+                        mode_hit: None,
+                        minimize_hit: None,
+                        maximize_hit: None,
+                        resize_hit: None,
+                    },
+                },
+                true,
+            )
+        });
+
+    let all_panels: Vec<_> = visible
+        .chain(hidden)
+        .filter_map(|(panel, hidden)| {
+            workspace.catalog.get(panel.key).map(|meta| (panel, meta, hidden))
+        })
+        .collect();
 
     rsx! {
         style { {CSS} }
@@ -311,33 +350,32 @@ fn App() -> Element {
                 onwheel: move |event: WheelEvent| {
                     workspace::events::handle_wheel(&wheel_workspace, &event)
                 },
-                for panel in frame.panels.iter().copied() {
-                    if let Some(meta) = workspace.catalog.get(panel.key) {
-                        div {
-                            key: "{meta.slug}",
-                            class: "pk-keepalive-slot",
-                            {
-                                let panel_class = format!("panel-{}", meta.slug);
-                                panel_kit::widgets::panel::panel_shell_with_events(
-                                    panel,
-                                    Some(&panel_class),
-                                    rsx! {
-                                        {panel_kit::widgets::panel::panel_chrome_with_events(
-                                            panel,
-                                            meta,
-                                            emit,
-                                            Some(panel_kit::widgets::panel::traffic_lights(panel, emit)),
-                                            None,
-                                        )}
-                                        {panel_kit::widgets::panel::panel_body(render_panel_body(
-                                            panel.key,
-                                            &workspace,
-                                        ))}
-                                        {panel_kit::widgets::panel::resize_grip(panel, emit)}
-                                    },
-                                    emit,
-                                )
-                            }
+                for (panel, meta, hidden) in all_panels {
+                    div {
+                        key: "{meta.slug}",
+                        class: if hidden { "pk-keepalive-slot pk-keepalive-hidden" } else { "pk-keepalive-slot" },
+                        style: if hidden { "display: none;" } else { "" },
+                        {
+                            let panel_class = format!("panel-{}", meta.slug);
+                            panel_kit::widgets::panel::panel_shell_with_events(
+                                panel,
+                                Some(&panel_class),
+                                rsx! {
+                                    {panel_kit::widgets::panel::panel_chrome_with_events(
+                                        panel,
+                                        meta,
+                                        emit,
+                                        Some(panel_kit::widgets::panel::traffic_lights(panel, emit)),
+                                        None,
+                                    )}
+                                    {panel_kit::widgets::panel::panel_body(render_panel_body(
+                                        panel.key,
+                                        &workspace,
+                                    ))}
+                                    {panel_kit::widgets::panel::resize_grip(panel, emit)}
+                                },
+                                emit,
+                            )
                         }
                     }
                 }
