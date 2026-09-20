@@ -313,27 +313,31 @@ fn App() -> Element {
                 },
                 for panel in frame.panels.iter().copied() {
                     if let Some(meta) = workspace.catalog.get(panel.key) {
-                        {
-                            let panel_class = format!("panel-{}", meta.slug);
-                            panel_kit::widgets::panel::panel_shell_with_events(
-                                panel,
-                                Some(&panel_class),
-                                rsx! {
-                                    {panel_kit::widgets::panel::panel_chrome_with_events(
-                                        panel,
-                                        meta,
-                                        emit,
-                                        Some(panel_kit::widgets::panel::traffic_lights(panel, emit)),
-                                        None,
-                                    )}
-                                    {panel_kit::widgets::panel::panel_body(render_panel_body(
-                                        panel.key,
-                                        &workspace,
-                                    ))}
-                                    {panel_kit::widgets::panel::resize_grip(panel, emit)}
-                                },
-                                emit,
-                            )
+                        div {
+                            key: "{meta.slug}",
+                            class: "pk-keepalive-slot",
+                            {
+                                let panel_class = format!("panel-{}", meta.slug);
+                                panel_kit::widgets::panel::panel_shell_with_events(
+                                    panel,
+                                    Some(&panel_class),
+                                    rsx! {
+                                        {panel_kit::widgets::panel::panel_chrome_with_events(
+                                            panel,
+                                            meta,
+                                            emit,
+                                            Some(panel_kit::widgets::panel::traffic_lights(panel, emit)),
+                                            None,
+                                        )}
+                                        {panel_kit::widgets::panel::panel_body(render_panel_body(
+                                            panel.key,
+                                            &workspace,
+                                        ))}
+                                        {panel_kit::widgets::panel::resize_grip(panel, emit)}
+                                    },
+                                    emit,
+                                )
+                            }
                         }
                     }
                 }
