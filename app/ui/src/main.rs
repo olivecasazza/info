@@ -230,6 +230,23 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::PanelKitTuiDemo,
 ];
 
+/// Panels with stateful DOM/WASM runtimes (WebGL contexts, Pyodide WASM runtimes,
+/// or iframe embeddings) that must stay mounted under `display: none` when minimized.
+fn is_keep_mounted(kind: Panel) -> bool {
+    matches!(
+        kind,
+        Panel::Projects
+            | Panel::Featured
+            | Panel::FlockDemo
+            | Panel::PipedreamDemo
+            | Panel::Spot
+            | Panel::NotebookKinematics
+            | Panel::NotebookInverseKinematics
+            | Panel::NotebookWigglystuff
+            | Panel::PanelKitTuiDemo
+    )
+}
+
 fn default_layout() -> Vec<PanelWin<Panel>> {
     let mut b = LayoutBuilder::new();
     vec![
@@ -288,7 +305,7 @@ fn App() -> Element {
     let visible = frame.panels.iter().copied().map(|p| (p, false));
     let hidden = snapshot.panels.iter().copied().enumerate()
         .filter(|(idx, p)| {
-            (p.kind == Panel::Projects || p.kind == Panel::Featured)
+            is_keep_mounted(p.kind)
                 && frame.panels.iter().all(|vis| vis.source_index != *idx)
         })
         .map(|(idx, p)| {
