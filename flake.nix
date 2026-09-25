@@ -98,6 +98,13 @@
           inherit info-ui pages;
         };
 
+        # PR gate, built by buildbot-nix (repo topic `nixlab-ci`), which reports
+        # GitHub statuses. x86_64-linux only: buildbot's workers are
+        # x86_64-linux, and GitHub Actions runs no Nix for PRs.
+        checks = nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          inherit info-ui pages;
+        };
+
         devShells.default = devShell;
       }
     );
