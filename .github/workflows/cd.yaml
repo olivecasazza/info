@@ -1,9 +1,11 @@
 name: Build and Deploy
 
+# Deploy only. PRs are checked by buildbot-nix (flake `checks`: info-ui,
+# pages), which reports GitHub statuses; GitHub Actions runs no Nix for PRs.
+# FOLLOW-UP: the site build below should come from Hydra's `hydraJobs.info-ui`
+# output instead of a Nix build here.
 on:
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
   workflow_dispatch:
 
