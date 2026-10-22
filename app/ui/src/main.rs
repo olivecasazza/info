@@ -434,7 +434,7 @@ fn render_panel_body(
             "Inverse Kinematics Approximation",
         ),
         Panel::NotebookWigglystuff => notebook_panel("wigglystuff", "Wigglystuff Demos"),
-        Panel::PanelKitPage => panel_kit_page(),
+        Panel::PanelKitPage => panel_kit_page(workspace),
         Panel::PanelKitWebDemo => panel_kit_web_demo(),
         Panel::PanelKitTuiDemo => panel_kit_tui_demo(),
     }
@@ -531,6 +531,49 @@ fn open_project_resources(
     });
 }
 
+/// Bring one panel forward without disturbing the others: open it if the
+/// layout has never held it, otherwise restore and raise it.
+fn reveal_panel(workspace: &workspace::state::PanelWorkspace<Panel>, kind: Panel) {
+    workspace::state::mutate_snapshot(workspace, |snapshot| {
+        snapshot.preferred_mode = Mode::Tiling;
+        let z = snapshot.panels.iter().map(|panel| panel.z).max().unwrap_or(0) + 1;
+        match snapshot.panels.iter_mut().find(|panel| panel.kind == kind) {
+            Some(panel) => {
+                panel.state = WinState::Floating;
+                panel.z = z;
+            }
+            None => {
+                let mut win = resource_panel_default(kind, 0, 1, z);
+                win.state = WinState::Floating;
+                snapshot.panels.push(win);
+            }
+        }
+    });
+}
+
+/// The two ways to run panel-kit's own demo, offered wherever it is described.
+fn demo_actions(
+    workspace: &workspace::state::PanelWorkspace<Panel>,
+    class: &'static str,
+) -> Element {
+    let web = workspace.clone();
+    let tui = workspace.clone();
+    rsx! {
+        div { class: "{class}",
+            button {
+                class: "proj-act",
+                onclick: move |_| reveal_panel(&web, Panel::PanelKitWebDemo),
+                "↳ web demo"
+            }
+            button {
+                class: "proj-act",
+                onclick: move |_| reveal_panel(&tui, Panel::PanelKitTuiDemo),
+                "↳ terminal demo"
+            }
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Projects Panel — Always shows the list
 // ─────────────────────────────────────────────────────────────────────────────
@@ -560,6 +603,9 @@ fn projects_panel(workspace: &workspace::state::PanelWorkspace<Panel>) -> Elemen
                                 "{item.heading}"
                             }
                             div { class: "proj-text", "{item.text}" }
+                            if item.link == "/src/panel-kit" {
+                                {demo_actions(workspace, "proj-links")}
+                            }
                             if !item.links.is_empty() {
                                 div { class: "proj-links",
                                     for l in item.links {
@@ -588,7 +634,7 @@ fn projects_panel(workspace: &workspace::state::PanelWorkspace<Panel>) -> Elemen
 fn info_body() -> Element {
     rsx! {
         div { class: "info-panel",
-            h1 { class: "name rainbow-text-animated", "Olive Casazza" }
+            h1 { class: "name", "Olive Casazza" }
 
             section { class: "contact",
                 h2 { class: "section-title", "Contact" }
@@ -1694,10 +1740,20 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
         format!("/notebooks/{}.html", slug)
     };
     rsx! {
-        iframe {
-            src: "{url}",
-            class: "featured-iframe notebook-iframe",
-            title: "{title}",
+        // The export is a megabyte-scale pyodide app, so the frame is only asked
+        // for once it is near the viewport; a hairline placeholder holds the
+        // panel's shape and names what is loading meanwhile.
+        div { class: "notebook-shell",
+            div { class: "notebook-placeholder",
+                span { class: "notebook-placeholder-label", "notebook" }
+                span { "pyodide and the widgets load when this panel is opened" }
+            }
+            iframe {
+                src: "{url}",
+                class: "featured-iframe notebook-iframe",
+                title: "{title}",
+                "loading": "lazy",
+            }
         }
     }
 }
@@ -2061,7 +2117,7 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
     }
 }
 
-fn panel_kit_page() -> Element {
+fn panel_kit_page(workspace: &workspace::state::PanelWorkspace<Panel>) -> Element {
     const INSTALL: &str = r#"[dependencies]
 panel-kit = { git = "https://github.com/ocasazza/panel-kit" }"#;
 
@@ -2096,6 +2152,13 @@ panel-kit = { git = "https://github.com/ocasazza/panel-kit" }"#;
                     li { b { "Semantic Theming" } " — Role-named `--color-*` tokens (primary, highlight, text-muted, …) shared between the web CSS and the TUI styles, with dark and paper presets and JSON theme specs (`spec-json`)." }
                     li { b { "Trace" } " — Agent and session activity as a session-tree rail, a timeline, a swimlane graph and a sequence-diagram lane view, filtering by window, agent, item, kind and tone; any node opens its full set of facts in place." }
                 }
+            }
+            section { class: "article-section",
+                h2 { "demos" }
+                p { "Both frontends run this one core: the browser workspace that hosts "
+                    "this site, and the terminal workspace compiled to WebAssembly so it "
+                    "can run in the page." }
+                {demo_actions(workspace, "proj-links")}
             }
             section { class: "article-section",
                 h2 { "install" }
@@ -2489,6 +2552,10 @@ fn panel_kit_tui_demo() -> Element {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const APP_CSS: &str = r#"
+/* The site's palette, stated once: graphite surfaces, teal for what is live or
+   selected, yellow for a warning, red for a failure. Every panel-kit role is
+   named so none falls back to the library's blueprint-and-CMY defaults. This
+   block loads after panel-kit's stylesheet and wins at equal specificity. */
 :root {
   --color-background: #0a0a0a;
   --color-surface: #0a0a0a;
@@ -2496,28 +2563,68 @@ const APP_CSS: &str = r#"
   --color-text-muted: #7a7a7a;
   --color-divider: #262626;
   --color-border: #3a3a3a;
-  --color-primary: #d9b94c;
-  --color-failure: #d45547;
-  --color-warning: #f0dd7d;
+  /* teal: live, selected, links, the mode light */
+  --color-primary: #5dcdbe;
   --color-success: #5dcdbe;
+  --color-focus-ring: #5dcdbe;
+  /* yellow: a warning, the minimize light */
+  --color-warning: #f0dd7d;
+  --color-tertiary: #f0dd7d;
+  /* red: a failure, an error, the maximize light */
+  --color-failure: #d45547;
+  --color-error: #d45547;
+  --color-secondary: #d45547;
+  /* slate teal: neutral metadata */
   --color-info: #579db4;
-  --color-secondary: #e4786a;
   --color-inverse-background: #ededed;
   --color-inverse-text: #0a0a0a;
+  --color-contrast: #0a0a0a;
 }
 
-.rainbow-text-animated {
-  background: linear-gradient(to right, #6666ff, #0099ff, #00ff00, #ff3399, #6666ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: rainbow_animation 6s ease-in-out infinite;
-  background-size: 400% 100%;
+/* The name is the page's heading, not a light: emphasis comes from weight and
+   size, so it is the one bright text colour and the hue stays on what means
+   something (teal live, yellow warning, red failure). */
+.name {
+  color: var(--color-text);
+  font-weight: 700;
 }
-@keyframes rainbow_animation {
-  0%, 100% { background-position: 0 0; }
-  50% { background-position: 100% 0; }
+
+/* The notebook's frame sits over a placeholder that names the load, so the
+   panel is never an empty hole while pyodide arrives. */
+.notebook-shell { position: relative; height: 100%; min-height: 240px; }
+.notebook-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 4px 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
 }
+.notebook-placeholder-label {
+  color: var(--color-text);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.notebook-iframe { position: relative; z-index: 1; background: transparent; }
+
+/* Inline actions that raise a panel, styled as the same "↳ label" links the
+   project list uses; a button so it can carry a click. */
+.proj-act {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.proj-act:hover { text-decoration: underline; }
+.proj-act:focus-visible { outline: 1px solid var(--color-focus-ring); outline-offset: 2px; }
 
 .ws-root {
   height: 100dvh;
@@ -2563,7 +2670,7 @@ const APP_CSS: &str = r#"
 
 /* Info panel */
 .info-panel { font-size: 13px; line-height: 1.5; padding: 4px 2px; }
-.info-panel .name { font-size: 1.5rem; margin: 0 0 12px 0; font-weight: 400; }
+.info-panel .name { font-size: 1.5rem; margin: 0 0 12px 0; }
 .info-panel .section-title { font-size: 1rem; color: var(--color-success); margin: 12px 0 6px 0; font-weight: 400; }
 .info-panel .contact { margin-bottom: 8px; }
 .info-panel .contact div { margin: 2px 0; }
