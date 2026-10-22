@@ -8,12 +8,21 @@
 //! - **Projects** — `ProjectsWrapper.vue`: the project / library / notebook list.
 //! - **Featured** — workspace context; demos/pages open as separate panels.
 
+use std::rc::Rc;
+
 use dioxus::prelude::*;
+use panel_kit::widgets::trace::{Trace, TraceRail};
 use panel_kit::{
     bevy::{get_bevy_handle, BevyCanvas, BEVY_CSS},
     LayoutBuilder, PanelKind, PanelWin, WinState, CSS,
 };
 use panel_kit_core::frame::{Placement, TileFillOrder};
+use panel_kit_core::widgets::trace::{
+    facts::Expansion,
+    query::GraphState,
+    rails::{vertical_with, RailOptions},
+    sample,
+};
 use panel_kit_core::{Mode, SurfaceClass};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -2061,7 +2070,7 @@ panel-kit = { git = "https://github.com/olivecasazza/panel-kit" }"#;
             }
             section { class: "article-section",
                 h2 { "overview" }
-                p { "panel-kit implements a full windowing state machine with support for both floating (free placement) and tiling (auto-grid) workspace modes. It provides macOS-style traffic light window controls, drag-to-reorder tiling, a minimized-panel dock, and layout persistence to localStorage or file-based stores." }
+                p { "panel-kit implements a full windowing state machine with support for both floating (free placement) and tiling (auto-grid) workspace modes. It provides macOS-style traffic light window controls, drag-to-reorder tiling, a minimized-panel dock, and layout persistence to localStorage or file-based stores. On top of the windowing layer it ships reusable content widgets: typed data tables, Grafana and lightweight IDE panels, session-tree/timeline/swimlane trace views, a semantic role-named theme system, and a Monaco-based code editor with a `.pest` grammar language." }
                 p { "Originally designed for desktop dashboards and terminal interfaces, the project is structured as a cargo workspace separating the platform-agnostic layout mathematics from the rendering engines." }
             }
             section { class: "article-section",
@@ -2070,6 +2079,7 @@ panel-kit = { git = "https://github.com/olivecasazza/panel-kit" }"#;
                     li { b { "panel-kit-core" } ": The core renderer-agnostic state machine. It manages panel geometry, window states (floating, minimized, maximized), drag-and-resize mathematics, viewport clamping, and serialized layouts. It does not use any web or platform-specific APIs and is purely mathematical (units are pixels on web or cells in terminal)." }
                     li { b { "panel-kit" } ": The Dioxus web renderer implementation. Translates browser DOM events into layout updates, integrates localStorage persistence, and supplies the CSS chrome styling." }
                     li { b { "panel-kit-tui" } ": The Ratatui terminal renderer. Uses Crossterm for terminal mouse inputs and renders panels inside terminal cells, with persistence to JSON files." }
+                    li { b { "panel-kit-grammar" } ": Declarative grammars and toposes. A grammar (a `pest` runtime grammar with a capture map, or JSON pointers) turns raw input into a renderer-neutral `Site`; a topos is one UI/UX regime over that site — a `WorkspaceSpec` plus per-binding panel content models. A `pest` grammar that declares `line_records` parses appended lines apart, so a live feed extends its `Site` without reparsing." }
                 }
             }
             section { class: "article-section",
@@ -2079,6 +2089,9 @@ panel-kit = { git = "https://github.com/olivecasazza/panel-kit" }"#;
                     li { b { "Layout Persistence" } " — Restores window geometries, maximized/minimized state, and workspace mode on reload." }
                     li { b { "Viewport Clamping" } " — Shrinking the window clamps panels within bounds without overwriting their original size, allowing them to spring back when resized." }
                     li { b { "Multi-Frontend" } " — The core is shared between WebAssembly browser applications and native TUI terminal applications." }
+                    li { b { "Typed Data Tables" } " — A semantic table model (typed columns, rows, query) rendered by one memoized interactive component; declared alignment is never overridden, and tables are named by their owner so ids cannot collide." }
+                    li { b { "Semantic Theming" } " — Role-named `--color-*` tokens (primary, highlight, text-muted, …) shared between the web CSS and the TUI styles, with dark and paper presets and JSON theme specs (`spec-json`)." }
+                    li { b { "Trace" } " — Agent and session activity as a session-tree rail, a timeline, a swimlane graph and a sequence-diagram lane view, filtering by window, agent, item, kind and tone; any node opens its full set of facts in place." }
                 }
             }
             section { class: "article-section",
@@ -2097,15 +2110,17 @@ panel-kit = { git = "https://github.com/olivecasazza/panel-kit" }"#;
 
 const DEMO_CSS: &str = r#"
 .ws.tiling .panel-status { flex: 1 1 100%; }
-.tip-target { border-bottom: 1px dashed var(--dim); cursor: help; }
-.topbar button { background: var(--bg); color: var(--fg); border: 1px solid var(--line2);
+.tip-target { border-bottom: 1px dashed var(--color-text-muted); cursor: help; }
+.topbar button { background: var(--color-background); color: var(--color-text); border: 1px solid var(--color-border);
   border-radius: 3px; padding: .15rem .5rem; font-size: .72rem; cursor: pointer; }
-.topbar button:hover { border-color: var(--fg); }
+.topbar button:hover { border-color: var(--color-text); }
 .status-list { margin: .25rem 0; padding-left: 1.1rem; }
-.status-list li { color: var(--dim); }
-textarea.notes { width: 100%; height: 70%; background: var(--bg); color: var(--fg);
-  border: 1px solid var(--line2); border-radius: 3px; font-family: var(--mono);
+.status-list li { color: var(--color-text-muted); }
+textarea.notes { width: 100%; height: 70%; background: var(--color-background); color: var(--color-text);
+  border: 1px solid var(--color-border); border-radius: 3px; font-family: var(--mono);
   font-size: .78rem; padding: .4rem; resize: none; }
+.demo-trace { display: flex; flex-direction: column; min-height: 300px; }
+.demo-trace > .pk-tr { flex: 1 1 auto; min-height: 0; }
 "#;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -2114,6 +2129,8 @@ enum DemoPanel {
     Preview,
     Status,
     Help,
+    Trace,
+    Timeline,
 }
 
 impl PanelKind for DemoPanel {
@@ -2123,18 +2140,22 @@ impl PanelKind for DemoPanel {
             DemoPanel::Preview => "Preview",
             DemoPanel::Status => "Status",
             DemoPanel::Help => "Help",
+            DemoPanel::Trace => "trace",
+            DemoPanel::Timeline => "timeline",
         }
     }
 }
 
 fn demo_default_layout() -> Vec<PanelWin<DemoPanel>> {
     let mut b = LayoutBuilder::new();
-    let mut help = b.at(DemoPanel::Help, 660.0, 340.0, 380.0, 240.0);
+    let mut help = b.at(DemoPanel::Help, 16.0, 960.0, 380.0, 200.0);
     help.state = WinState::Minimized;
     vec![
         b.at(DemoPanel::Notes, 16.0, 16.0, 420.0, 300.0),
         b.at(DemoPanel::Preview, 452.0, 16.0, 420.0, 300.0),
         b.at(DemoPanel::Status, 16.0, 332.0, 560.0, 280.0),
+        b.at(DemoPanel::Timeline, 592.0, 332.0, 448.0, 280.0),
+        b.at(DemoPanel::Trace, 16.0, 628.0, 1024.0, 320.0),
         help,
     ]
 }
@@ -2354,6 +2375,8 @@ fn demo_panel_body(
                     code { "panel_kit_web_demo_workspace" } " — reload to verify." }
             }
         }
+        DemoPanel::Trace => rsx! { div { class: "demo-trace", TraceDemo {} } },
+        DemoPanel::Timeline => rsx! { TimelineDemo {} },
         DemoPanel::Help => rsx! {
             p { b { "This panel started minimized" } " (a dock chip) via "
                 code { "WinState::Minimized" } " in the default layout." }
@@ -2367,6 +2390,71 @@ fn demo_panel_body(
                 li { "narrow the window under 760px for the mobile stack" }
             }
         },
+    }
+}
+
+/// The trace graph over the deterministic sample: modes, query, legend and the
+/// inspector all live in `GraphState`.
+#[component]
+fn TraceDemo() -> Element {
+    let activity = use_hook(|| {
+        let a = sample::activity();
+        (Rc::new(a.events), Rc::new(a.tree), a.now)
+    });
+    let mut state = use_signal(|| GraphState {
+        window: "30d".to_owned(),
+        tree: true,
+        ..GraphState::default()
+    });
+    rsx! {
+        Trace {
+            id: "demo-trace",
+            state: state.read().clone(),
+            events: activity.0.clone(),
+            tree: activity.1.clone(),
+            now: activity.2,
+            on_action: move |action| {
+                let _ = state.write().reduce(action);
+            },
+        }
+    }
+}
+
+/// The same component as a rail: a row opens its facts under itself.
+#[component]
+fn TimelineDemo() -> Element {
+    let data = use_hook(|| Rc::new(sample::session_tree()));
+    let mut open = use_signal(Expansion::new);
+    let mut selected = use_signal(|| None::<String>);
+    let options = RailOptions {
+        title: "timeline".to_owned(),
+        dom_id: "demo-timeline".to_owned(),
+        separators: true,
+        ..RailOptions::default()
+    };
+    let view = vertical_with(
+        &data.events,
+        &data.item,
+        &data.tree,
+        &open.read(),
+        options.wrap,
+    )
+    .view(&RailOptions {
+        selected: selected.read().clone(),
+        on_select: true,
+        ..options
+    });
+    rsx! {
+        TraceRail {
+            view,
+            expanded: open.read().clone(),
+            on_toggle: move |id: String| {
+                open.write().toggle(&id);
+                selected.set(Some(id));
+            },
+            on_open_all: move |ids: Vec<String>| open.write().open_all(ids.iter().map(String::as_str)),
+            on_close_all: move |_| open.write().close_all(),
+        }
     }
 }
 
@@ -2396,20 +2484,20 @@ fn panel_kit_tui_demo() -> Element {
 
 const APP_CSS: &str = r#"
 :root {
-  --bg:     #0a0a0a;
-  --panel:  #0a0a0a;
-  --fg:     #ededed;
-  --dim:    #7a7a7a;
-  --line:   #262626;
-  --line2:  #3a3a3a;
-  --accent: #d9b94c;
-  --red:    #d45547;
-  --yellow: #f0dd7d;
-  --green:  #5dcdbe;
-  --blue:   #579db4;
-  --pink:   #e4786a;
-  --inv-bg: #ededed;
-  --inv-fg: #0a0a0a;
+  --color-background: #0a0a0a;
+  --color-surface: #0a0a0a;
+  --color-text: #ededed;
+  --color-text-muted: #7a7a7a;
+  --color-divider: #262626;
+  --color-border: #3a3a3a;
+  --color-primary: #d9b94c;
+  --color-failure: #d45547;
+  --color-warning: #f0dd7d;
+  --color-success: #5dcdbe;
+  --color-info: #579db4;
+  --color-secondary: #e4786a;
+  --color-inverse-background: #ededed;
+  --color-inverse-text: #0a0a0a;
 }
 
 .rainbow-text-animated {
@@ -2470,31 +2558,31 @@ const APP_CSS: &str = r#"
 /* Info panel */
 .info-panel { font-size: 13px; line-height: 1.5; padding: 4px 2px; }
 .info-panel .name { font-size: 1.5rem; margin: 0 0 12px 0; font-weight: 400; }
-.info-panel .section-title { font-size: 1rem; color: var(--green); margin: 12px 0 6px 0; font-weight: 400; }
+.info-panel .section-title { font-size: 1rem; color: var(--color-success); margin: 12px 0 6px 0; font-weight: 400; }
 .info-panel .contact { margin-bottom: 8px; }
 .info-panel .contact div { margin: 2px 0; }
-.link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
-.link:hover { color: var(--yellow); }
+.link { color: var(--color-primary); text-decoration: underline; text-underline-offset: 2px; }
+.link:hover { color: var(--color-warning); }
 
 .info-projects, .info-exp { font-size: 13px; line-height: 1.5; padding: 4px 2px; }
 
 /* Projects list */
 .cat { margin-bottom: 14px; }
-.cat-subject { color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; margin-bottom: 6px; }
+.cat-subject { color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; margin-bottom: 6px; }
 .proj { margin-bottom: 10px; }
-.proj-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.proj-link:hover { color: var(--yellow); }
-.proj-text { color: var(--fg); margin-top: 2px; }
+.proj-link { color: var(--color-primary); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.proj-link:hover { color: var(--color-warning); }
+.proj-text { color: var(--color-text); margin-top: 2px; }
 .proj-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
-.ext { color: var(--dim); font-size: 11px; text-decoration: none; }
-.ext:hover { color: var(--accent); }
+.ext { color: var(--color-text-muted); font-size: 11px; text-decoration: none; }
+.ext:hover { color: var(--color-primary); }
 
 /* Experience */
 .info-exp { list-style: none; margin: 0; padding: 4px 2px; }
 .exp { margin-bottom: 12px; }
-.exp-co { color: var(--accent); font-weight: 600; }
+.exp-co { color: var(--color-primary); font-weight: 600; }
 .exp-role { margin-top: 2px; }
-.exp-date { color: var(--dim); }
+.exp-date { color: var(--color-text-muted); }
 
 /* Featured panel content */
 .featured-iframe {
@@ -2503,7 +2591,7 @@ const APP_CSS: &str = r#"
   flex: 1;
   min-height: 0;
   border: none;
-  background: var(--bg);
+  background: var(--color-background);
   color-scheme: dark;
 }
 .notebook-iframe {
@@ -2523,13 +2611,13 @@ const APP_CSS: &str = r#"
 }
 .panel-kit-info-overlay {
   padding: 0.75rem 1rem;
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-divider);
 }
 .panel-kit-info-overlay h2 {
   margin: 0 0 0.25rem 0;
   font-size: 1.1rem;
-  color: var(--green);
+  color: var(--color-success);
   font-weight: 400;
 }
 .panel-kit-info-overlay p {
@@ -2537,7 +2625,7 @@ const APP_CSS: &str = r#"
   font-size: 0.85rem;
   line-height: 1.4;
 }
-.panel-kit-info-overlay .dim { color: var(--dim); margin: 0; }
+.panel-kit-info-overlay .dim { color: var(--color-text-muted); margin: 0; }
 .panel-kit-tui-frame {
   display: block;
   flex: 1;
@@ -2558,13 +2646,13 @@ const APP_CSS: &str = r#"
   text-align: center;
 }
 .featured-info h1 {
-  color: var(--green);
+  color: var(--color-success);
   font-size: 1.5rem;
   margin: 0 0 0.5rem 0;
   font-weight: 400;
 }
 .featured-info p {
-  color: var(--fg);
+  color: var(--color-text);
   margin: 0.25rem 0;
 }
 .featured-links {
@@ -2609,13 +2697,13 @@ const APP_CSS: &str = r#"
   margin-bottom: 18px;
 }
 .project-article h1 {
-  color: var(--green);
+  color: var(--color-success);
   font-size: 1.4rem;
   margin: 0 0 4px;
   font-weight: 400;
 }
 .project-article h2 {
-  color: var(--green);
+  color: var(--color-success);
   font-size: .95rem;
   margin: 0;
   font-weight: 400;
@@ -2634,17 +2722,17 @@ const APP_CSS: &str = r#"
   margin: 0 0 18px;
 }
 .muted {
-  color: var(--dim);
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 .code-block {
   margin: 0;
   padding: 10px 12px;
   overflow: auto;
-  background: color-mix(in srgb, var(--line) 38%, var(--bg));
-  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--color-divider) 38%, var(--color-background));
+  border: 1px solid var(--color-divider);
   border-radius: 4px;
-  color: var(--fg);
+  color: var(--color-text);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -2663,7 +2751,7 @@ const APP_CSS: &str = r#"
   vertical-align: top;
 }
 .bird-table th {
-  color: var(--dim);
+  color: var(--color-text-muted);
   font-weight: 400;
 }
 .project-figure {
@@ -2706,11 +2794,11 @@ const APP_CSS: &str = r#"
   padding: 12px 8px;
   overflow-y: auto;
   background: rgba(0,0,0,0.3);
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-divider);
   border-radius: 4px;
 }
 .tree-title {
-  color: var(--dim);
+  color: var(--color-text-muted);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -2723,7 +2811,7 @@ const APP_CSS: &str = r#"
   width: 100%;
 }
 .round-label {
-  color: var(--dim);
+  color: var(--color-text-muted);
   font-size: 9px;
   width: 20px;
   padding-top: 4px;
@@ -2751,16 +2839,16 @@ const APP_CSS: &str = r#"
   display: block;
   width: 1px;
   height: 100%;
-  background: var(--line2);
+  background: var(--color-border);
 }
 .tree-node {
   padding: 3px 10px;
   border-radius: 3px;
   font-size: 10px;
   font-weight: bold;
-  border: 1px solid var(--line2);
-  background: var(--panel);
-  color: var(--dim);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
   white-space: nowrap;
   animation: node-pop 0.3s ease-out;
 }
@@ -2769,13 +2857,13 @@ const APP_CSS: &str = r#"
   to { opacity: 1; transform: scale(1); }
 }
 .tree-source {
-  border-color: var(--yellow);
-  color: var(--yellow);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
   background: rgba(240,221,125,0.08);
 }
 .tree-active {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
   background: rgba(217,185,76,0.08);
   animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s;
 }
@@ -2783,13 +2871,13 @@ const APP_CSS: &str = r#"
   50% { box-shadow: 0 0 8px rgba(217,185,76,0.4); }
 }
 .tree-done {
-  border-color: var(--green);
-  color: var(--green);
+  border-color: var(--color-success);
+  color: var(--color-success);
   background: rgba(93,205,190,0.05);
 }
 .tree-summary {
   margin-top: auto;
-  color: var(--dim);
+  color: var(--color-text-muted);
   font-size: 10px;
   text-align: center;
   padding-top: 12px;
@@ -2801,7 +2889,7 @@ const APP_CSS: &str = r#"
   gap: 8px;
   padding: 12px 10px;
   background: rgba(0,0,0,0.3);
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-divider);
   border-radius: 4px;
 }
 .heph-replicas {
@@ -2813,16 +2901,16 @@ const APP_CSS: &str = r#"
 .heph-replica-num {
   font-size: 28px;
   font-weight: bold;
-  color: var(--accent);
+  color: var(--color-primary);
 }
 .heph-replica-label {
   font-size: 11px;
-  color: var(--dim);
+  color: var(--color-text-muted);
 }
 .heph-phase {
   text-align: center;
   font-size: 10px;
-  color: var(--dim);
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -2838,8 +2926,8 @@ const APP_CSS: &str = r#"
   align-items: center;
   padding: 6px 10px;
   border-radius: 3px;
-  border: 1px solid var(--line2);
-  background: var(--panel);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   font-size: 11px;
   animation: node-pop 0.3s ease-out;
 }
@@ -2847,22 +2935,22 @@ const APP_CSS: &str = r#"
 .heph-host-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
 .heph-host-state { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
 .heph-host-uptime { font-size: 8px; opacity: 0.7; }
-.heph-ready { border-color: var(--green); }
-.heph-ready .heph-host-name { color: var(--green); }
-.heph-ready .heph-host-state { color: var(--green); }
-.heph-off { border-color: var(--line2); opacity: 0.5; }
-.heph-off .heph-host-name, .heph-off .heph-host-state { color: var(--dim); }
-.heph-powering-off { border-color: var(--red); animation: node-pop 0.3s ease-out, pulse-border 1s ease-in-out infinite 0.3s; }
-.heph-powering-off .heph-host-name, .heph-powering-off .heph-host-state { color: var(--red); }
-.heph-provisioning { border-color: var(--yellow); animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s; }
-.heph-provisioning .heph-host-name, .heph-provisioning .heph-host-state { color: var(--yellow); }
-.heph-joining { border-color: var(--blue); animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s; }
-.heph-joining .heph-host-name, .heph-joining .heph-host-state { color: var(--blue); }
+.heph-ready { border-color: var(--color-success); }
+.heph-ready .heph-host-name { color: var(--color-success); }
+.heph-ready .heph-host-state { color: var(--color-success); }
+.heph-off { border-color: var(--color-border); opacity: 0.5; }
+.heph-off .heph-host-name, .heph-off .heph-host-state { color: var(--color-text-muted); }
+.heph-powering-off { border-color: var(--color-failure); animation: node-pop 0.3s ease-out, pulse-border 1s ease-in-out infinite 0.3s; }
+.heph-powering-off .heph-host-name, .heph-powering-off .heph-host-state { color: var(--color-failure); }
+.heph-provisioning { border-color: var(--color-warning); animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s; }
+.heph-provisioning .heph-host-name, .heph-provisioning .heph-host-state { color: var(--color-warning); }
+.heph-joining { border-color: var(--color-info); animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s; }
+.heph-joining .heph-host-name, .heph-joining .heph-host-state { color: var(--color-info); }
 .heph-info {
   margin-top: auto;
   text-align: center;
   font-size: 9px;
-  color: var(--dim);
+  color: var(--color-text-muted);
   line-height: 1.5;
 }
 .project-figure img {
@@ -2873,10 +2961,10 @@ const APP_CSS: &str = r#"
   align-self: center;
   object-fit: contain;
   background: #000;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-divider);
 }
 .project-figure figcaption {
-  color: var(--dim);
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 
@@ -2891,7 +2979,7 @@ const APP_CSS: &str = r#"
   width: 100%;
   aspect-ratio: 16 / 9;
   max-height: 70vh;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-divider);
   border-radius: 4px;
 }
 /* Bird-nix REPL in-article embed */
@@ -2900,7 +2988,7 @@ const APP_CSS: &str = r#"
   /* ponytail: panel-kit tiling needs vertical room; vh scales, min-height stops the squish */
   height: 85vh;
   min-height: 720px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-divider);
   border-radius: 4px;
 }
 .demo-cta {
@@ -2908,9 +2996,9 @@ const APP_CSS: &str = r#"
   flex-direction: column;
   gap: 2px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-divider);
   border-radius: 4px;
-  background: var(--bg2);
+  background: var(--color-surface);
 }
 .demo-cta-link {
   font-size: 13px;
@@ -2921,17 +3009,17 @@ const APP_CSS: &str = r#"
   margin: 0;
 }
 .policy-link {
-  color: var(--green);
+  color: var(--color-success);
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
   white-space: nowrap;
 }
 .policy-link:hover {
-  color: var(--accent);
+  color: var(--color-primary);
 }
 .policy-inline-note {
-  color: var(--dim);
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 .spot-timeline td {
@@ -2948,21 +3036,21 @@ const APP_CSS: &str = r#"
 
 .controls-toggle {
   background: rgba(10, 10, 10, 0.85);
-  border: 1px solid var(--line2);
-  color: var(--dim);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
   padding: 4px 10px;
   font-size: 11px;
   cursor: pointer;
   border-radius: 3px;
 }
 .controls-toggle:hover {
-  color: var(--fg);
-  border-color: var(--accent);
+  color: var(--color-text);
+  border-color: var(--color-primary);
 }
 
 .controls-panel {
   background: rgba(10, 10, 10, 0.92);
-  border: 1px solid var(--line2);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 10px 12px;
   margin-top: 4px;
@@ -2974,17 +3062,17 @@ const APP_CSS: &str = r#"
   overflow-y: auto;
 }
 .species-list {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--color-divider);
   margin-top: 8px;
   padding-top: 8px;
 }
 .species-controls {
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-divider);
   padding: 6px 8px;
   margin-top: 6px;
 }
 .species-controls summary {
-  color: var(--accent);
+  color: var(--color-primary);
   cursor: pointer;
   font-size: 11px;
   margin-bottom: 6px;
@@ -3004,19 +3092,19 @@ const APP_CSS: &str = r#"
   margin-bottom: 0;
 }
 .control-row label {
-  color: var(--dim);
+  color: var(--color-text-muted);
   min-width: 70px;
 }
 .control-row input[type="range"] {
   flex: 1;
   height: 4px;
-  accent-color: var(--accent);
+  accent-color: var(--color-primary);
 }
 .control-row input[type="checkbox"] {
-  accent-color: var(--accent);
+  accent-color: var(--color-primary);
 }
 .control-value {
-  color: var(--fg);
+  color: var(--color-text);
   min-width: 36px;
   text-align: right;
   font-family: monospace;
@@ -3024,8 +3112,8 @@ const APP_CSS: &str = r#"
 
 .reset-btn {
   background: transparent;
-  border: 1px solid var(--line2);
-  color: var(--dim);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
   padding: 4px 8px;
   font-size: 10px;
   cursor: pointer;
@@ -3033,19 +3121,19 @@ const APP_CSS: &str = r#"
   width: 100%;
 }
 .reset-btn:hover {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 /* Throughput graph */
 .throughput-graph {
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--color-divider);
   padding-bottom: 8px;
   margin-bottom: 8px;
 }
 .throughput-title {
   font-size: 10px;
-  color: var(--dim);
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 6px;
@@ -3061,14 +3149,14 @@ const APP_CSS: &str = r#"
   margin-bottom: 0;
 }
 .throughput-label {
-  color: var(--dim);
+  color: var(--color-text-muted);
   min-width: 54px;
   text-align: right;
 }
 .throughput-bar-track {
   flex: 1;
   height: 8px;
-  background: var(--line);
+  background: var(--color-divider);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -3077,12 +3165,12 @@ const APP_CSS: &str = r#"
   border-radius: 2px;
   transition: width 0.1s ease-out;
 }
-.throughput-servers { background: var(--green); }
-.throughput-aisle { background: var(--yellow); }
-.throughput-core { background: var(--blue); }
-.throughput-backbone { background: var(--pink); }
+.throughput-servers { background: var(--color-success); }
+.throughput-aisle { background: var(--color-warning); }
+.throughput-core { background: var(--color-info); }
+.throughput-backbone { background: var(--color-secondary); }
 .throughput-value {
-  color: var(--fg);
+  color: var(--color-text);
   min-width: 28px;
   text-align: right;
   font-family: monospace;
@@ -3099,7 +3187,7 @@ const APP_CSS: &str = r#"
 }
 .cascade-term {
   background: #050505;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-divider);
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
@@ -3110,15 +3198,15 @@ const APP_CSS: &str = r#"
   gap: 6px;
   padding: 4px 8px;
   background: #111;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--color-divider);
 }
 .term-dot {
   width: 8px; height: 8px; border-radius: 50%;
-  background: var(--accent);
+  background: var(--color-primary);
   flex-shrink: 0;
 }
 .term-title {
-  color: var(--dim);
+  color: var(--color-text-muted);
   font-size: 11px;
 }
 .term-body {
@@ -3129,13 +3217,13 @@ const APP_CSS: &str = r#"
   overflow-y: auto;
 }
 .term-line { white-space: pre-wrap; }
-.term-cmd { color: var(--accent); }
-.term-info { color: var(--dim); }
-.term-r0 { color: var(--yellow); }
-.term-r1 { color: var(--green); }
-.term-r2 { color: var(--blue); }
-.term-done { color: var(--accent); font-weight: bold; }
-.term-cursor { color: var(--accent); animation: blink 1s step-end infinite; }
+.term-cmd { color: var(--color-primary); }
+.term-info { color: var(--color-text-muted); }
+.term-r0 { color: var(--color-warning); }
+.term-r1 { color: var(--color-success); }
+.term-r2 { color: var(--color-info); }
+.term-done { color: var(--color-primary); font-weight: bold; }
+.term-cursor { color: var(--color-primary); animation: blink 1s step-end infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .cascade-tree {
   flex: 1;
@@ -3155,7 +3243,7 @@ const APP_CSS: &str = r#"
   justify-content: center;
 }
 .round-label {
-  color: var(--dim);
+  color: var(--color-text-muted);
   font-size: 10px;
   width: 50px;
   text-align: right;
@@ -3166,9 +3254,9 @@ const APP_CSS: &str = r#"
   border-radius: 3px;
   font-size: 11px;
   font-weight: bold;
-  border: 1px solid var(--line2);
-  background: var(--panel);
-  color: var(--dim);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
   white-space: nowrap;
   animation: node-pop 0.3s ease-out;
 }
@@ -3177,13 +3265,13 @@ const APP_CSS: &str = r#"
   to { opacity: 1; transform: scale(1); }
 }
 .tree-source {
-  border-color: var(--yellow);
-  color: var(--yellow);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
   background: rgba(240,221,125,0.08);
 }
 .tree-active {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
   background: rgba(217,185,76,0.08);
   animation: node-pop 0.3s ease-out, pulse-border 1.5s ease-in-out infinite 0.3s;
 }
@@ -3191,8 +3279,8 @@ const APP_CSS: &str = r#"
   50% { box-shadow: 0 0 8px rgba(217,185,76,0.4); }
 }
 .tree-done {
-  border-color: var(--green);
-  color: var(--green);
+  border-color: var(--color-success);
+  color: var(--color-success);
   background: rgba(93,205,190,0.05);
 }
 .tree-edges {
@@ -3203,7 +3291,7 @@ const APP_CSS: &str = r#"
   display: block;
   width: 1px;
   height: 20px;
-  background: var(--line2);
+  background: var(--color-border);
 }
 .tree-nodes {
   display: flex;
@@ -3219,7 +3307,7 @@ const APP_CSS: &str = r#"
   gap: 8px;
 }
 .cascade-demo figcaption {
-  color: var(--dim);
+  color: var(--color-text-muted);
   font-size: 11px;
   text-align: center;
   padding: 4px 12px;
