@@ -434,7 +434,7 @@ fn render_panel_body(
             "Inverse Kinematics Approximation",
         ),
         Panel::NotebookWigglystuff => notebook_panel("wigglystuff", "Wigglystuff Demos"),
-        Panel::PanelKitPage => panel_kit_page(),
+        Panel::PanelKitPage => panel_kit_page(workspace),
         Panel::PanelKitWebDemo => panel_kit_web_demo(),
         Panel::PanelKitTuiDemo => panel_kit_tui_demo(),
     }
@@ -531,6 +531,49 @@ fn open_project_resources(
     });
 }
 
+/// Bring one panel forward without disturbing the others: open it if the
+/// layout has never held it, otherwise restore and raise it.
+fn reveal_panel(workspace: &workspace::state::PanelWorkspace<Panel>, kind: Panel) {
+    workspace::state::mutate_snapshot(workspace, |snapshot| {
+        snapshot.preferred_mode = Mode::Tiling;
+        let z = snapshot.panels.iter().map(|panel| panel.z).max().unwrap_or(0) + 1;
+        match snapshot.panels.iter_mut().find(|panel| panel.kind == kind) {
+            Some(panel) => {
+                panel.state = WinState::Floating;
+                panel.z = z;
+            }
+            None => {
+                let mut win = resource_panel_default(kind, 0, 1, z);
+                win.state = WinState::Floating;
+                snapshot.panels.push(win);
+            }
+        }
+    });
+}
+
+/// The two ways to run panel-kit's own demo, offered wherever it is described.
+fn demo_actions(
+    workspace: &workspace::state::PanelWorkspace<Panel>,
+    class: &'static str,
+) -> Element {
+    let web = workspace.clone();
+    let tui = workspace.clone();
+    rsx! {
+        div { class: "{class}",
+            button {
+                class: "proj-act",
+                onclick: move |_| reveal_panel(&web, Panel::PanelKitWebDemo),
+                "↳ web demo"
+            }
+            button {
+                class: "proj-act",
+                onclick: move |_| reveal_panel(&tui, Panel::PanelKitTuiDemo),
+                "↳ terminal demo"
+            }
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Projects Panel — Always shows the list
 // ─────────────────────────────────────────────────────────────────────────────
@@ -560,6 +603,9 @@ fn projects_panel(workspace: &workspace::state::PanelWorkspace<Panel>) -> Elemen
                                 "{item.heading}"
                             }
                             div { class: "proj-text", "{item.text}" }
+                            if item.link == "/src/panel-kit" {
+                                {demo_actions(workspace, "proj-links")}
+                            }
                             if !item.links.is_empty() {
                                 div { class: "proj-links",
                                     for l in item.links {
@@ -2061,7 +2107,7 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
     }
 }
 
-fn panel_kit_page() -> Element {
+fn panel_kit_page(workspace: &workspace::state::PanelWorkspace<Panel>) -> Element {
     const INSTALL: &str = r#"[dependencies]
 panel-kit = { git = "https://github.com/ocasazza/panel-kit" }"#;
 
@@ -2096,6 +2142,13 @@ panel-kit = { git = "https://github.com/ocasazza/panel-kit" }"#;
                     li { b { "Semantic Theming" } " — Role-named `--color-*` tokens (primary, highlight, text-muted, …) shared between the web CSS and the TUI styles, with dark and paper presets and JSON theme specs (`spec-json`)." }
                     li { b { "Trace" } " — Agent and session activity as a session-tree rail, a timeline, a swimlane graph and a sequence-diagram lane view, filtering by window, agent, item, kind and tone; any node opens its full set of facts in place." }
                 }
+            }
+            section { class: "article-section",
+                h2 { "demos" }
+                p { "Both frontends run this one core: the browser workspace that hosts "
+                    "this site, and the terminal workspace compiled to WebAssembly so it "
+                    "can run in the page." }
+                {demo_actions(workspace, "proj-links")}
             }
             section { class: "article-section",
                 h2 { "install" }
@@ -2525,6 +2578,20 @@ const APP_CSS: &str = r#"
   color: var(--color-text);
   font-weight: 700;
 }
+
+/* Inline actions that raise a panel, styled as the same "↳ label" links the
+   project list uses; a button so it can carry a click. */
+.proj-act {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.proj-act:hover { text-decoration: underline; }
+.proj-act:focus-visible { outline: 1px solid var(--color-focus-ring); outline-offset: 2px; }
 
 .ws-root {
   height: 100dvh;
