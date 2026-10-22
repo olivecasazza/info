@@ -588,7 +588,7 @@ fn projects_panel(workspace: &workspace::state::PanelWorkspace<Panel>) -> Elemen
 fn info_body() -> Element {
     rsx! {
         div { class: "info-panel",
-            h1 { class: "name rainbow-text-animated", "Olive Casazza" }
+            h1 { class: "name", "Olive Casazza" }
 
             section { class: "contact",
                 h2 { class: "section-title", "Contact" }
@@ -2489,6 +2489,10 @@ fn panel_kit_tui_demo() -> Element {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const APP_CSS: &str = r#"
+/* The site's palette, stated once: graphite surfaces, teal for what is live or
+   selected, yellow for a warning, red for a failure. Every panel-kit role is
+   named so none falls back to the library's blueprint-and-CMY defaults. This
+   block loads after panel-kit's stylesheet and wins at equal specificity. */
 :root {
   --color-background: #0a0a0a;
   --color-surface: #0a0a0a;
@@ -2496,27 +2500,30 @@ const APP_CSS: &str = r#"
   --color-text-muted: #7a7a7a;
   --color-divider: #262626;
   --color-border: #3a3a3a;
-  --color-primary: #d9b94c;
-  --color-failure: #d45547;
-  --color-warning: #f0dd7d;
+  /* teal: live, selected, links, the mode light */
+  --color-primary: #5dcdbe;
   --color-success: #5dcdbe;
+  --color-focus-ring: #5dcdbe;
+  /* yellow: a warning, the minimize light */
+  --color-warning: #f0dd7d;
+  --color-tertiary: #f0dd7d;
+  /* red: a failure, an error, the maximize light */
+  --color-failure: #d45547;
+  --color-error: #d45547;
+  --color-secondary: #d45547;
+  /* slate teal: neutral metadata */
   --color-info: #579db4;
-  --color-secondary: #e4786a;
   --color-inverse-background: #ededed;
   --color-inverse-text: #0a0a0a;
+  --color-contrast: #0a0a0a;
 }
 
-.rainbow-text-animated {
-  background: linear-gradient(to right, #6666ff, #0099ff, #00ff00, #ff3399, #6666ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: rainbow_animation 6s ease-in-out infinite;
-  background-size: 400% 100%;
-}
-@keyframes rainbow_animation {
-  0%, 100% { background-position: 0 0; }
-  50% { background-position: 100% 0; }
+/* The name is the page's heading, not a light: emphasis comes from weight and
+   size, so it is the one bright text colour and the hue stays on what means
+   something (teal live, yellow warning, red failure). */
+.name {
+  color: var(--color-text);
+  font-weight: 700;
 }
 
 .ws-root {
@@ -2563,7 +2570,7 @@ const APP_CSS: &str = r#"
 
 /* Info panel */
 .info-panel { font-size: 13px; line-height: 1.5; padding: 4px 2px; }
-.info-panel .name { font-size: 1.5rem; margin: 0 0 12px 0; font-weight: 400; }
+.info-panel .name { font-size: 1.5rem; margin: 0 0 12px 0; }
 .info-panel .section-title { font-size: 1rem; color: var(--color-success); margin: 12px 0 6px 0; font-weight: 400; }
 .info-panel .contact { margin-bottom: 8px; }
 .info-panel .contact div { margin: 2px 0; }
