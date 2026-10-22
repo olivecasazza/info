@@ -2063,7 +2063,7 @@ imports = [ flake.inputs.hephaestus.kubenixModules.hephaestus ];"#;
 
 fn panel_kit_page() -> Element {
     const INSTALL: &str = r#"[dependencies]
-panel-kit = { git = "https://github.com/olivecasazza/panel-kit" }"#;
+panel-kit = { git = "https://github.com/ocasazza/panel-kit" }"#;
 
     rsx! {
         article { class: "project-article",
@@ -2104,7 +2104,7 @@ panel-kit = { git = "https://github.com/olivecasazza/panel-kit" }"#;
             section { class: "article-section",
                 h2 { "links" }
                 ul {
-                    li { a { class: "link", href: "https://github.com/olivecasazza/panel-kit", target: "_blank", "source" } " - github.com/olivecasazza/panel-kit" }
+                    li { a { class: "link", href: "https://github.com/ocasazza/panel-kit", target: "_blank", "source" } " - github.com/ocasazza/panel-kit" }
                 }
             }
         }
