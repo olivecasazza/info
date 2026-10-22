@@ -18,7 +18,8 @@ use panel_kit_core::{
 use panel_kit_tui::input::{workspace_event_from_key, workspace_event_from_pointer};
 use panel_kit_tui::store::JsonFileLayoutStore;
 use panel_kit_tui::widgets::{self, TuiHitBuffer};
-use panel_kit_tui::{scroll, Charset, ResolvedTuiTheme};
+use panel_kit_tui::scroll::PanelScroll;
+use panel_kit_tui::{scroll, ResolvedTuiTheme, TerminalCharset};
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -74,10 +75,9 @@ pub struct App {
     store: Option<JsonFileLayoutStore>,
     save_policy: SavePolicy,
     theme: ResolvedTuiTheme,
-    charset: Charset,
+    charset: TerminalCharset,
     hover: Option<Position>,
-    projects_scroll: usize,
-    info_scroll: usize,
+    scroll: PanelScroll<Panel>,
 }
 
 impl App {
@@ -126,13 +126,12 @@ impl App {
             save_policy: SavePolicy::OnSettle,
             theme: ResolvedTuiTheme::default(),
             charset: if cfg!(target_arch = "wasm32") {
-                Charset::Ascii
+                TerminalCharset::Ascii
             } else {
-                Charset::Unicode
+                TerminalCharset::Unicode
             },
             hover: None,
-            projects_scroll: 0,
-            info_scroll: 0,
+            scroll: PanelScroll::with_capacity(panel_count),
         }
     }
 
@@ -146,12 +145,12 @@ impl App {
 
     /// Scroll the projects panel (`+1` down, `-1` up).
     pub fn scroll_projects(&mut self, delta: isize) {
-        self.projects_scroll = shift(self.projects_scroll, delta);
+        self.scroll.scroll_by(&Panel::Projects, 0, delta as i32);
     }
 
     /// Scroll the info panel.
     pub fn scroll_info(&mut self, delta: isize) {
-        self.info_scroll = shift(self.info_scroll, delta);
+        self.scroll.scroll_by(&Panel::Info, 0, delta as i32);
     }
 
     /// Send a normalized key chord to panel-kit after application bindings have
@@ -238,21 +237,23 @@ impl App {
 
             match panel.key {
                 Panel::Projects => {
-                    self.projects_scroll = scroll::lines(
+                    scroll::lines(
                         frame,
                         body,
                         &self.theme,
+                        &Panel::Projects,
+                        &mut self.scroll,
                         projects_lines(&self.theme),
-                        self.projects_scroll,
                     );
                 }
                 Panel::Info => {
-                    self.info_scroll = scroll::lines(
+                    scroll::lines(
                         frame,
                         body,
                         &self.theme,
+                        &Panel::Info,
+                        &mut self.scroll,
                         info_lines(&self.theme),
-                        self.info_scroll,
                     );
                 }
                 Panel::Background => {
@@ -335,29 +336,21 @@ fn rect_from_region(region: panel_kit_core::Region) -> Rect {
     )
 }
 
-fn shift(current: usize, delta: isize) -> usize {
-    if delta < 0 {
-        current.saturating_sub((-delta) as usize)
-    } else {
-        current.saturating_add(delta as usize)
-    }
-}
-
 fn projects_lines(theme: &ResolvedTuiTheme) -> Vec<Line<'static>> {
     let mut output = Vec::new();
     for category in info_core::projects() {
         output.push(Line::from(Span::styled(
             category.subject.to_uppercase(),
-            Style::default().fg(theme.dim).add_modifier(Modifier::BOLD),
+            Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD),
         )));
         for item in category.items {
             output.push(Line::from(Span::styled(
                 item.heading,
-                Style::default().fg(theme.accent),
+                Style::default().fg(theme.highlight),
             )));
             output.push(Line::from(Span::styled(
                 item.text,
-                Style::default().fg(theme.fg),
+                Style::default().fg(theme.text),
             )));
             if !item.links.is_empty() {
                 let mut spans = Vec::new();
@@ -367,7 +360,7 @@ fn projects_lines(theme: &ResolvedTuiTheme) -> Vec<Line<'static>> {
                     }
                     spans.push(Span::styled(
                         format!("\u{21B3} {}", link.label),
-                        Style::default().fg(theme.dim),
+                        Style::default().fg(theme.text_muted),
                     ));
                 }
                 output.push(Line::from(spans));
@@ -383,21 +376,21 @@ fn info_lines(theme: &ResolvedTuiTheme) -> Vec<Line<'static>> {
     for experience in info_core::experiences() {
         output.push(Line::from(Span::styled(
             experience.company,
-            Style::default().fg(theme.accent),
+            Style::default().fg(theme.highlight),
         )));
         for role in experience.roles {
             output.push(Line::from(vec![
                 Span::styled(
                     role.start,
-                    Style::default().fg(theme.dim).add_modifier(Modifier::BOLD),
+                    Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" - "),
                 Span::styled(
                     role.end,
-                    Style::default().fg(theme.dim).add_modifier(Modifier::BOLD),
+                    Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(": "),
-                Span::styled(role.description, Style::default().fg(theme.fg)),
+                Span::styled(role.description, Style::default().fg(theme.text)),
             ]));
         }
         output.push(Line::from(""));
@@ -409,28 +402,28 @@ fn background_lines(theme: &ResolvedTuiTheme) -> Vec<Line<'static>> {
     let mut output = vec![
         Line::from(Span::styled(
             "random project background",
-            Style::default().fg(theme.dim),
+            Style::default().fg(theme.text_muted),
         )),
         Line::from(Span::styled(
             "live 3D (flock / pipedream) lands in phase 2",
-            Style::default().fg(theme.dim),
+            Style::default().fg(theme.text_muted),
         )),
         Line::from(""),
     ];
     if let Some((subject, project)) = info_core::project_at(0) {
         output.push(Line::from(Span::styled(
             subject.to_uppercase(),
-            Style::default().fg(theme.dim),
+            Style::default().fg(theme.text_muted),
         )));
         output.push(Line::from(Span::styled(
             project.heading,
             Style::default()
-                .fg(theme.accent)
+                .fg(theme.highlight)
                 .add_modifier(Modifier::BOLD),
         )));
         output.push(Line::from(Span::styled(
             project.text,
-            Style::default().fg(theme.fg),
+            Style::default().fg(theme.text),
         )));
     }
     output
