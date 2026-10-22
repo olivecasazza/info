@@ -225,7 +225,7 @@ const SPOT_RESOURCES: &[Panel] = &[Panel::Spot];
 const KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookKinematics];
 const INVERSE_KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookInverseKinematics];
 const WIGGLYSTUFF_RESOURCES: &[Panel] = &[Panel::NotebookWigglystuff];
-const PANEL_KIT_RESOURCES: &[Panel] = &[Panel::PanelKitTuiDemo];
+const PANEL_KIT_RESOURCES: &[Panel] = &[Panel::PanelKitPage, Panel::PanelKitWebDemo, Panel::PanelKitTuiDemo];
 const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::BirdNix,
     Panel::Consortium,
@@ -236,6 +236,8 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::NotebookKinematics,
     Panel::NotebookInverseKinematics,
     Panel::NotebookWigglystuff,
+    Panel::PanelKitPage,
+    Panel::PanelKitWebDemo,
     Panel::PanelKitTuiDemo,
 ];
 
@@ -252,6 +254,7 @@ fn is_keep_mounted(kind: Panel) -> bool {
             | Panel::NotebookKinematics
             | Panel::NotebookInverseKinematics
             | Panel::NotebookWigglystuff
+            | Panel::PanelKitWebDemo
             | Panel::PanelKitTuiDemo
     )
 }
@@ -2119,7 +2122,7 @@ const DEMO_CSS: &str = r#"
 textarea.notes { width: 100%; height: 70%; background: var(--color-background); color: var(--color-text);
   border: 1px solid var(--color-border); border-radius: 3px; font-family: var(--mono);
   font-size: .78rem; padding: .4rem; resize: none; }
-.demo-trace { display: flex; flex-direction: column; min-height: 300px; }
+.demo-trace { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .demo-trace > .pk-tr { flex: 1 1 auto; min-height: 0; }
 "#;
 
@@ -2148,14 +2151,17 @@ impl PanelKind for DemoPanel {
 
 fn demo_default_layout() -> Vec<PanelWin<DemoPanel>> {
     let mut b = LayoutBuilder::new();
-    let mut help = b.at(DemoPanel::Help, 16.0, 960.0, 380.0, 200.0);
+    // The trace graph leads: it needs the full width for its lanes and rows.
+    // Help starts minimized, so its slot overlaps the row below it (as it did
+    // when it sat inside the Status row).
+    let mut help = b.at(DemoPanel::Help, 660.0, 340.0, 380.0, 240.0);
     help.state = WinState::Minimized;
     vec![
-        b.at(DemoPanel::Notes, 16.0, 16.0, 420.0, 300.0),
-        b.at(DemoPanel::Preview, 452.0, 16.0, 420.0, 300.0),
-        b.at(DemoPanel::Status, 16.0, 332.0, 560.0, 280.0),
-        b.at(DemoPanel::Timeline, 592.0, 332.0, 448.0, 280.0),
-        b.at(DemoPanel::Trace, 16.0, 628.0, 1024.0, 320.0),
+        b.at(DemoPanel::Trace, 16.0, 16.0, 1024.0, 400.0),
+        b.at(DemoPanel::Notes, 16.0, 432.0, 420.0, 250.0),
+        b.at(DemoPanel::Preview, 452.0, 432.0, 420.0, 250.0),
+        b.at(DemoPanel::Status, 16.0, 698.0, 560.0, 200.0),
+        b.at(DemoPanel::Timeline, 592.0, 698.0, 448.0, 200.0),
         help,
     ]
 }
