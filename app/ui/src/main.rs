@@ -1740,10 +1740,20 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
         format!("/notebooks/{}.html", slug)
     };
     rsx! {
-        iframe {
-            src: "{url}",
-            class: "featured-iframe notebook-iframe",
-            title: "{title}",
+        // The export is a megabyte-scale pyodide app, so the frame is only asked
+        // for once it is near the viewport; a hairline placeholder holds the
+        // panel's shape and names what is loading meanwhile.
+        div { class: "notebook-shell",
+            div { class: "notebook-placeholder",
+                span { class: "notebook-placeholder-label", "notebook" }
+                span { "pyodide and the widgets load when this panel is opened" }
+            }
+            iframe {
+                src: "{url}",
+                class: "featured-iframe notebook-iframe",
+                title: "{title}",
+                "loading": "lazy",
+            }
         }
     }
 }
@@ -2578,6 +2588,29 @@ const APP_CSS: &str = r#"
   color: var(--color-text);
   font-weight: 700;
 }
+
+/* The notebook's frame sits over a placeholder that names the load, so the
+   panel is never an empty hole while pyodide arrives. */
+.notebook-shell { position: relative; height: 100%; min-height: 240px; }
+.notebook-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 4px 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+.notebook-placeholder-label {
+  color: var(--color-text);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.notebook-iframe { position: relative; z-index: 1; background: transparent; }
 
 /* Inline actions that raise a panel, styled as the same "↳ label" links the
    project list uses; a button so it can carry a click. */
