@@ -1,0 +1,161 @@
+/* One notebook surface for every demo this site embeds.
+   The notebooks are their own documents, so the palette is restated rather
+   than inherited: graphite surfaces, one mono stack, hairlines for structure,
+   and the site's three hues for what they mean (teal live, yellow warning,
+   red failure). Loaded by kinematics.html, inverse-kinematic-approximations.html
+   and wigglystuff-export/index.html, before marimo's own CSS; every rule below
+   carries enough weight to win against it. */
+/* The notebook is a page of this site, not a guest: graphite surfaces, one
+         mono stack, hairlines for structure, and the site's three hues for what
+         they mean (teal live, yellow warning, red failure). Values are restated
+         rather than inherited because the notebook is its own document. */
+      :root {
+        --nb-bg: #0a0a0a;
+        --nb-panel: #0d0d0d;
+        --nb-text: #ededed;
+        --nb-muted: #7a7a7a;
+        --nb-line: #262626;
+        --nb-line2: #3a3a3a;
+        --nb-teal: #5dcdbe;
+        --nb-yellow: #f0dd7d;
+        --nb-red: #d45547;
+        --nb-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+        --nb-body: 13px;
+        --nb-label: 11px;
+        /* marimo's own tokens, pointed at the console */
+        --mono-font: var(--nb-mono);
+        --sans-font: var(--nb-mono);
+        /* marimo's own font hooks: everything it renders is one family here. */
+        --marimo-monospace-font: var(--nb-mono);
+        --marimo-text-font: var(--nb-mono);
+        --marimo-heading-font: var(--nb-mono);
+        --background: var(--nb-bg);
+        --foreground: var(--nb-text);
+        --muted: var(--nb-muted);
+        --border: var(--nb-line);
+        --primary: var(--nb-teal);
+      }
+      html, body, #root {
+        background: var(--nb-bg) !important;
+        color: var(--nb-text) !important;
+        font-family: var(--nb-mono) !important;
+        font-size: var(--nb-body);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+      /* One family, everywhere: the site has no display face. */
+      html body, html body * { font-family: var(--nb-mono) !important; }
+      h1, h2, h3, h4, h5, h6, p, li, td, th, code, pre, kbd, samp { font-family: var(--nb-mono) !important; }
+
+      /* Cells read as console rows: no cards, no shadows, one hairline between
+         neighbours and a single rhythm of 8px. */
+      .marimo-cell, [class*="marimo-cell"] {
+        padding: 0 !important;
+        margin: 0 0 8px !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        border-radius: 0 !important;
+      }
+      .marimo-cell + .marimo-cell { border-top: 1px solid var(--nb-line) !important; padding-top: 8px !important; }
+      .markdown, .prose { max-width: 78ch; }
+      .markdown h1, .prose h1 { font-size: 18px; font-weight: 700; letter-spacing: 0; }
+      .markdown h2, .prose h2 { font-size: var(--nb-label); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--nb-muted); margin: 16px 0 8px; }
+      .markdown p, .prose p { color: var(--nb-text); }
+      .markdown a, .prose a { color: var(--nb-teal); text-decoration: none; border-bottom: 1px solid var(--nb-line2); }
+      .markdown code, .prose code { color: var(--nb-yellow); background: transparent; }
+      .output, [class*="output"] { padding: 0 !important; margin: 4px 0 0 !important; }
+
+      /* Controls take the site's button shape. */
+      button, select, input { font-family: var(--nb-mono) !important; border-radius: 0 !important; box-shadow: none !important; }
+      button { border: 1px solid var(--nb-line2) !important; background: var(--nb-bg) !important; color: var(--nb-text) !important; }
+      button:hover { background: var(--nb-text) !important; color: var(--nb-bg) !important; }
+      button:focus-visible { outline: 1px solid var(--nb-teal) !important; outline-offset: 1px; }
+      a:focus-visible { outline: 1px solid var(--nb-teal); outline-offset: 1px; }
+
+      /* The attribution stays (it is marimo's), but as a console footnote rather
+         than brand chrome; no badge, no logo, no gradient. */
+      /* The attribution stays (it is marimo's), but as a console footnote: no
+         brand colours, no rounded pill, no logo. */
+      div.fixed.bottom-0.right-0 > a[href*="github.com/marimo-team"] {
+        background: var(--nb-bg) !important;
+        color: var(--nb-muted) !important;
+        border: 0 !important;
+        border-left: 1px solid var(--nb-line) !important;
+        border-top: 1px solid var(--nb-line) !important;
+        border-radius: 0 !important;
+        font-size: var(--nb-label) !important;
+        font-weight: 400 !important;
+        letter-spacing: .06em !important;
+        text-transform: uppercase;
+        box-shadow: none !important;
+        padding: 2px 6px !important;
+      }
+      div.fixed.bottom-0.right-0 > a[href*="github.com/marimo-team"]:hover {
+        background: var(--nb-panel) !important;
+        color: var(--nb-text) !important;
+      }
+      div.fixed.bottom-0.right-0 > a[href*="github.com/marimo-team"] svg { display: none !important; }
+      /* The hourglass is marimo's running icon, not this site's; the notebook is
+         already named by its own heading. */
+      svg.running-app-icon { display: none !important; }
+      /* The app menu keeps its 28px hit box, in the console's border language. */
+      button:has(svg.lucide-ellipsis) {
+        background: var(--nb-bg) !important;
+        border: 1px solid var(--nb-line2) !important;
+        color: var(--nb-text) !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      }
+
+      /* A quiet scrollbar, because it ships with the surface. */
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-track { background: var(--nb-bg); }
+      ::-webkit-scrollbar-thumb { background: var(--nb-line2); border: 2px solid var(--nb-bg); }
+      ::selection { background: var(--nb-text); color: var(--nb-bg); }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* Code cells. The export renders marimo's editor, so the editor itself takes the
+   console: bright code on graphite, dim line numbers, no gutter chrome, and one
+   row of padding instead of the editor's default block. */
+.cm-editor, .cm-editor .cm-content, .cm-editor .cm-line {
+  background: transparent !important;
+  color: var(--nb-text) !important;
+  font-family: var(--nb-mono) !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+.cm-editor .cm-content { padding: 4px 0 !important; }
+.cm-editor .cm-gutters {
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--nb-muted) !important;
+}
+.cm-editor .cm-lineNumbers .cm-gutterElement {
+  color: var(--nb-muted) !important;
+  opacity: .55;
+  min-width: 2ch;
+}
+.cm-editor .cm-activeLine, .cm-editor .cm-activeLineGutter { background: transparent !important; }
+.cm-editor .cm-selectionBackground, .cm-editor ::selection { background: var(--nb-line2) !important; }
+.cm-editor .cm-cursor { border-left-color: var(--nb-teal) !important; }
+/* marimo's cell toolbar and run controls: square, quiet, out of the way. */
+.marimo-cell .hover-actions, .marimo-cell [class*="cell-toolbar"] {
+  background: var(--nb-bg) !important;
+  border: 1px solid var(--nb-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  opacity: .8;
+}
+/* The cell status ring (queued, running, stale) in the site's hues. */
+.marimo-cell [class*="cell-status"], .marimo-cell [class*="status"] {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Syntax tokens: one readable ink. The console reserves colour for state, so
+   code is bright text; comments step back one grey, strings take the live hue. */
+.cm-editor .cm-line span { color: var(--nb-text) !important; }
+.cm-editor .cm-line .cm-comment,
+.cm-editor .cm-line span[class*="comment"] { color: var(--nb-muted) !important; }
+.cm-editor .cm-line span[class*="string"] { color: var(--nb-teal) !important; }
