@@ -23,6 +23,7 @@ pub(crate) fn app_catalog() -> Rc<PanelCatalog<Panel>> {
         Panel::PanelKitPage,
         Panel::PanelKitWebDemo,
         Panel::PanelKitTuiDemo,
+        Panel::BirdNixPlayground,
     ]
     .into_iter()
     .enumerate()

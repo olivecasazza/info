@@ -192,6 +192,7 @@ enum Panel {
     PanelKitPage,
     PanelKitWebDemo,
     PanelKitTuiDemo,
+    BirdNixPlayground,
 }
 
 impl PanelKind for Panel {
@@ -212,6 +213,7 @@ impl PanelKind for Panel {
             Panel::PanelKitPage => "panel-kit page",
             Panel::PanelKitWebDemo => "panel-kit web demo",
             Panel::PanelKitTuiDemo => "panel-kit terminal demo",
+            Panel::BirdNixPlayground => "bird-nix playground",
         }
     }
 }
@@ -242,6 +244,7 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::PanelKitPage,
     Panel::PanelKitWebDemo,
     Panel::PanelKitTuiDemo,
+    Panel::BirdNixPlayground,
 ];
 
 /// Panels with stateful DOM/WASM runtimes (WebGL contexts, Pyodide WASM runtimes,
@@ -259,6 +262,7 @@ fn is_keep_mounted(kind: Panel) -> bool {
             | Panel::NotebookWigglystuff
             | Panel::PanelKitWebDemo
             | Panel::PanelKitTuiDemo
+            | Panel::BirdNixPlayground
     )
 }
 
@@ -425,7 +429,7 @@ fn render_panel_body(
         Panel::Info => info_body(),
         Panel::Projects => projects_panel(workspace),
         Panel::Featured => featured_body(),
-        Panel::BirdNix => bird_nix(),
+        Panel::BirdNix => bird_nix(workspace),
         Panel::Consortium => consortium(),
         Panel::Hephaestus => hephaestus(),
         Panel::FlockDemo => flock_demo(),
@@ -440,6 +444,7 @@ fn render_panel_body(
         Panel::PanelKitPage => panel_kit_page(workspace),
         Panel::PanelKitWebDemo => panel_kit_web_demo(),
         Panel::PanelKitTuiDemo => panel_kit_tui_demo(),
+        Panel::BirdNixPlayground => bird_nix_playground(),
     }
 }
 
@@ -1800,7 +1805,21 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
     }
 }
 
-fn bird_nix() -> Element {
+/// The playground as its own panel: the frame is the panel, opened on request.
+fn bird_nix_playground() -> Element {
+    rsx! {
+        div { class: "playground-shell",
+            iframe {
+                src: "https://olivecasazza.github.io/bird-nix/",
+                class: "featured-iframe",
+                title: "bird-nix playground",
+                "loading": "lazy",
+            }
+        }
+    }
+}
+
+fn bird_nix(workspace: &workspace::state::PanelWorkspace<Panel>) -> Element {
     const INSTALL: &str = r#"inputs.bird-nix.url = "github:olivecasazza/bird-nix";
 
 # As a full library:
@@ -1877,22 +1896,23 @@ inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
                 p {
                     "The full playground runs real Nix in your browser: tvix-eval compiled to WASM, wired into a REPL with the bird-nix library preloaded, a step-by-step reducer, and the pretty-printer for the resulting AST. It's hosted on GitHub Pages and updated on every push to main."
                 }
-                figure { class: "project-figure bird-nix-repl",
-                    iframe {
-                        src: "https://olivecasazza.github.io/bird-nix/",
-                        class: "featured-iframe bird-nix-repl-frame",
-                        title: "bird-nix REPL",
+                div { class: "proj-links",
+                    button {
+                        class: "proj-act",
+                        onclick: {
+                            // The workspace outlives this render, so the handler
+                            // holds a clone rather than the borrow.
+                            let workspace = workspace.clone();
+                            move |_| reveal_panel(&workspace, Panel::BirdNixPlayground)
+                        },
+                        "↳ open the playground"
                     }
-                    figcaption { "Live REPL embedded in-article. Open the playground below for the full reducer and pretty-printer." }
+                    a { class: "proj-act", href: "https://olivecasazza.github.io/bird-nix/", target: "_blank",
+                        "↳ github pages"
+                    }
                 }
-                pre { class: "code-block", code { "{SAMPLE}" } }
-                div { class: "demo-cta",
-                    a { class: "link demo-cta-link", href: "https://olivecasazza.github.io/bird-nix/", target: "_blank",
-                        "open the playground →"
-                    }
-                    p { class: "muted demo-cta-note",
-                        "github-pages deployment · tvix-eval WASM · live REPL"
-                    }
+                p { class: "muted demo-cta-note",
+                    "tvix-eval compiled to WebAssembly · the bird-nix library preloaded · step-by-step reducer"
                 }
             }
             section { class: "article-section",
@@ -2630,6 +2650,9 @@ const APP_CSS: &str = r#"
   color: var(--color-text);
   font-weight: 700;
 }
+
+.playground-shell { position: relative; width: 100%; height: 100%; min-height: 240px; }
+.playground-shell > iframe { display: block; width: 100%; height: 100%; border: 0; }
 
 /* The notebook's frame sits over a placeholder that names the load, so the
    panel is never an empty hole while pyodide arrives. */
