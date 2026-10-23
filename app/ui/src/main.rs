@@ -1915,7 +1915,7 @@ task.run("node[01-16]")"#;
                                     "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
                                     " document.getElementById('asciinema-consortium-container'), {",
                                     "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
-                                    "  theme: 'monokai', fontSize: '11px', fit: false,",
+                                    "  theme: 'monokai', fontSize: '11px', fit: 'width',",
                                     "  idleTimeLimit: 2, controls: false",
                                     "});"
                                 ).to_string();
@@ -2721,16 +2721,17 @@ const APP_CSS: &str = r#"
   background: #0a0a0a;
 }
 
+/* Positioned past the header row rather than padded past it: the panel body
+   already insets its content, so a padding here counted the header twice and
+   cost the frame 22px at every size. */
 .panel-kit-demo-wrapper {
   display: flex;
   flex-direction: column;
   position: absolute;
-  inset: 0;
-  padding-top: var(--panel-head-h, 22px);
-  width: 100%;
-  height: 100%;
+  inset: calc(var(--panel-head-h, 22px) + var(--space-sm, 6px)) 0 0 0;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 .panel-kit-info-overlay {
   padding: 0.75rem 1rem;
@@ -2749,14 +2750,23 @@ const APP_CSS: &str = r#"
   line-height: 1.4;
 }
 .panel-kit-info-overlay .dim { color: var(--color-text-muted); margin: 0; }
+/* Flex alone sizes the frame: \`height: 100%\` measures the wrapper's whole
+   box, which the copy above it has already partly used, so the frame ran
+   ~120px short at every size. */
 .panel-kit-tui-frame {
   display: block;
-  flex: 1;
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-width: 0;
   min-height: 0;
   border: none;
+}
+/* The wrapper is the container: at a short panel the introductory copy would
+   take the whole height, so it steps aside and the demo keeps the room. */
+.panel-kit-demo-wrapper { container-type: size; }
+@container (max-height: 300px) {
+  .panel-kit-info-overlay { display: none; }
 }
 
 .featured-info {
@@ -2885,16 +2895,19 @@ const APP_CSS: &str = r#"
   flex-direction: column;
   gap: 8px;
 }
+/* The player scales to the column: a fixed 95-column recording is wider than a
+   panel, and hiding the overflow cut the right of every line. */
 .asciinema-container {
   flex: 1;
   min-width: 0;
   min-height: 120px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
 }
 /* Override asciinema-player's internal overflow:hidden so the full
    terminal is scrollable within the panel instead of clipped. */
+.asciinema-container .ap-line { max-width: 100%; }
 .asciinema-container .ap-player {
+  max-width: 100%;
   overflow: visible !important;
 }
 .asciinema-container .ap-terminal {
