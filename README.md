@@ -1,50 +1,42 @@
 # info
 
-This is a [sidebase merino](https://sidebase.io/) app created by running `npm create sidebase@latest`. This project uses the following technologies for a great developer- and user-experience:
-- [TypeScript](https://www.typescriptlang.org/)
-- [Nuxt 3](https://nuxt.com)
-- Tailwind CSS
-- Naive UI
+The site at <https://info-ecl.pages.dev>: a Dioxus panel workspace over the
+`info-core` content crate, with a Ratatui frontend (`info-tui`) and Bevy demos
+(`flock`, `pipedream`) compiled to WebAssembly.
 
-## How to get going?
+## How to get going
 
-This is a straight-forward setup with minimal templating and scaffolding. The options you selected during the sidebase CLI setup are all here though. Good places to continue reading are:
-- [the First Steps documentation](https://sidebase.io/sidebase/usage)
-- [our discord](https://discord.gg/auc8eCeGzx)
-
-Some tasks you should probably do in the beginning are:
-- [ ] replace this generic README with a more specific one
-- [ ] install the Vue Volar extension
-- [ ] enable [Volar takeover mode](https://nuxt.com/docs/getting-started/installation#prerequisites) to ensure a smooth editor setup
-- [ ] [install Nuxt 3 devtools](https://github.com/nuxt/devtools#installation) if you want to use them
-
-
-### Setup
-
-Make sure to install the dependencies:
+Everything runs inside the Nix dev shell.
 
 ```bash
-npm install
+nix develop
+cd app/ui && trunk serve        # development server on http://127.0.0.1:8080
+nix build .#info-ui             # hermetic site build
+nix build .#pages               # GitHub Pages build
 ```
 
-### Development Server
+The development server must not inherit `NO_COLOR` (trunk reads it as a flag):
+`nix develop --command bash -c 'unset NO_COLOR; exec trunk serve'`.
 
-Start the development server on http://localhost:3000
+## Routing
+
+Each project has a path (`/lib/bird-nix`, `/src/flock`,
+`/projects/notebooks/kinematics`, …); loading one opens that project's panel,
+and the address bar follows a click in the project list, so views can be
+linked, reloaded and walked with back/forward. `/src/panel-kit` opens its
+article; the web and terminal demos are one click away in the article's demo
+section and in the project row.
+
+## Checks
 
 ```bash
-npm run dev
+nix develop --command cargo test                     # workspace tests
+nix run .#layout-probe -- --url http://127.0.0.1:4055  # layout at four sizes
 ```
 
-### Production
-
-Build the application for production:
-
-```bash
-npm run build
-```
-
-Locally preview production build:
-
-```bash
-npm run preview
-```
+The layout probe drives headless Chromium over CDP, at 420, 760, 1180 and
+1600px wide, and reports a frame that does not span its container or collapsed
+to nothing, a row that clips its text without an ellipsis, a broken image, and
+a page wider than the viewport. It exits non-zero on any finding, so it can gate
+a change to the workspace chrome or to anything embedded in a panel. On Linux it
+uses nixpkgs' Chromium; on darwin it uses the installed Chrome or `$CHROME`.

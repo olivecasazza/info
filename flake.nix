@@ -94,6 +94,27 @@
           default = info-ui;
         };
 
+        # Layout probe: drives headless Chromium over CDP at several viewport
+        # sizes and reports frames that do not fill, clipped rows, broken images
+        # and pages wider than the viewport. Point it at a server that is
+        # already running: `nix run .#layout-probe -- --url http://127.0.0.1:4055`
+        apps.layout-probe = let
+          # nixpkgs ships Chromium for Linux only; on darwin the probe uses the
+          # installed Chrome, or whatever CHROME points at.
+          chrome =
+            if pkgs.stdenv.isLinux
+            then "${pkgs.chromium}/bin/chromium"
+            else "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+        in {
+          type = "app";
+          program = "${
+            pkgs.writeShellScript "layout-probe" ''
+              export CHROME="''${CHROME:-${chrome}}"
+              exec ${pkgs.nodejs}/bin/node ${./scripts/layout-probe.mjs} "$@"
+            ''
+          }";
+        };
+
         hydraJobs = {
           inherit info-ui pages;
         };
