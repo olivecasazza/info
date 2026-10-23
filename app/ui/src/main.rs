@@ -225,7 +225,10 @@ const SPOT_RESOURCES: &[Panel] = &[Panel::Spot];
 const KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookKinematics];
 const INVERSE_KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookInverseKinematics];
 const WIGGLYSTUFF_RESOURCES: &[Panel] = &[Panel::NotebookWigglystuff];
-const PANEL_KIT_RESOURCES: &[Panel] = &[Panel::PanelKitPage, Panel::PanelKitWebDemo, Panel::PanelKitTuiDemo];
+/// The panel-kit route lands on its article. The web and terminal demos are
+/// opened from the article's demo actions or the project row, never on arrival:
+/// two live workspaces on load bury the writing they are meant to illustrate.
+const PANEL_KIT_RESOURCES: &[Panel] = &[Panel::PanelKitPage];
 const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::BirdNix,
     Panel::Consortium,
@@ -289,11 +292,11 @@ fn App() -> Element {
     use_hook({
         let workspace = workspace.clone();
         move || {
-            let route_resources = current_path_resources();
-            if !route_resources.is_empty() {
-                open_project_resources(&workspace, route_resources);
-            } else if let Some((_, project)) = random_project() {
-                open_project_resources(&workspace, resources_for_project(project.link));
+            watch_history(&workspace);
+            if !open_current_path(&workspace) {
+                if let Some((_, project)) = random_project() {
+                    navigate(&workspace, project.link);
+                }
             }
         }
     });
@@ -440,6 +443,8 @@ fn render_panel_body(
     }
 }
 
+/// The panels a project's path opens. Every entry of [`info_core::projects`]
+/// has one, so any project is reachable by typing or linking its path.
 fn resources_for_project(link: &str) -> &'static [Panel] {
     match link {
         "/lib/bird-nix" => BIRD_NIX_RESOURCES,
@@ -469,11 +474,51 @@ fn random_project() -> Option<(&'static str, &'static info_core::Project)> {
     info_core::project_at(idx)
 }
 
-fn current_path_resources() -> &'static [Panel] {
+/// The path the browser is on, minus a trailing slash.
+fn current_path() -> String {
     web_sys::window()
-        .and_then(|w: web_sys::Window| w.location().pathname().ok())
-        .map(|path| resources_for_project(&path))
-        .unwrap_or(&[])
+        .and_then(|window| window.location().pathname().ok())
+        .map(|path| path.trim_end_matches('/').to_owned())
+        .unwrap_or_default()
+}
+
+/// Open the path the browser is on, if it names a project.
+fn open_current_path(workspace: &workspace::state::PanelWorkspace<Panel>) -> bool {
+    let resources = resources_for_project(&current_path());
+    open_project_resources(workspace, resources);
+    !resources.is_empty()
+}
+
+/// Open a project and put its path in the address bar, so the view can be
+/// linked, reloaded and walked back through.
+fn navigate(workspace: &workspace::state::PanelWorkspace<Panel>, link: &str) {
+    let path = link.trim_end_matches('/');
+    if let Some(window) = web_sys::window() {
+        let _ = window
+            .history()
+            .and_then(|history| history.push_state_with_url(&JsValue::NULL, "", Some(path)));
+    }
+    open_project_resources(workspace, resources_for_project(path));
+}
+
+/// Follow the address bar: back, forward and a pasted path all reopen.
+fn watch_history(workspace: &workspace::state::PanelWorkspace<Panel>) {
+    let listener = {
+        let workspace = workspace.clone();
+        wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::Event)>::new(
+            move |_event: web_sys::Event| {
+                open_current_path(&workspace);
+            },
+        )
+    };
+    if let Some(window) = web_sys::window() {
+        let _ = window.add_event_listener_with_callback(
+            "popstate",
+            listener.as_ref().unchecked_ref(),
+        );
+    }
+    // The listener lives as long as the page does, like the viewport observer.
+    listener.forget();
 }
 
 fn resource_panel_default(kind: Panel, index: usize, total: usize, z: i32) -> PanelWin<Panel> {
@@ -594,10 +639,7 @@ fn projects_panel(workspace: &workspace::state::PanelWorkspace<Panel>) -> Elemen
                                     let link = item.link;
                                     move |event: Event<MouseData>| {
                                         event.prevent_default();
-                                        open_project_resources(
-                                            &workspace,
-                                            resources_for_project(link),
-                                        );
+                                        navigate(&workspace, link);
                                     }
                                 },
                                 "{item.heading}"
