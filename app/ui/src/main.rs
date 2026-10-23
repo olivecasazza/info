@@ -2591,7 +2591,7 @@ const APP_CSS: &str = r#"
 
 /* The notebook's frame sits over a placeholder that names the load, so the
    panel is never an empty hole while pyodide arrives. */
-.notebook-shell { position: relative; height: 100%; min-height: 240px; }
+.notebook-shell { position: relative; width: 100%; height: 100%; min-height: 240px; }
 .notebook-placeholder {
   position: absolute;
   inset: 0;
@@ -2610,7 +2610,17 @@ const APP_CSS: &str = r#"
   font-weight: 700;
   text-transform: uppercase;
 }
-.notebook-iframe { position: relative; z-index: 1; background: transparent; }
+/* The frame fills the shell it was given. Without both declarations an iframe
+   falls back to its 300x150 default and the notebook renders in a strip. */
+.notebook-iframe {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+}
 
 /* Inline actions that raise a panel, styled as the same "↳ label" links the
    project list uses; a button so it can carry a click. */

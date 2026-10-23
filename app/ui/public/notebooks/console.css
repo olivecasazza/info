@@ -159,3 +159,12 @@
 .cm-editor .cm-line .cm-comment,
 .cm-editor .cm-line span[class*="comment"] { color: var(--nb-muted) !important; }
 .cm-editor .cm-line span[class*="string"] { color: var(--nb-teal) !important; }
+
+/* The notebook uses the frame it is given. marimo caps its column at a reading
+   measure and pads it for a full page; inside a panel that cap is the panel.
+   Prose keeps its measure below, so paragraphs still read at 65-75ch. */
+html body [class*="mathjax_ignore"] { max-width: 100% !important; }
+[class*="px-24"], [class*="px-20"], [class*="px-16"] {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
