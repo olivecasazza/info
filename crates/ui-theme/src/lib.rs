@@ -5,7 +5,7 @@
 //! boilerplate from individual projects.
 //!
 //! # Quick Start
-//! ```rust
+//! ```rust,ignore
 //! // In your state struct:
 //! pub ui: ui_theme::ProjectUi,
 //!
@@ -362,7 +362,7 @@ impl PerfOverlay {
 /// performance monitoring, and responsive window creation.
 ///
 /// # Usage
-/// ```rust
+/// ```rust,ignore
 /// // In your state struct:
 /// pub ui: ui_theme::ProjectUi,
 ///
