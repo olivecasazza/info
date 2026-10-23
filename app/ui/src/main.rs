@@ -192,6 +192,7 @@ enum Panel {
     PanelKitPage,
     PanelKitWebDemo,
     PanelKitTuiDemo,
+    BirdNixPlayground,
 }
 
 impl PanelKind for Panel {
@@ -212,6 +213,7 @@ impl PanelKind for Panel {
             Panel::PanelKitPage => "panel-kit page",
             Panel::PanelKitWebDemo => "panel-kit web demo",
             Panel::PanelKitTuiDemo => "panel-kit terminal demo",
+            Panel::BirdNixPlayground => "bird-nix playground",
         }
     }
 }
@@ -225,7 +227,10 @@ const SPOT_RESOURCES: &[Panel] = &[Panel::Spot];
 const KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookKinematics];
 const INVERSE_KINEMATICS_RESOURCES: &[Panel] = &[Panel::NotebookInverseKinematics];
 const WIGGLYSTUFF_RESOURCES: &[Panel] = &[Panel::NotebookWigglystuff];
-const PANEL_KIT_RESOURCES: &[Panel] = &[Panel::PanelKitPage, Panel::PanelKitWebDemo, Panel::PanelKitTuiDemo];
+/// The panel-kit route lands on its article. The web and terminal demos are
+/// opened from the article's demo actions or the project row, never on arrival:
+/// two live workspaces on load bury the writing they are meant to illustrate.
+const PANEL_KIT_RESOURCES: &[Panel] = &[Panel::PanelKitPage];
 const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::BirdNix,
     Panel::Consortium,
@@ -239,6 +244,7 @@ const ALL_PROJECT_RESOURCES: &[Panel] = &[
     Panel::PanelKitPage,
     Panel::PanelKitWebDemo,
     Panel::PanelKitTuiDemo,
+    Panel::BirdNixPlayground,
 ];
 
 /// Panels with stateful DOM/WASM runtimes (WebGL contexts, Pyodide WASM runtimes,
@@ -256,6 +262,7 @@ fn is_keep_mounted(kind: Panel) -> bool {
             | Panel::NotebookWigglystuff
             | Panel::PanelKitWebDemo
             | Panel::PanelKitTuiDemo
+            | Panel::BirdNixPlayground
     )
 }
 
@@ -289,11 +296,11 @@ fn App() -> Element {
     use_hook({
         let workspace = workspace.clone();
         move || {
-            let route_resources = current_path_resources();
-            if !route_resources.is_empty() {
-                open_project_resources(&workspace, route_resources);
-            } else if let Some((_, project)) = random_project() {
-                open_project_resources(&workspace, resources_for_project(project.link));
+            watch_history(&workspace);
+            if !open_current_path(&workspace) {
+                if let Some((_, project)) = random_project() {
+                    navigate(&workspace, project.link);
+                }
             }
         }
     });
@@ -422,7 +429,7 @@ fn render_panel_body(
         Panel::Info => info_body(),
         Panel::Projects => projects_panel(workspace),
         Panel::Featured => featured_body(),
-        Panel::BirdNix => bird_nix(),
+        Panel::BirdNix => bird_nix(workspace),
         Panel::Consortium => consortium(),
         Panel::Hephaestus => hephaestus(),
         Panel::FlockDemo => flock_demo(),
@@ -437,9 +444,12 @@ fn render_panel_body(
         Panel::PanelKitPage => panel_kit_page(workspace),
         Panel::PanelKitWebDemo => panel_kit_web_demo(),
         Panel::PanelKitTuiDemo => panel_kit_tui_demo(),
+        Panel::BirdNixPlayground => bird_nix_playground(),
     }
 }
 
+/// The panels a project's path opens. Every entry of [`info_core::projects`]
+/// has one, so any project is reachable by typing or linking its path.
 fn resources_for_project(link: &str) -> &'static [Panel] {
     match link {
         "/lib/bird-nix" => BIRD_NIX_RESOURCES,
@@ -469,11 +479,51 @@ fn random_project() -> Option<(&'static str, &'static info_core::Project)> {
     info_core::project_at(idx)
 }
 
-fn current_path_resources() -> &'static [Panel] {
+/// The path the browser is on, minus a trailing slash.
+fn current_path() -> String {
     web_sys::window()
-        .and_then(|w: web_sys::Window| w.location().pathname().ok())
-        .map(|path| resources_for_project(&path))
-        .unwrap_or(&[])
+        .and_then(|window| window.location().pathname().ok())
+        .map(|path| path.trim_end_matches('/').to_owned())
+        .unwrap_or_default()
+}
+
+/// Open the path the browser is on, if it names a project.
+fn open_current_path(workspace: &workspace::state::PanelWorkspace<Panel>) -> bool {
+    let resources = resources_for_project(&current_path());
+    open_project_resources(workspace, resources);
+    !resources.is_empty()
+}
+
+/// Open a project and put its path in the address bar, so the view can be
+/// linked, reloaded and walked back through.
+fn navigate(workspace: &workspace::state::PanelWorkspace<Panel>, link: &str) {
+    let path = link.trim_end_matches('/');
+    if let Some(window) = web_sys::window() {
+        let _ = window
+            .history()
+            .and_then(|history| history.push_state_with_url(&JsValue::NULL, "", Some(path)));
+    }
+    open_project_resources(workspace, resources_for_project(path));
+}
+
+/// Follow the address bar: back, forward and a pasted path all reopen.
+fn watch_history(workspace: &workspace::state::PanelWorkspace<Panel>) {
+    let listener = {
+        let workspace = workspace.clone();
+        wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::Event)>::new(
+            move |_event: web_sys::Event| {
+                open_current_path(&workspace);
+            },
+        )
+    };
+    if let Some(window) = web_sys::window() {
+        let _ = window.add_event_listener_with_callback(
+            "popstate",
+            listener.as_ref().unchecked_ref(),
+        );
+    }
+    // The listener lives as long as the page does, like the viewport observer.
+    listener.forget();
 }
 
 fn resource_panel_default(kind: Panel, index: usize, total: usize, z: i32) -> PanelWin<Panel> {
@@ -594,10 +644,7 @@ fn projects_panel(workspace: &workspace::state::PanelWorkspace<Panel>) -> Elemen
                                     let link = item.link;
                                     move |event: Event<MouseData>| {
                                         event.prevent_default();
-                                        open_project_resources(
-                                            &workspace,
-                                            resources_for_project(link),
-                                        );
+                                        navigate(&workspace, link);
                                     }
                                 },
                                 "{item.heading}"
@@ -1758,7 +1805,21 @@ fn notebook_panel(slug: &'static str, title: &'static str) -> Element {
     }
 }
 
-fn bird_nix() -> Element {
+/// The playground as its own panel: the frame is the panel, opened on request.
+fn bird_nix_playground() -> Element {
+    rsx! {
+        div { class: "playground-shell",
+            iframe {
+                src: "https://olivecasazza.github.io/bird-nix/",
+                class: "featured-iframe",
+                title: "bird-nix playground",
+                "loading": "lazy",
+            }
+        }
+    }
+}
+
+fn bird_nix(workspace: &workspace::state::PanelWorkspace<Panel>) -> Element {
     const INSTALL: &str = r#"inputs.bird-nix.url = "github:olivecasazza/bird-nix";
 
 # As a full library:
@@ -1835,22 +1896,23 @@ inherit (inputs.bird-nix.lib {}) I M K KI B C L W S V Y;"#;
                 p {
                     "The full playground runs real Nix in your browser: tvix-eval compiled to WASM, wired into a REPL with the bird-nix library preloaded, a step-by-step reducer, and the pretty-printer for the resulting AST. It's hosted on GitHub Pages and updated on every push to main."
                 }
-                figure { class: "project-figure bird-nix-repl",
-                    iframe {
-                        src: "https://olivecasazza.github.io/bird-nix/",
-                        class: "featured-iframe bird-nix-repl-frame",
-                        title: "bird-nix REPL",
+                div { class: "proj-links",
+                    button {
+                        class: "proj-act",
+                        onclick: {
+                            // The workspace outlives this render, so the handler
+                            // holds a clone rather than the borrow.
+                            let workspace = workspace.clone();
+                            move |_| reveal_panel(&workspace, Panel::BirdNixPlayground)
+                        },
+                        "↳ open the playground"
                     }
-                    figcaption { "Live REPL embedded in-article. Open the playground below for the full reducer and pretty-printer." }
+                    a { class: "proj-act", href: "https://olivecasazza.github.io/bird-nix/", target: "_blank",
+                        "↳ github pages"
+                    }
                 }
-                pre { class: "code-block", code { "{SAMPLE}" } }
-                div { class: "demo-cta",
-                    a { class: "link demo-cta-link", href: "https://olivecasazza.github.io/bird-nix/", target: "_blank",
-                        "open the playground →"
-                    }
-                    p { class: "muted demo-cta-note",
-                        "github-pages deployment · tvix-eval WASM · live REPL"
-                    }
+                p { class: "muted demo-cta-note",
+                    "tvix-eval compiled to WebAssembly · the bird-nix library preloaded · step-by-step reducer"
                 }
             }
             section { class: "article-section",
@@ -1915,7 +1977,7 @@ task.run("node[01-16]")"#;
                                     "AsciinemaPlayer.create('/projects-media/cascade-demo.cast',",
                                     " document.getElementById('asciinema-consortium-container'), {",
                                     "  cols: 95, rows: 30, autoPlay: true, loop: true, speed: 0.7,",
-                                    "  theme: 'monokai', fontSize: '11px', fit: false,",
+                                    "  theme: 'monokai', fontSize: '11px', fit: 'width',",
                                     "  idleTimeLimit: 2, controls: false",
                                     "});"
                                 ).to_string();
@@ -2589,6 +2651,9 @@ const APP_CSS: &str = r#"
   font-weight: 700;
 }
 
+.playground-shell { position: relative; width: 100%; height: 100%; min-height: 240px; }
+.playground-shell > iframe { display: block; width: 100%; height: 100%; border: 0; }
+
 /* The notebook's frame sits over a placeholder that names the load, so the
    panel is never an empty hole while pyodide arrives. */
 .notebook-shell { position: relative; width: 100%; height: 100%; min-height: 240px; }
@@ -2721,16 +2786,17 @@ const APP_CSS: &str = r#"
   background: #0a0a0a;
 }
 
+/* Positioned past the header row rather than padded past it: the panel body
+   already insets its content, so a padding here counted the header twice and
+   cost the frame 22px at every size. */
 .panel-kit-demo-wrapper {
   display: flex;
   flex-direction: column;
   position: absolute;
-  inset: 0;
-  padding-top: var(--panel-head-h, 22px);
-  width: 100%;
-  height: 100%;
+  inset: calc(var(--panel-head-h, 22px) + var(--space-sm, 6px)) 0 0 0;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 .panel-kit-info-overlay {
   padding: 0.75rem 1rem;
@@ -2749,14 +2815,23 @@ const APP_CSS: &str = r#"
   line-height: 1.4;
 }
 .panel-kit-info-overlay .dim { color: var(--color-text-muted); margin: 0; }
+/* Flex alone sizes the frame: \`height: 100%\` measures the wrapper's whole
+   box, which the copy above it has already partly used, so the frame ran
+   ~120px short at every size. */
 .panel-kit-tui-frame {
   display: block;
-  flex: 1;
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-width: 0;
   min-height: 0;
   border: none;
+}
+/* The wrapper is the container: at a short panel the introductory copy would
+   take the whole height, so it steps aside and the demo keeps the room. */
+.panel-kit-demo-wrapper { container-type: size; }
+@container (max-height: 300px) {
+  .panel-kit-info-overlay { display: none; }
 }
 
 .featured-info {
@@ -2885,16 +2960,19 @@ const APP_CSS: &str = r#"
   flex-direction: column;
   gap: 8px;
 }
+/* The player scales to the column: a fixed 95-column recording is wider than a
+   panel, and hiding the overflow cut the right of every line. */
 .asciinema-container {
   flex: 1;
   min-width: 0;
   min-height: 120px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
 }
 /* Override asciinema-player's internal overflow:hidden so the full
    terminal is scrollable within the panel instead of clipped. */
+.asciinema-container .ap-line { max-width: 100%; }
 .asciinema-container .ap-player {
+  max-width: 100%;
   overflow: visible !important;
 }
 .asciinema-container .ap-terminal {
